@@ -23,6 +23,9 @@ concurrency:
 
 jobs:
   publish-docs:
+    # GitHub Pages requires a public repository (or a paid plan); the docs site is only
+    # deployed from the upstream repository.
+    if: github.repository == 'ValveResourceFormat/ValveResourceFormat'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
