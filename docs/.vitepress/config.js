@@ -57,6 +57,10 @@ export default defineConfig({
                             link: "/guides/getting-started",
                         },
                         {
+                            text: "Linux",
+                            link: "/guides/linux",
+                        },
+                        {
                             text: "Format Support",
                             link: "/guides/format-support",
                         },

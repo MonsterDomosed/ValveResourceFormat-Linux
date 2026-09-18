@@ -28,6 +28,20 @@ https://github.com/ValveResourceFormat/ValveResourceFormat
 
 Powered by [Source 2 Viewer](https://s2v.app) ([ValveResourceFormat](https://github.com/ValveResourceFormat/ValveResourceFormat)).
 
+## Linux
+
+This fork adds a native Linux shell built with Avalonia and OpenGL, distributed as a
+self-contained `linux-x64` tarball, so neither Wine nor a separate .NET runtime is required.
+See the [Linux guide](docs/guides/linux.md) for installation, system requirements, display
+backends, configuration paths, the release artifacts and the current limitations.
+
+Build and package it with:
+
+```bash
+dotnet build GUI.Linux/GUI.Linux.csproj -c Release
+./Misc/Linux/package-linux.sh
+```
+
 > [!IMPORTANT]
 > [**For more information and downloads of _Source 2 Viewer_, visit the website.**](https://s2v.app/)
 >

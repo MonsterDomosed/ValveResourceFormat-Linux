@@ -6,12 +6,16 @@ The project folders are:
 
 - **ValveResourceFormat/**: Core parsing library published to NuGet
 - **GUI/**: WinForms viewer application
+- **GUI.Linux/**: Native Linux viewer shell built with Avalonia and OpenGL. Reuses the shared scene runtime, viewers and browser from `GUI.Shared/`; never duplicate viewer logic here.
+    - Run `dotnet build GUI.Linux/GUI.Linux.csproj -c Release`. A runtime smoke check is `dotnet GUI.Linux/bin/Release/Source2Viewer.dll --self-check=smoke --x11`; the full `--self-check` needs a game installation.
+    - The release tarball is built with `Misc/Linux/package-linux.sh` and published by the `source2viewer-linux` CI job.
+- **GUI.Shared/**: UI-toolkit-agnostic types shared by both shells: settings, logging, portable viewers, the package browser model, audio decoding, the graph presenter and the neutral GL viewport contracts. Keep Avalonia and WinForms out of this project.
 - **CLI/**: Command-line decompiler and file viewer
 - **Renderer/**: OpenGL rendering engine for Source 2 assets.
     - Shaders use the `.slang` extension (`.frag.slang`, `.vert.slang`) with GLSL syntax, and must only contain ASCII characters.
     - After changing shaders, run `dotnet run --project Misc/ShaderValidator -- <name filter>` to compile them and their combos on a real GL context. `complex` has combinatorially many combos and is far too slow to validate interactively, so iterate against a smaller shader.
-- **Tests/**: TUnit test suite for the ValveResourceFormat library, plus some headless Renderer logic tests in `Tests/Renderer/`.
-    - Run tests when changing code in `ValveResourceFormat/` or `Renderer/`. GUI and CLI are not covered.
+- **Tests/**: TUnit test suite for the ValveResourceFormat library, plus some headless Renderer logic tests in `Tests/Renderer/` and portable `GUI.Shared` logic tests in `Tests/GuiSharedTest.cs`.
+    - Run tests when changing code in `ValveResourceFormat/`, `Renderer/` or `GUI.Shared/`. The WinForms shell (`GUI/`) and the Linux shell (`GUI.Linux/`) are not covered directly.
     - Tests are fast, run the whole suite with `dotnet test`. If it reports `Zero tests ran` (exit code 5), do a full `dotnet build` and retry.
     - When a parsing change legitimately alters text output, run tests with `VRF_REGEN_FIXTURES=1` to rewrite the mismatching `Tests/Files/ValidOutput` dumps in the source tree.
 - **Misc/**: Auxiliary tools (ShaderValidator, RenderTest, etc.) in their own solution `Misc/MiscVrfProjects.slnx`.

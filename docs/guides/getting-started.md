@@ -8,7 +8,7 @@ Download the latest release from [s2v.app](https://s2v.app).
 
 Source 2 Viewer is portable and requires no installation. Just run the executable directly.
 
-- **Source 2 Viewer** (GUI) is Windows-only. It can be run on Linux/macOS using Wine.
+- **Source 2 Viewer** (GUI) runs on Windows and, natively, on Linux. The Linux build is an independent, AI-assisted continuation of this project; see the [Linux guide](./linux.md).
 - **Source2Viewer-CLI** (command-line) is cross-platform. Download for your target platform is available in the changelog section.
 
 ## Using the Explorer

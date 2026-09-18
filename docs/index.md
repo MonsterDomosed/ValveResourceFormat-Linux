@@ -89,7 +89,9 @@ Source 2 Viewer is the result of years of reverse engineering by many contributo
 
 ### Does Source 2 Viewer work on Mac and Linux?
 
-Source 2 Viewer is currently a .NET WinForms application, as a result it only works on Windows. However you can run it using Wine.
+The Windows application is a .NET WinForms application, so it only runs on Windows natively.
+This fork adds a native Linux shell built with Avalonia and OpenGL, distributed as a
+self-contained tarball; see the [Linux guide](./guides/linux.md).
 The command-line utility is completely cross-platform.
 
 ### How do I open VPK files?

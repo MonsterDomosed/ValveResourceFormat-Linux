@@ -36,4 +36,6 @@ of its bot protection. The site remembers small things in your browser, such as 
 ## Local Data
 
 Settings, including recent files and bookmarks, are stored in
-`%LocalAppData%/Source2Viewer/settings.vdf` and never uploaded.
+`%LocalAppData%/Source2Viewer/settings.vdf` on Windows and in
+`$XDG_DATA_HOME/Source2Viewer/settings.vdf` (by default
+`~/.local/share/Source2Viewer/settings.vdf`) on Linux, and never uploaded.
