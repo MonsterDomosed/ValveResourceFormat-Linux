@@ -213,11 +213,21 @@ jobs:
     - name: Package
       run: ./Misc/Linux/package-linux.sh
 
+    - name: Install GL runtime libraries
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends xvfb mesa-utils libgl1 libgl1-mesa-dri libglx-mesa0 libegl1 libegl-mesa0 libgles2 libx11-6 libxcb1 libfontconfig1
+
+    - name: GL information
+      continue-on-error: true
+      run: xvfb-run -a -s "-screen 0 1280x720x24" glxinfo -B
+
     - name: Smoke test (Xvfb + llvmpipe)
       env:
         MESA_GLSL_VERSION_OVERRIDE: '460'
         MESA_GL_VERSION_OVERRIDE: '4.6'
         GALLIUM_DRIVER: 'llvmpipe'
+        LIBGL_DEBUG: 'verbose'
       run: xvfb-run -a -s "-screen 0 1280x720x24" ./artifacts/Source2Viewer/Source2Viewer --self-check=smoke --x11
 
     - name: Attest build provenance
