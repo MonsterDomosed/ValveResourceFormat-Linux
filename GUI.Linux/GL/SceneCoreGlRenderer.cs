@@ -25,6 +25,9 @@ internal class SceneCoreGlRenderer : ViewportGlRenderer
 
     protected GLSceneViewerCore? Core => core;
 
+    /// <summary>The hosted scene core, exposed for the self-check to drive keyboard shortcuts.</summary>
+    internal GLSceneViewerCore? SceneCore => core;
+
     public SceneCoreGlRenderer(string label, CoreFactory factory)
         : base(label)
     {
@@ -60,6 +63,8 @@ internal class SceneCoreGlRenderer : ViewportGlRenderer
     }
 
     protected override void OnResize(int width, int height) => core?.Resize(width, height);
+
+    public override void OnKeyDown(ViewerKey key) => core?.OnKeyDown(key);
 
     protected override void OnDispose() => core?.Dispose();
 }

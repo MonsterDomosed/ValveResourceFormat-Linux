@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Numerics;
 using Avalonia;
 using Avalonia.Controls;
@@ -56,9 +57,37 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
 
     void IGLViewerHost.RequestFrame() => RequestNextFrameRendering();
 
-    void IGLViewerHost.RequestFullscreen()
+    void IGLViewerHost.RequestFullscreen() => ToggleFullscreen();
+
+    private void ToggleFullscreen()
     {
-        // Fullscreen is a shell concern; the shell decides how to present the viewport.
+        if (TopLevel.GetTopLevel(this) is Window window)
+        {
+            window.WindowState = window.WindowState == WindowState.FullScreen
+                ? WindowState.Normal
+                : WindowState.FullScreen;
+        }
+    }
+
+    private void CaptureScreenshot(Action<SkiaSharp.SKBitmap> handler)
+    {
+        if (renderer is not ViewportGlRenderer viewportRenderer)
+        {
+            return;
+        }
+
+        viewportRenderer.RequestScreenshot(bitmap =>
+        {
+            try
+            {
+                handler(bitmap);
+            }
+            finally
+            {
+                bitmap.Dispose();
+            }
+        });
+        RequestNextFrameRendering();
     }
 
     void IGLViewerHost.SetClipboardImage(SkiaSharp.SKBitmap bitmap) => AppClipboard.SetImage(bitmap);
@@ -187,8 +216,52 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
     {
         base.OnKeyDown(e);
 
-        Input.Keys |= MapKey(e.Key) | MapModifiers(e.KeyModifiers);
+        if (e.Key == Key.F11)
+        {
+            ToggleFullscreen();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.Key == Key.C)
+        {
+            CaptureScreenshot(AppClipboard.SetImage);
+            e.Handled = true;
+            return;
+        }
+
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.Key == Key.S)
+        {
+            CaptureScreenshot(SaveScreenshot);
+            e.Handled = true;
+            return;
+        }
+
+        var key = MapKey(e.Key);
+        Input.Keys |= key | MapModifiers(e.KeyModifiers);
+
+        // Viewer shortcuts (Tab performance overlay, Delete, Escape) are handled by the core, not by
+        // the held-key input state.
+        if (key != ViewerKey.None && renderer is ViewportGlRenderer viewportRenderer)
+        {
+            viewportRenderer.OnKeyDown(key);
+        }
+
         RequestNextFrameRendering();
+    }
+
+    private static void SaveScreenshot(SkiaSharp.SKBitmap bitmap)
+    {
+        var path = AppFileDialogs.SaveFile("Save screenshot", "screenshot.png", "png", "PNG image|*.png");
+
+        if (string.IsNullOrEmpty(path))
+        {
+            return;
+        }
+
+        using var data = bitmap.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+        using var stream = File.OpenWrite(path);
+        data.SaveTo(stream);
     }
 
     protected override void OnKeyUp(KeyEventArgs e)
@@ -274,6 +347,8 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         Key.F => ViewerKey.F,
         Key.Space => ViewerKey.Space,
         Key.Escape => ViewerKey.Escape,
+        Key.Tab => ViewerKey.Tab,
+        Key.Delete => ViewerKey.Delete,
         Key.D1 => ViewerKey.Slot1,
         Key.D2 => ViewerKey.Slot2,
         Key.D3 => ViewerKey.Slot3,

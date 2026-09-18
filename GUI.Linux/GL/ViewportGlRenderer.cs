@@ -56,6 +56,24 @@ internal abstract class ViewportGlRenderer : IGLViewportRenderer
 
     public virtual bool ContinuousRendering => true;
 
+    /// <summary>
+    /// Forwards a viewer keyboard shortcut from the host to the renderer. Base renderers ignore keys.
+    /// </summary>
+    public virtual void OnKeyDown(ViewerKey key)
+    {
+    }
+
+    private Action<SkiaSharp.SKBitmap>? screenshotCallback;
+
+    /// <summary>
+    /// Requests a screenshot of the next rendered frame. The callback runs on the UI thread and owns
+    /// the bitmap, which it must dispose.
+    /// </summary>
+    public void RequestScreenshot(Action<SkiaSharp.SKBitmap> onCaptured)
+    {
+        screenshotCallback = onCaptured;
+    }
+
     protected ViewportGlRenderer(string label)
     {
         Label = label;
@@ -140,6 +158,12 @@ internal abstract class ViewportGlRenderer : IGLViewportRenderer
                 ReadBackFrame(width, height);
             }
 
+            if (screenshotCallback is { } capture && RenderedFrames >= 1)
+            {
+                screenshotCallback = null;
+                CaptureScreenshot(width, height, capture);
+            }
+
             RenderedFrames++;
         }
         finally
@@ -180,6 +204,44 @@ internal abstract class ViewportGlRenderer : IGLViewportRenderer
         ReadbackNonBackgroundPixels = nonBackground;
 
         Program.StdOut.WriteLine($"[gl] {Label} pixels: distinct={distinct.Count} nonBackground={nonBackground}/{width * height} glError={OpenGL.GetError()}");
+    }
+
+    private void CaptureScreenshot(int width, int height, Action<SkiaSharp.SKBitmap> callback)
+    {
+        if (Host is null || width <= 0 || height <= 0)
+        {
+            return;
+        }
+
+        var screen = Host.ScreenFramebuffer;
+        screen.Bind(FramebufferTarget.ReadFramebuffer);
+
+        var pixels = new byte[width * height * 4];
+        OpenGL.ReadPixels(0, 0, width, height, PixelFormat.Bgra, PixelType.UnsignedByte, pixels);
+
+        // OpenGL's origin is bottom-left, so flip the rows to produce a top-down image.
+        var stride = width * 4;
+        var flipped = new byte[pixels.Length];
+        for (var row = 0; row < height; row++)
+        {
+            Array.Copy(pixels, row * stride, flipped, (height - 1 - row) * stride, stride);
+        }
+
+        var info = new SkiaSharp.SKImageInfo(width, height, SkiaSharp.SKColorType.Bgra8888, SkiaSharp.SKAlphaType.Premul);
+        using var image = SkiaSharp.SKImage.FromPixelCopy(info, flipped);
+        var bitmap = SkiaSharp.SKBitmap.FromImage(image);
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            try
+            {
+                callback(bitmap);
+            }
+            catch (Exception e)
+            {
+                Program.StdOut.WriteLine($"[gl] screenshot failed: {e.GetType().Name}: {e.Message}");
+            }
+        });
     }
 
     public void Dispose()

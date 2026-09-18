@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Input;
 using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
 using Avalonia.Threading;
@@ -162,6 +163,7 @@ internal sealed class App : Application
         await RunParticleRenderCheckAsync(window).ConfigureAwait(true);
         await RunVoxelVisibilityRenderCheckAsync(window).ConfigureAwait(true);
         await RunModelRenderCheckAsync(window).ConfigureAwait(true);
+        await RunKeyboardRoutingCheckAsync(window).ConfigureAwait(true);
         await RunMaterialRenderCheckAsync(window).ConfigureAwait(true);
         await RunAnimationRenderCheckAsync(window).ConfigureAwait(true);
         await RunPhysicsRenderCheckAsync(window).ConfigureAwait(true);
@@ -1031,6 +1033,65 @@ internal sealed class App : Application
         catch (Exception e)
         {
             await Program.StdOut.WriteLineAsync($"[self-check] visibility tab failed: {e.GetType().Name}: {e.Message}").ConfigureAwait(true);
+        }
+    }
+
+    private static async Task RunKeyboardRoutingCheckAsync(MainWindow window)
+    {
+        const string modelPath = "Tests/Files/export_test.vmdl_c";
+
+        if (!File.Exists(modelPath))
+        {
+            await Program.StdOut.WriteLineAsync($"[self-check] keyboard sample missing: {modelPath}").ConfigureAwait(true);
+            return;
+        }
+
+        try
+        {
+            await window.OpenFileAsync(modelPath).ConfigureAwait(true);
+
+            var (viewport, renderer) = await WaitForRendererAsync<ModelGlRenderer>(window, 1, 30000).ConfigureAwait(true);
+
+            if (viewport is null || renderer.SceneCore is null)
+            {
+                await Program.StdOut.WriteLineAsync("[self-check] keyboard routing: model renderer timed out").ConfigureAwait(true);
+                return;
+            }
+
+            for (var i = 0; i < 50 && renderer.RenderedFrames < 2; i++)
+            {
+                await Task.Delay(50).ConfigureAwait(true);
+            }
+
+            var before = renderer.SceneCore.PerfDisplayMode;
+            viewport.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Tab });
+            var after = renderer.SceneCore.PerfDisplayMode;
+
+            await Program.StdOut.WriteLineAsync(after != before
+                ? $"[self-check] keyboard routing: Tab changed performance overlay {before} -> {after}"
+                : "[self-check] keyboard routing: Tab did not reach the scene core").ConfigureAwait(true);
+
+            SkiaSharp.SKBitmap? screenshot = null;
+            renderer.RequestScreenshot(bitmap => screenshot = bitmap);
+            for (var i = 0; i < 80 && screenshot is null; i++)
+            {
+                await Task.Delay(50).ConfigureAwait(true);
+            }
+
+            await Program.StdOut.WriteLineAsync(screenshot is not null
+                ? $"[self-check] screenshot capture: {screenshot.Width}x{screenshot.Height}"
+                : "[self-check] screenshot capture: no bitmap produced").ConfigureAwait(true);
+            screenshot?.Dispose();
+
+            window.CloseTabContaining(viewport);
+            for (var i = 0; i < 60 && !renderer.Disposed; i++)
+            {
+                await Task.Delay(50).ConfigureAwait(true);
+            }
+        }
+        catch (Exception e)
+        {
+            await Program.StdOut.WriteLineAsync($"[self-check] keyboard routing failed: {e.GetType().Name}: {e.Message}").ConfigureAwait(true);
         }
     }
 
