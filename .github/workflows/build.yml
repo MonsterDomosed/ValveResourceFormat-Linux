@@ -227,7 +227,9 @@ jobs:
         MESA_GLSL_VERSION_OVERRIDE: '460'
         MESA_GL_VERSION_OVERRIDE: '4.6'
         GALLIUM_DRIVER: 'llvmpipe'
-        LIBGL_DEBUG: 'verbose'
+        # Avalonia blacklists the llvmpipe software renderer for GLX by default; the smoke test
+        # intentionally runs on llvmpipe, so opt out of the blacklist.
+        AVALONIA_GLX_IGNORE_RENDERER_BLACKLIST: '1'
       run: xvfb-run -a -s "-screen 0 1280x720x24" ./artifacts/Source2Viewer/Source2Viewer --self-check=smoke --x11
 
     - name: Attest build provenance

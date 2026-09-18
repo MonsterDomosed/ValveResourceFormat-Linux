@@ -84,7 +84,7 @@ internal static class Program
     {
         var builder = AppBuilder.Configure<App>()
             .UsePlatformDetect()
-            .LogToTrace(SelfCheck != SelfCheckMode.None ? LogEventLevel.Verbose : LogEventLevel.Information);
+            .LogToTrace(LogEventLevel.Information);
 
         if (OperatingSystem.IsLinux())
         {
