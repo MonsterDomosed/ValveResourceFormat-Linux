@@ -1,7 +1,12 @@
 using System;
+using System.IO;
 using GUI.Types.GLViewers;
+using SkiaSharp;
+using Svg.Skia;
+using ValveResourceFormat;
 using ValveResourceFormat.CompiledShader;
 using ValveResourceFormat.Renderer;
+using ValveResourceFormat.Renderer.Materials;
 using ValveResourceFormat.Renderer.Shaders;
 using ValveResourceFormat.ResourceTypes;
 using FramebufferTarget = OpenTK.Graphics.OpenGL.FramebufferTarget;
@@ -51,14 +56,29 @@ internal sealed class TextureGlRenderer : ViewportGlRenderer
         };
         resource.Read(fileName);
 
-        if (resource.DataBlock is not Texture textureData)
+        if (resource.DataBlock is Texture)
+        {
+            texture = rendererContext.MaterialLoader.LoadTexture(resource);
+        }
+        else if (resource.ResourceType == ResourceType.PanoramaVectorGraphic && resource.DataBlock is Panorama panoramaData)
+        {
+            using var svgBitmap = CreateSvgBitmap(panoramaData);
+            texture = MaterialLoader.LoadBitmapTexture(svgBitmap);
+        }
+        else if (resource.ResourceType == ResourceType.PostProcessing
+            && resource.DataBlock is PostProcessing postProcessingData
+            && postProcessingData.HasColorCorrection())
+        {
+            using var lutBitmap = CreateLutBitmap(postProcessingData);
+            texture = MaterialLoader.LoadBitmapTexture(lutBitmap);
+        }
+        else
         {
             resource.Dispose();
             resource = null;
-            throw new InvalidOperationException($"Resource is not a texture: {fileName}");
+            throw new InvalidOperationException($"Resource is not a previewable texture: {fileName}");
         }
 
-        texture = rendererContext.MaterialLoader.LoadTexture(resource);
         originalWidth = texture.Width;
         originalHeight = texture.Height;
 
@@ -66,6 +86,65 @@ internal sealed class TextureGlRenderer : ViewportGlRenderer
         shader = rendererContext.ShaderLoader.LoadShader("texture_decode", (textureType, (byte)1));
 
         Program.StdOut.WriteLine($"[gl] texture loaded: {originalWidth}x{originalHeight}, {texture.NumMipLevels} mips, target={texture.Target}");
+    }
+
+    private static SKBitmap CreateSvgBitmap(Panorama panorama)
+    {
+        using var stream = new MemoryStream(panorama.Data);
+        using var svg = new SKSvg();
+
+        if (svg.Load(stream) is null || svg.Picture is null)
+        {
+            throw new InvalidOperationException("Panorama vector graphic could not be parsed as SVG.");
+        }
+
+        var width = Math.Max(1, (int)MathF.Ceiling(svg.Picture.CullRect.Width));
+        var height = Math.Max(1, (int)MathF.Ceiling(svg.Picture.CullRect.Height));
+        var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
+
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Scale(width / svg.Picture.CullRect.Width, height / svg.Picture.CullRect.Height);
+        canvas.DrawPicture(svg.Picture);
+        return bitmap;
+    }
+
+    // Lays the 3D color correction LUT out as a 2D atlas of slices so the shared 2D texture shader
+    // can preview it: width is resolution^2 (slices side by side), height is resolution.
+    private static SKBitmap CreateLutBitmap(PostProcessing postProcessing)
+    {
+        var resolution = postProcessing.GetColorCorrectionLUTDimension();
+        var data = postProcessing.GetColorCorrectionLUT();
+
+        if (resolution <= 0 || data.Length < resolution * resolution * resolution * 4)
+        {
+            throw new InvalidOperationException("Color correction LUT data is incomplete.");
+        }
+
+        var width = resolution * resolution;
+        var height = resolution;
+        var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Opaque));
+        var pixels = bitmap.GetPixelSpan();
+
+        for (var z = 0; z < resolution; z++)
+        {
+            for (var y = 0; y < resolution; y++)
+            {
+                for (var x = 0; x < resolution; x++)
+                {
+                    var source = ((z * resolution + y) * resolution + x) * 4;
+                    var destX = z * resolution + x;
+                    var dest = (y * width + destX) * 4;
+
+                    // Source is RGBA; Skia wants BGRA.
+                    pixels[dest] = data[source + 2];
+                    pixels[dest + 1] = data[source + 1];
+                    pixels[dest + 2] = data[source];
+                    pixels[dest + 3] = data[source + 3];
+                }
+            }
+        }
+
+        return bitmap;
     }
 
     protected override void RenderFrame(GraphicsContext context, ViewerInputState input, float frameTime)

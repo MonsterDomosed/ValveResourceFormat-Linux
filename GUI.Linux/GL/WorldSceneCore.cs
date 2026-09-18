@@ -17,13 +17,15 @@ namespace GUI.Linux.GL;
 internal sealed class WorldSceneCore : GLSceneViewerCore
 {
     private readonly ValveResourceFormat.Resource resource;
+    private readonly ValveResourceFormat.Resource? mapResource;
     private readonly World world;
     private readonly ResourceExtRefList? externalReferences;
 
-    public WorldSceneCore(ISceneViewerContext context, RendererContext rendererContext, IGLViewerHost host, ValveResourceFormat.Resource resource, World world, ResourceExtRefList? externalReferences)
+    public WorldSceneCore(ISceneViewerContext context, RendererContext rendererContext, IGLViewerHost host, ValveResourceFormat.Resource resource, World world, ResourceExtRefList? externalReferences, ValveResourceFormat.Resource? mapResource = null)
         : base(context, rendererContext, host)
     {
         this.resource = resource;
+        this.mapResource = mapResource;
         this.world = world;
         this.externalReferences = externalReferences;
     }
@@ -69,6 +71,7 @@ internal sealed class WorldSceneCore : GLSceneViewerCore
         if (disposing)
         {
             resource.Dispose();
+            mapResource?.Dispose();
         }
     }
 }

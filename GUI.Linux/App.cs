@@ -190,6 +190,9 @@ internal sealed class App : Application
         await RunTwoViewportsCheckAsync(window).ConfigureAwait(true);
         await RunMeshRenderCheckAsync(window).ConfigureAwait(true);
         await RunParticleRenderCheckAsync(window).ConfigureAwait(true);
+        await RunFixtureGlRenderCheckAsync<GUI.Linux.GL.TextureGlRenderer>(window, "Tests/Files/pip-left.vsvg_c", "panorama vector").ConfigureAwait(true);
+        await RunFixtureGlRenderCheckAsync<GUI.Linux.GL.ParticleSnapshotGlRenderer>(window, "Tests/Files/test.vsnap_c", "particle snapshot").ConfigureAwait(true);
+        await RunFixtureGlRenderCheckAsync<GUI.Linux.GL.WorldNodeGlRenderer>(window, "Tests/Files/node000_kv3_v2_zstd.vwnod_c", "world node").ConfigureAwait(true);
         await RunVoxelVisibilityRenderCheckAsync(window).ConfigureAwait(true);
         await RunModelRenderCheckAsync(window).ConfigureAwait(true);
         await RunKeyboardRoutingCheckAsync(window).ConfigureAwait(true);
@@ -1065,6 +1068,50 @@ internal sealed class App : Application
         }
     }
 
+    private static async Task RunFixtureGlRenderCheckAsync<T>(MainWindow window, string path, string label)
+        where T : GUI.Linux.GL.ViewportGlRenderer
+    {
+        if (!File.Exists(path))
+        {
+            await Program.StdOut.WriteLineAsync($"[self-check] {label} sample missing: {path}").ConfigureAwait(true);
+            return;
+        }
+
+        try
+        {
+            await window.OpenFileAsync(path).ConfigureAwait(true);
+
+            var (viewport, renderer) = await WaitForRendererAsync<T>(window, 1, 30000).ConfigureAwait(true);
+
+            if (viewport is null)
+            {
+                await Program.StdOut.WriteLineAsync($"[self-check] {label} tab render timed out").ConfigureAwait(true);
+                return;
+            }
+
+            for (var i = 0; i < 60 && renderer.RenderedFrames < 3; i++)
+            {
+                await Task.Delay(50).ConfigureAwait(true);
+            }
+
+            await Program.StdOut.WriteLineAsync(
+                $"[self-check] {label} tab: frames={renderer.RenderedFrames}, distinctColors={renderer.ReadbackDistinctColors}, "
+                + $"nonBackgroundPixels={renderer.ReadbackNonBackgroundPixels}").ConfigureAwait(true);
+
+            window.CloseTabContaining(viewport);
+            for (var i = 0; i < 60 && !renderer.Disposed; i++)
+            {
+                await Task.Delay(50).ConfigureAwait(true);
+            }
+
+            await Program.StdOut.WriteLineAsync($"[self-check] {label} tab closed, renderer disposed={renderer.Disposed}").ConfigureAwait(true);
+        }
+        catch (Exception e)
+        {
+            await Program.StdOut.WriteLineAsync($"[self-check] {label} failed: {e.GetType().Name}: {e.Message}").ConfigureAwait(true);
+        }
+    }
+
     private static async Task RunKeyboardRoutingCheckAsync(MainWindow window)
     {
         const string modelPath = "Tests/Files/export_test.vmdl_c";
@@ -1865,6 +1912,11 @@ internal sealed class App : Application
             ("Tests/Files/reflectivity_90b.vmat_c", "material"),
             ("Tests/Files/ak47.vnmskel_c", "skeleton"),
             ("Tests/Files/juggernaut.vphys_c", "physics"),
+            ("Tests/Files/dota.vmap_c", "map"),
+            ("Tests/Files/node000_kv3_v2_zstd.vwnod_c", "world node"),
+            ("Tests/Files/pip-left.vsvg_c", "panorama vector graphic"),
+            ("Tests/Files/test.vsnap_c", "particle snapshot"),
+            ("Tests/Files/a1_eli_corridor_kv3_v1_uncompressed.vpost_c", "resource postprocessing"),
         ];
 
         foreach (var (path, expected) in samples)

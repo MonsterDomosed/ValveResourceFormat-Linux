@@ -1,25 +1,29 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using GUI.Linux.GL;
+using GUI.Types.GLViewers;
 using GUI.Types.Viewers;
 
 namespace GUI.Linux.Viewers;
 
 /// <summary>
-/// Linux world/map viewer: a real GL viewport tab plus the portable resource data tabs. The GL tab
-/// renders through the shared <see cref="GUI.Types.GLViewers.GLSceneViewerCore"/> and the existing
-/// <c>WorldLoader</c>.
+/// Linux world/map/world-node viewer: a real GL viewport tab plus the portable resource data tabs.
+/// The GL tab renders through the shared <see cref="GLSceneViewerCore"/> and the existing world
+/// loaders; the renderer factory lets the shell pick the world, map or world-node core.
 /// </summary>
 internal sealed class WorldGlViewer : IViewer
 {
-    private readonly string fileName;
     private readonly ResourceDataViewer dataViewer;
+    private readonly Func<IGLViewportRenderer> createRenderer;
+    private readonly string tabName;
 
-    public WorldGlViewer(IViewerContext context, string fileName, ResourceDataViewer dataViewer)
+    public WorldGlViewer(IViewerContext context, string fileName, ResourceDataViewer dataViewer, Func<IGLViewportRenderer>? createRenderer = null, string tabName = "MAP")
     {
-        this.fileName = fileName;
         this.dataViewer = dataViewer;
+        this.createRenderer = createRenderer ?? (() => new WorldGlRenderer(fileName));
+        this.tabName = tabName;
     }
 
     public Task LoadAsync(Stream? stream) => dataViewer.LoadAsync(stream);
@@ -28,7 +32,7 @@ internal sealed class WorldGlViewer : IViewer
     {
         List<ViewerTab> tabs =
         [
-            new ViewerTab("MAP", new ViewerContent.GlViewport(() => new WorldGlRenderer(fileName)), Select: true),
+            new ViewerTab(tabName, new ViewerContent.GlViewport(createRenderer), Select: true),
         ];
 
         if (dataViewer.GetContent() is ViewerContent.Tabs data)

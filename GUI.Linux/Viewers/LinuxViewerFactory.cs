@@ -1,5 +1,6 @@
 using System.IO;
 using System.Threading.Tasks;
+using GUI.Linux.GL;
 using GUI.Types.Viewers;
 using ValveResourceFormat;
 using ValveResourceFormat.Blocks;
@@ -148,6 +149,34 @@ internal static class LinuxViewerFactory
             if (resourceViewer.ResourceType == ResourceType.PhysicsCollisionMesh)
             {
                 return new PhysGlViewer(context, fileName, resourceViewer);
+            }
+
+            if (resourceViewer.ResourceType == ResourceType.Map)
+            {
+                return new WorldGlViewer(context, fileName, resourceViewer, () => new MapGlRenderer(fileName), "MAP");
+            }
+
+            if (resourceViewer.ResourceType == ResourceType.WorldNode)
+            {
+                return new WorldGlViewer(context, fileName, resourceViewer, () => new WorldNodeGlRenderer(fileName), "WORLD NODE");
+            }
+
+            if (resourceViewer.ResourceType == ResourceType.PanoramaVectorGraphic)
+            {
+                return new TextureGlViewer(context, fileName, resourceViewer);
+            }
+
+            if (resourceViewer.ResourceType == ResourceType.ParticleSnapshot)
+            {
+                return new ParticleGlViewer(context, fileName, resourceViewer, () => new ParticleSnapshotGlRenderer(fileName), "SNAPSHOT");
+            }
+
+            if (resourceViewer.ResourceType == ResourceType.PostProcessing)
+            {
+                return resourceViewer.Resource?.DataBlock is PostProcessing postProcessing
+                    && postProcessing.Data.ContainsKey("m_colorCorrectionVolumeData")
+                    ? new TextureGlViewer(context, fileName, resourceViewer)
+                    : resourceViewer;
             }
 
             return LinuxGlBoundary.IsGlBacked(resourceViewer.ResourceType)

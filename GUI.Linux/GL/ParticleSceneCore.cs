@@ -1,4 +1,5 @@
 using GUI.Types.GLViewers;
+using ValveResourceFormat.Blocks;
 using ValveResourceFormat.Renderer;
 using ValveResourceFormat.Renderer.SceneNodes;
 using ValveResourceFormat.ResourceTypes;
@@ -14,12 +15,14 @@ internal sealed class ParticleSceneCore : GLSceneViewerCore
 {
     private readonly ValveResourceFormat.Resource resource;
     private readonly ParticleSystem particleSystem;
+    private readonly ParticleSnapshot? particleSnapshot;
 
-    public ParticleSceneCore(ISceneViewerContext context, RendererContext rendererContext, IGLViewerHost host, ValveResourceFormat.Resource resource, ParticleSystem particleSystem)
+    public ParticleSceneCore(ISceneViewerContext context, RendererContext rendererContext, IGLViewerHost host, ValveResourceFormat.Resource resource, ParticleSystem particleSystem, ParticleSnapshot? particleSnapshot = null)
         : base(context, rendererContext, host, Frustum.CreateEmpty())
     {
         this.resource = resource;
         this.particleSystem = particleSystem;
+        this.particleSnapshot = particleSnapshot;
     }
 
     public override void PreSceneLoad()
@@ -32,6 +35,17 @@ internal sealed class ParticleSceneCore : GLSceneViewerCore
     {
         RunPostSceneLoad();
 
+        if (particleSnapshot is { } snapshot)
+        {
+            var bounds = ValveResourceFormat.Particles.SnapshotParticleSystem.GetBounds(snapshot);
+            var center = bounds.Center;
+            var size = MathF.Max(bounds.Size.Length(), 64f);
+
+            Input.Camera.SetLocation(center + new Vector3(size));
+            Input.Camera.LookAt(center);
+            return;
+        }
+
         Input.Camera.SetLocation(new Vector3(200, 200, 200));
         Input.Camera.LookAt(Vector3.Zero);
     }
@@ -40,7 +54,7 @@ internal sealed class ParticleSceneCore : GLSceneViewerCore
     {
         Scene.LightingInfo.UseSceneBoundsForSunLightFrustum = false;
 
-        Scene.Add(new ParticleSceneNode(Scene, particleSystem, null, true)
+        Scene.Add(new ParticleSceneNode(Scene, particleSystem, particleSnapshot, true)
         {
             Transform = Matrix4x4.Identity
         }, true);

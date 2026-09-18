@@ -1,24 +1,29 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using GUI.Linux.GL;
+using GUI.Types.GLViewers;
 using GUI.Types.Viewers;
 
 namespace GUI.Linux.Viewers;
 
 /// <summary>
 /// Linux particle viewer: a real GL viewport tab plus the portable resource data tabs. The GL tab
-/// renders through the shared <see cref="GUI.Types.GLViewers.GLSceneViewerCore"/>.
+/// renders through the shared <see cref="GLSceneViewerCore"/>; the renderer factory lets the shell
+/// pick the particle or particle-snapshot core.
 /// </summary>
 internal sealed class ParticleGlViewer : IViewer
 {
-    private readonly string fileName;
     private readonly ResourceDataViewer dataViewer;
+    private readonly Func<IGLViewportRenderer> createRenderer;
+    private readonly string tabName;
 
-    public ParticleGlViewer(IViewerContext context, string fileName, ResourceDataViewer dataViewer)
+    public ParticleGlViewer(IViewerContext context, string fileName, ResourceDataViewer dataViewer, Func<IGLViewportRenderer>? createRenderer = null, string tabName = "PARTICLE")
     {
-        this.fileName = fileName;
         this.dataViewer = dataViewer;
+        this.createRenderer = createRenderer ?? (() => new ParticleGlRenderer(fileName));
+        this.tabName = tabName;
     }
 
     public Task LoadAsync(Stream? stream) => dataViewer.LoadAsync(stream);
@@ -27,7 +32,7 @@ internal sealed class ParticleGlViewer : IViewer
     {
         List<ViewerTab> tabs =
         [
-            new ViewerTab("PARTICLE", new ViewerContent.GlViewport(() => new ParticleGlRenderer(fileName)), Select: true),
+            new ViewerTab(tabName, new ViewerContent.GlViewport(createRenderer), Select: true),
         ];
 
         if (dataViewer.GetContent() is ViewerContent.Tabs data)

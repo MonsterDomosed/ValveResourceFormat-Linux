@@ -57,19 +57,27 @@ internal static class LinuxGameContent
     }
 
     /// <summary>
-    /// Adds the map VPK for a map name (e.g. <c>start</c> or <c>maps/start</c>) when it exists under the
-    /// discovered installation, so its world/entity resources can be resolved.
+    /// Adds the map VPK for a map or world resource path (for example <c>maps/start.vmap_c</c> or
+    /// <c>maps/start/world.vwrld</c>) when it exists under the discovered installation, so its world,
+    /// entity and prop resources can be resolved.
     /// </summary>
-    public static bool EnsureMapVpkLoaded(string mapName)
+    public static bool EnsureMapVpkLoaded(string mapOrWorldPath)
     {
         if (Context.Install is not { } install)
         {
             return false;
         }
 
-        var mapsDir = Path.Combine(install.ContentRoot, "maps");
-        var name = Path.GetFileNameWithoutExtension(mapName);
-        var mapVpk = Path.Combine(mapsDir, name + ".vpk");
+        var normalized = mapOrWorldPath.Replace('\\', '/');
+        var directory = Path.GetDirectoryName(normalized)?.Replace('\\', '/') ?? string.Empty;
+        var mapDirectory = Path.GetFileName(directory);
+
+        if (mapDirectory.Length == 0 || string.Equals(mapDirectory, "maps", StringComparison.OrdinalIgnoreCase))
+        {
+            mapDirectory = Path.GetFileNameWithoutExtension(normalized);
+        }
+
+        var mapVpk = Path.Combine(install.ContentRoot, "maps", mapDirectory + ".vpk");
 
         return AddSearchPackage(mapVpk);
     }
