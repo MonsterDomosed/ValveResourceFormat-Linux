@@ -11,6 +11,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform;
+using Avalonia.Platform.Storage;
 using Avalonia.VisualTree;
 using GUI.Linux.GL;
 using GUI.Linux.Shell;
@@ -37,6 +38,8 @@ internal sealed class MainWindow : Window
     private readonly ConsoleView consoleView = new();
     private readonly TextBlock statusText = new();
     private readonly MenuItem recentFilesMenu = new() { Header = "_Open Recent" };
+    private readonly MenuItem bookmarksMenu = new() { Header = "_Bookmarks" };
+    private readonly Dictionary<TabItem, string> tabPaths = [];
     private TabItem consoleTab = null!;
 
     /// <summary>Number of open tabs, used by the self-check.</summary>
@@ -59,6 +62,12 @@ internal sealed class MainWindow : Window
         RestoreWindowGeometry();
 
         Content = BuildLayout();
+        RefreshRecentFiles();
+        RefreshBookmarks();
+
+        DragDrop.SetAllowDrop(this, true);
+        AddHandler(DragDrop.DragOverEvent, OnDragOver);
+        AddHandler(DragDrop.DropEvent, OnDrop);
 
         KeyDown += OnKeyDown;
         Opened += OnOpened;
@@ -76,6 +85,7 @@ internal sealed class MainWindow : Window
         {
             UpdateContentVisibility();
             UpdateStatus();
+            RefreshBookmarks();
         };
 
         // The tab strip and the content are separated so tab contents stay mounted. This keeps GL
@@ -127,6 +137,7 @@ internal sealed class MainWindow : Window
         var fileMenu = new MenuItem { Header = "_File" };
         fileMenu.Items.Add(open);
         fileMenu.Items.Add(recentFilesMenu);
+        fileMenu.Items.Add(bookmarksMenu);
         fileMenu.Items.Add(new Separator());
         fileMenu.Items.Add(exit);
 
@@ -188,6 +199,27 @@ internal sealed class MainWindow : Window
     {
         SaveWindowGeometry();
         Settings.Save();
+    }
+
+    private static void OnDragOver(object? sender, DragEventArgs e)
+    {
+        e.DragEffects = e.DataTransfer.Contains(DataFormat.File) ? DragDropEffects.Copy : DragDropEffects.None;
+    }
+
+    private void OnDrop(object? sender, DragEventArgs e)
+    {
+        if (e.DataTransfer.TryGetFiles() is not { } files)
+        {
+            return;
+        }
+
+        foreach (var item in files)
+        {
+            if (item.TryGetLocalPath() is { Length: > 0 } path)
+            {
+                _ = OpenFileAsync(path);
+            }
+        }
     }
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
@@ -260,6 +292,7 @@ internal sealed class MainWindow : Window
 
         var tab = CreateTab(Path.GetFileName(path), loading, CloseTab, select: true);
         tab.Tag = path;
+        tabPaths[tab] = path;
         mainTabs.Items.Add(tab);
         mainTabs.SelectedItem = tab;
 
@@ -284,12 +317,56 @@ internal sealed class MainWindow : Window
         catch (Exception ex)
         {
             Log.Error(nameof(MainWindow), ex.ToString());
-            SetTabContent(tab, AvaloniaViewerContentPresenter.Present(new ViewerContent.Text(ex.ToString(), HighlightLanguage.None)));
+            SetTabContent(tab, CreateErrorView(path, ex));
         }
 
         Settings.TrackRecentFile(path);
         RefreshRecentFiles();
+        RefreshBookmarks();
         UpdateStatus();
+    }
+
+    private static StackPanel CreateErrorView(string path, Exception exception)
+    {
+        var details = new TextBox
+        {
+            Text = exception.ToString(),
+            IsReadOnly = true,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.NoWrap,
+            FontFamily = new FontFamily("monospace"),
+            Height = 280,
+            IsVisible = false,
+        };
+
+        var toggle = new Button { Content = "Show details", HorizontalAlignment = HorizontalAlignment.Left };
+        toggle.Click += (_, _) =>
+        {
+            details.IsVisible = !details.IsVisible;
+            toggle.Content = details.IsVisible ? "Hide details" : "Show details";
+        };
+
+        return new StackPanel
+        {
+            Margin = new Thickness(24),
+            Spacing = 10,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = $"Could not open {Path.GetFileName(path)}",
+                    FontSize = 18,
+                    FontWeight = FontWeight.SemiBold,
+                },
+                new TextBlock
+                {
+                    Text = $"{exception.GetType().Name}: {exception.Message}",
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                toggle,
+                details,
+            },
+        };
     }
 
     /// <summary>Opens (or focuses) the source browser tab.</summary>
@@ -397,7 +474,88 @@ internal sealed class MainWindow : Window
             item.Click += (_, _) => _ = OpenFileAsync(path);
             recentFilesMenu.Items.Add(item);
         }
+
+        recentFilesMenu.Items.Add(new Separator());
+
+        var clear = new MenuItem { Header = "Clear recent files" };
+        clear.Click += (_, _) =>
+        {
+            Settings.Config.RecentFiles.Clear();
+            Settings.Save();
+            RefreshRecentFiles();
+        };
+        recentFilesMenu.Items.Add(clear);
     }
+
+    private void RefreshBookmarks()
+    {
+        bookmarksMenu.Items.Clear();
+
+        var bookmarks = Settings.Config.BookmarkedFiles;
+        var currentPath = GetSelectedFilePath();
+
+        var bookmarkCurrent = new MenuItem
+        {
+            Header = "Bookmark current file",
+            IsEnabled = currentPath is not null && !bookmarks.Contains(currentPath, StringComparer.OrdinalIgnoreCase),
+        };
+        bookmarkCurrent.Click += (_, _) =>
+        {
+            if (GetSelectedFilePath() is { } path && !bookmarks.Contains(path, StringComparer.OrdinalIgnoreCase))
+            {
+                bookmarks.Add(path);
+                Settings.Save();
+                RefreshBookmarks();
+            }
+        };
+        bookmarksMenu.Items.Add(bookmarkCurrent);
+
+        var removeCurrent = new MenuItem
+        {
+            Header = "Remove bookmark for current file",
+            IsEnabled = currentPath is not null && bookmarks.Contains(currentPath, StringComparer.OrdinalIgnoreCase),
+        };
+        removeCurrent.Click += (_, _) =>
+        {
+            if (GetSelectedFilePath() is { } path)
+            {
+                bookmarks.RemoveAll(existing => string.Equals(existing, path, StringComparison.OrdinalIgnoreCase));
+                Settings.Save();
+                RefreshBookmarks();
+            }
+        };
+        bookmarksMenu.Items.Add(removeCurrent);
+
+        if (bookmarks.Count == 0)
+        {
+            bookmarksMenu.Items.Add(new MenuItem { Header = "(no bookmarks)", IsEnabled = false });
+            return;
+        }
+
+        bookmarksMenu.Items.Add(new Separator());
+
+        foreach (var path in bookmarks)
+        {
+            var item = new MenuItem { Header = Path.GetFileName(path) };
+            ToolTip.SetTip(item, path);
+            item.Click += (_, _) => _ = OpenFileAsync(path);
+            bookmarksMenu.Items.Add(item);
+        }
+
+        bookmarksMenu.Items.Add(new Separator());
+
+        var clear = new MenuItem { Header = "Clear bookmarks" };
+        clear.Click += (_, _) =>
+        {
+            bookmarks.Clear();
+            Settings.Save();
+            RefreshBookmarks();
+        };
+        bookmarksMenu.Items.Add(clear);
+    }
+
+    private string? GetSelectedFilePath()
+        => mainTabs.SelectedItem is TabItem tab && tabPaths.TryGetValue(tab, out var path) ? path : null;
 
     private void OpenWelcome()
     {
@@ -538,6 +696,7 @@ internal sealed class MainWindow : Window
         }
 
         RemoveTabContent(tab);
+        tabPaths.Remove(tab);
         mainTabs.Items.Remove(tab);
 
         if (mainTabs.Items.Count > 0)

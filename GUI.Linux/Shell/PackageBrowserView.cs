@@ -12,6 +12,7 @@ using Avalonia.Threading;
 using GUI.Types.Browser;
 using GUI.Utils;
 using ValvePak;
+using ValveResourceFormat.IO;
 
 namespace GUI.Linux.Shell;
 
@@ -107,6 +108,8 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
                 e.Handled = true;
             }
         };
+        fileList.ContextMenu = BuildFileContextMenu();
+        fileList.PointerPressed += OnFileListPointerPressed;
 
         var panes = new Grid
         {
@@ -254,6 +257,70 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
         if (fileList.SelectedItem is FileRow row)
         {
             _ = window.OpenPackageEntryAsync(package, vpkPath, row.Entry);
+        }
+    }
+
+    private ContextMenu BuildFileContextMenu()
+    {
+        var open = new MenuItem { Header = "Open" };
+        open.Click += (_, _) => OpenSelected();
+
+        var copyPath = new MenuItem { Header = "Copy path" };
+        copyPath.Click += (_, _) =>
+        {
+            if (fileList.SelectedItem is FileRow row)
+            {
+                AppClipboard.SetText(row.Entry.GetFullPath());
+            }
+        };
+
+        var export = new MenuItem { Header = "Export..." };
+        export.Click += (_, _) => ExportSelected();
+
+        var menu = new ContextMenu();
+        menu.Items.Add(open);
+        menu.Items.Add(copyPath);
+        menu.Items.Add(export);
+        return menu;
+    }
+
+    private void ExportSelected()
+    {
+        if (fileList.SelectedItem is not FileRow row)
+        {
+            return;
+        }
+
+        var dest = AppFileDialogs.SaveFile(
+            "Export file",
+            row.Name,
+            Path.GetExtension(row.Name).TrimStart('.'),
+            "All files (*.*)|*.*");
+
+        if (string.IsNullOrEmpty(dest))
+        {
+            return;
+        }
+
+        try
+        {
+            using var stream = GameFileLoader.GetPackageEntryStream(package, row.Entry);
+            using var file = File.Create(dest);
+            stream.CopyTo(file);
+            Log.Info(nameof(PackageBrowserView), $"Exported {row.Entry.GetFullPath()} to {dest}");
+        }
+        catch (Exception e)
+        {
+            Log.Error(nameof(PackageBrowserView), e.ToString());
+        }
+    }
+
+    private void OnFileListPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (e.GetCurrentPoint(fileList).Properties.IsRightButtonPressed
+            && (e.Source as Control)?.DataContext is FileRow row)
+        {
+            fileList.SelectedItem = row;
         }
     }
 
