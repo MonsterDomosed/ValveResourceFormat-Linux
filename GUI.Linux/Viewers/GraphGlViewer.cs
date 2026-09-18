@@ -1,24 +1,29 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using GUI.Linux.GL;
+using GUI.Types.Graphs.Core;
 using GUI.Types.Viewers;
-using ValveResourceFormat.ResourceTypes;
 
 namespace GUI.Linux.Viewers;
 
 /// <summary>
-/// Linux animation graph viewer: a real GL viewport tab rendering the shared graph presenter plus the
-/// portable resource data tabs. The graph is built by the same <c>NmGraphBuilder</c> the Windows
-/// viewer uses.
+/// Linux graph viewer: a real GL viewport tab rendering the shared graph presenter plus the portable
+/// resource data tabs. The caller supplies the graph build action so AG2, AG1, pulse and entity I/O
+/// graphs all reuse the same presenter and renderer.
 /// </summary>
 internal sealed class GraphGlViewer : IViewer
 {
     private readonly ResourceDataViewer dataViewer;
+    private readonly Func<GraphView, IDisposable?>? build;
+    private readonly string tabName;
 
-    public GraphGlViewer(ResourceDataViewer dataViewer)
+    public GraphGlViewer(ResourceDataViewer dataViewer, Func<GraphView, IDisposable?>? build, string tabName)
     {
         this.dataViewer = dataViewer;
+        this.build = build;
+        this.tabName = tabName;
     }
 
     public Task LoadAsync(Stream? stream) => dataViewer.LoadAsync(stream);
@@ -27,9 +32,9 @@ internal sealed class GraphGlViewer : IViewer
     {
         List<ViewerTab> tabs = [];
 
-        if (dataViewer.Resource?.DataBlock is BinaryKV3 graphData)
+        if (build is not null)
         {
-            tabs.Add(new ViewerTab("AG2 ANIMATION GRAPH", new ViewerContent.GlViewport(() => new GraphGlRenderer(graphData.Data)), Select: true));
+            tabs.Add(new ViewerTab(tabName, new ViewerContent.GlViewport(() => new GraphGlRenderer(build)), Select: true));
         }
 
         if (dataViewer.GetContent() is ViewerContent.Tabs data)

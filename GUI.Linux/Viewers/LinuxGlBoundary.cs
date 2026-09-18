@@ -9,8 +9,8 @@ namespace GUI.Linux.Viewers;
 internal static class LinuxGlBoundary
 {
     public const string Graph =
-        "Rendering uncompiled AG1 animation graphs is not supported on Linux yet; compiled AG2 animation "
-        + "graphs render in the ANIMATION GRAPH tab.";
+        "Uncompiled AG1 animation graphs are shown as KV3 text on Linux; open the compiled .vanmgrph_c to "
+        + "render the graph.";
 
     public const string Resource =
         "This resource has a GPU rendered preview that is not supported on Linux yet. The tabs above show "

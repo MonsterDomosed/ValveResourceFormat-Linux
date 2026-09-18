@@ -1,9 +1,13 @@
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using GUI.Linux.GL;
 using GUI.Types.Viewers;
+using GUI.Utils;
+using ValveKeyValue;
 using ValveResourceFormat;
 using ValveResourceFormat.Blocks;
+using ValveResourceFormat.Graphs;
 using ValveResourceFormat.ResourceTypes;
 
 namespace GUI.Linux.Viewers;
@@ -80,7 +84,9 @@ internal static class LinuxViewerFactory
 
         if (ResourceDataViewer.IsAccepted(magicResourceVersion))
         {
+#pragma warning disable CA2000 // Ownership is transferred to whichever viewer is returned below
             var resourceViewer = new ResourceDataViewer(context);
+#pragma warning restore CA2000
             await resourceViewer.LoadAsync(stream: null).ConfigureAwait(false);
 
             if (resourceViewer.ResourceType == ResourceType.Mesh)
@@ -121,9 +127,27 @@ internal static class LinuxViewerFactory
             }
 
             if (resourceViewer.ResourceType == ResourceType.NmGraph
-                && resourceViewer.Resource?.DataBlock is BinaryKV3)
+                && resourceViewer.Resource?.DataBlock is BinaryKV3 nmGraphData)
             {
-                return new GraphGlViewer(resourceViewer);
+                return CreateAg2Graph(resourceViewer, nmGraphData.Data);
+            }
+
+            if (resourceViewer.ResourceType == ResourceType.AnimationGraph
+                && resourceViewer.Resource?.DataBlock is AnimGraph animGraphData)
+            {
+                return CreateAg1Graph(resourceViewer, animGraphData.Data);
+            }
+
+            if (resourceViewer.ResourceType == ResourceType.PulseGraphDef
+                && resourceViewer.Resource?.DataBlock is BinaryKV3 pulseData)
+            {
+                return CreatePulseGraph(resourceViewer, pulseData.Data);
+            }
+
+            if (resourceViewer.ResourceType == ResourceType.EntityLump
+                && resourceViewer.Resource?.DataBlock is EntityLump entityLumpData)
+            {
+                return CreateEntityIoGraph(resourceViewer, entityLumpData);
             }
 
             if (resourceViewer.ResourceType == ResourceType.Material
@@ -238,5 +262,56 @@ internal static class LinuxViewerFactory
     {
         await viewer.LoadAsync(stream: null).ConfigureAwait(false);
         return viewer;
+    }
+
+    private static GraphGlViewer CreateAg2Graph(ResourceDataViewer dataViewer, KVObject data)
+        => new(dataViewer, view =>
+        {
+            new NmGraphBuilder(data).Build(view.Document);
+            return null;
+        }, "AG2 ANIMATION GRAPH");
+
+    private static GraphGlViewer CreateAg1Graph(ResourceDataViewer dataViewer, KVObject data)
+        => new(dataViewer, view =>
+        {
+            var builder = new AnimGraph1Builder(data, LinuxGameContent.FileLoader);
+            builder.Build(view.Document);
+            return builder;
+        }, "AG1 ANIMATION GRAPH");
+
+    private static GraphGlViewer CreatePulseGraph(ResourceDataViewer dataViewer, KVObject data)
+        => new(dataViewer, view =>
+        {
+            new PulseGraphBuilder(data).Build(view.Document);
+            return null;
+        }, "PULSE GRAPH");
+
+    private static GraphGlViewer CreateEntityIoGraph(ResourceDataViewer dataViewer, EntityLump entityLump)
+        => new(dataViewer, view =>
+        {
+            BuildEntityIo(view.Document, entityLump);
+            return null;
+        }, "ENTITY I/O");
+
+    private static void BuildEntityIo(GraphDocument document, EntityLump entityLump)
+    {
+        System.Collections.Generic.List<EntityLump.Entity> entities;
+
+        try
+        {
+            entities =
+            [
+                .. ValveResourceFormat.ResourceTypes.EntityLumpTraversal
+                    .EnumerateEntities(entityLump, LinuxGameContent.FileLoader, System.Numerics.Matrix4x4.Identity)
+                    .Select(static traversed => traversed.Entity),
+            ];
+        }
+        catch (Exception e)
+        {
+            Log.Warn(nameof(LinuxViewerFactory), $"Failed to traverse child entity lumps: {e.Message}");
+            entities = [.. entityLump.GetEntities()];
+        }
+
+        EntityIOGraphBuilder.Build(document, entities);
     }
 }

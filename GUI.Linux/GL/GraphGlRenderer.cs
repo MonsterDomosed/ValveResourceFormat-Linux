@@ -3,9 +3,7 @@ using System.Numerics;
 using GUI.Types.GLViewers;
 using GUI.Types.Graphs.Core;
 using SkiaSharp;
-using ValveKeyValue;
 using ValveResourceFormat.CompiledShader;
-using ValveResourceFormat.Graphs;
 using ValveResourceFormat.Renderer;
 using ValveResourceFormat.Renderer.Materials;
 using ValveResourceFormat.Renderer.Shaders;
@@ -22,8 +20,9 @@ namespace GUI.Linux.GL;
 /// </summary>
 internal sealed class GraphGlRenderer : ViewportGlRenderer
 {
-    private readonly KVObject graphDefinition;
+    private readonly Func<GraphView, IDisposable?> build;
 
+    private IDisposable? builder;
     private GraphView? view;
     private RendererContext? rendererContext;
     private Shader? shader;
@@ -40,10 +39,10 @@ internal sealed class GraphGlRenderer : ViewportGlRenderer
 
     private bool previousLeft;
 
-    public GraphGlRenderer(KVObject graphDefinition)
+    public GraphGlRenderer(Func<GraphView, IDisposable?> build)
         : base("graph")
     {
-        this.graphDefinition = graphDefinition;
+        this.build = build;
     }
 
     /// <summary>Nodes in the presented graph, for diagnostics.</summary>
@@ -62,7 +61,7 @@ internal sealed class GraphGlRenderer : ViewportGlRenderer
 #pragma warning restore CA2000
 
         view = new GraphView(GraphPalette.Default);
-        new NmGraphBuilder(graphDefinition).Build(view.Document);
+        builder = build(view);
 
         shader = rendererContext.ShaderLoader.LoadShader(
             "texture_decode",
@@ -286,6 +285,8 @@ internal sealed class GraphGlRenderer : ViewportGlRenderer
 
     protected override void OnDispose()
     {
+        builder?.Dispose();
+        builder = null;
         view?.Dispose();
         view = null;
         bitmap?.Dispose();

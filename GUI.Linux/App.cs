@@ -193,6 +193,10 @@ internal sealed class App : Application
         await RunFixtureGlRenderCheckAsync<GUI.Linux.GL.TextureGlRenderer>(window, "Tests/Files/pip-left.vsvg_c", "panorama vector").ConfigureAwait(true);
         await RunFixtureGlRenderCheckAsync<GUI.Linux.GL.ParticleSnapshotGlRenderer>(window, "Tests/Files/test.vsnap_c", "particle snapshot").ConfigureAwait(true);
         await RunFixtureGlRenderCheckAsync<GUI.Linux.GL.WorldNodeGlRenderer>(window, "Tests/Files/node000_kv3_v2_zstd.vwnod_c", "world node").ConfigureAwait(true);
+        await RunFixtureGlRenderCheckAsync<GUI.Linux.GL.TextureGlRenderer>(window, "Tests/Files/a1_eli_corridor_kv3_v1_uncompressed.vpost_c", "postprocessing lut").ConfigureAwait(true);
+        await RunFixtureGlRenderCheckAsync<GUI.Linux.GL.GraphGlRenderer>(window, "Tests/Files/vrf_all_nodes.vanmgrph_c", "ag1 graph").ConfigureAwait(true);
+        await RunFixtureGlRenderCheckAsync<GUI.Linux.GL.GraphGlRenderer>(window, "Tests/Files/de_inferno_script.vpulse_c", "pulse graph").ConfigureAwait(true);
+        await RunFixtureGlRenderCheckAsync<GUI.Linux.GL.GraphGlRenderer>(window, "Tests/Files/default_ents.vents_c", "entity io graph").ConfigureAwait(true);
         await RunVoxelVisibilityRenderCheckAsync(window).ConfigureAwait(true);
         await RunModelRenderCheckAsync(window).ConfigureAwait(true);
         await RunKeyboardRoutingCheckAsync(window).ConfigureAwait(true);
@@ -617,6 +621,8 @@ internal sealed class App : Application
                 await Program.StdOut.WriteLineAsync(worldRenderer.ReadbackNonBackgroundPixels > 0 && worldRenderer.ReadbackDistinctColors > 1
                     ? "[self-check] world tab rendered real geometry"
                     : "[self-check] world tab rendered only a flat frame").ConfigureAwait(true);
+
+                await Program.StdOut.WriteLineAsync($"[self-check] world scene sound: {worldRenderer.HasSoundPlayer}").ConfigureAwait(true);
 
                 window.CloseTabContaining(worldViewport);
                 for (var i = 0; i < 60 && !worldRenderer.Disposed; i++)
@@ -1917,6 +1923,9 @@ internal sealed class App : Application
             ("Tests/Files/pip-left.vsvg_c", "panorama vector graphic"),
             ("Tests/Files/test.vsnap_c", "particle snapshot"),
             ("Tests/Files/a1_eli_corridor_kv3_v1_uncompressed.vpost_c", "resource postprocessing"),
+            ("Tests/Files/vrf_all_nodes.vanmgrph_c", "ag1 animation graph"),
+            ("Tests/Files/de_inferno_script.vpulse_c", "pulse graph"),
+            ("Tests/Files/default_ents.vents_c", "resource entity lump"),
         ];
 
         foreach (var (path, expected) in samples)
