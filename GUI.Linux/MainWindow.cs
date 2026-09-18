@@ -426,8 +426,8 @@ internal sealed class MainWindow : Window
                 },
                 new TextBlock
                 {
-                    Text = "Use File > Open to load a file, or drop a path on the command line.\n"
-                        + "Portable content types open in the shared viewer; compiled resources are not viewable yet.",
+                    Text = "Use File > Open to load a file, or open an installed game from View > Browser.\n"
+                        + "You can also pass file or package paths on the command line.",
                     TextWrapping = TextWrapping.Wrap,
                 },
                 CreateOpenButton(),
@@ -451,7 +451,7 @@ internal sealed class MainWindow : Window
         return button;
     }
 
-    private void OpenSettings()
+    internal void OpenSettings()
     {
         if (FindTab("Settings") is { } existing)
         {
@@ -459,34 +459,7 @@ internal sealed class MainWindow : Window
             return;
         }
 
-        var panel = new StackPanel
-        {
-            Margin = new Thickness(24),
-            Spacing = 10,
-            Children =
-            {
-                new TextBlock { Text = "Settings", FontSize = 22, FontWeight = FontWeight.SemiBold },
-                new TextBlock { Text = "Settings file:", FontWeight = FontWeight.SemiBold },
-                new TextBlock { Text = Path.Combine(PlatformServices.Current.SettingsDirectory, "settings.vdf"), FontFamily = new FontFamily("monospace") },
-                new TextBlock { Text = "Game search paths:", FontWeight = FontWeight.SemiBold },
-                new TextBlock
-                {
-                    Text = Settings.Config.GameSearchPaths.Count == 0
-                        ? "(none configured)"
-                        : string.Join(Environment.NewLine, Settings.Config.GameSearchPaths),
-                    FontFamily = new FontFamily("monospace"),
-                    TextWrapping = TextWrapping.Wrap,
-                },
-                new TextBlock
-                {
-                    Text = "The settings UI is not ported yet; this tab will grow in a later phase.",
-                    Opacity = 0.7,
-                    TextWrapping = TextWrapping.Wrap,
-                },
-            },
-        };
-
-        var tab = CreateTab("Settings", panel, CloseTab, select: true);
+        var tab = CreateTab("Settings", SettingsView.Create(), CloseTab, select: true);
         mainTabs.Items.Add(tab);
         mainTabs.SelectedItem = tab;
     }

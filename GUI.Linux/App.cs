@@ -33,11 +33,28 @@ internal sealed class App : Application
         Styles.Add(new FluentTheme());
     }
 
+    /// <summary>Applies the configured theme to the running application.</summary>
+    internal static void ApplyTheme()
+    {
+        if (Application.Current is not { } application)
+        {
+            return;
+        }
+
+        application.RequestedThemeVariant = Settings.Config.Theme switch
+        {
+            1 => ThemeVariant.Light,
+            2 => ThemeVariant.Dark,
+            _ => ThemeVariant.Default,
+        };
+    }
+
     public override void OnFrameworkInitializationCompleted()
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             Settings.Load();
+            ApplyTheme();
 
             var window = new MainWindow(Program.FileArgs);
             desktop.MainWindow = window;
@@ -124,6 +141,18 @@ internal sealed class App : Application
         catch (Exception e)
         {
             output.WriteLine($"[self-check] content path failed: {e.GetType().Name}: {e.Message}");
+        }
+
+        try
+        {
+            var tabsBeforeSettings = window.TabCount;
+            window.OpenSettings();
+            await Task.Delay(200).ConfigureAwait(true);
+            output.WriteLine($"[self-check] settings tab: tabs {tabsBeforeSettings} -> {window.TabCount}");
+        }
+        catch (Exception e)
+        {
+            output.WriteLine($"[self-check] settings tab failed: {e.GetType().Name}: {e.Message}");
         }
 
         if (Program.SelfCheck == Program.SelfCheckMode.Smoke)

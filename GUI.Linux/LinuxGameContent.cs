@@ -15,7 +15,22 @@ internal static class LinuxGameContent
     private static readonly HashSet<string> AddedPackages = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The shared content context, discovered on first use.</summary>
-    public static GameContentContext Context => context ??= GameContentContext.Discover("Deadlock");
+    public static GameContentContext Context => context ??= CreateContext();
+
+    private static GameContentContext CreateContext()
+    {
+        var selected = Settings.Config.SelectedGame;
+        var preferred = string.IsNullOrEmpty(selected) ? "Deadlock" : selected;
+        return GameContentContext.Discover(preferred);
+    }
+
+    /// <summary>Rebuilds the shared context after the selected game changes.</summary>
+    public static void Reset()
+    {
+        context?.Dispose();
+        context = null;
+        AddedPackages.Clear();
+    }
 
     /// <summary>The shared game file loader, used by renderer contexts.</summary>
     public static GameFileLoader FileLoader => Context.FileLoader;

@@ -11,7 +11,7 @@ namespace GUI.Utils
     /// </summary>
     public static class Settings
     {
-        private const int SettingsFileCurrentVersion = 17;
+        private const int SettingsFileCurrentVersion = 18;
         private const int RecentFilesLimit = 20;
 
         /// <summary>
@@ -62,6 +62,8 @@ namespace GUI.Utils
         {
             /// <summary>Gets or sets the list of game content search paths.</summary>
             public List<string> GameSearchPaths { get; set; } = [];
+            /// <summary>Gets or sets the name of the installed game used for content resolution, or empty for the default.</summary>
+            public string SelectedGame { get; set; } = string.Empty;
             /// <summary>Gets or sets the last directory used when opening files.</summary>
             public string OpenDirectory { get; set; } = string.Empty;
             /// <summary>Gets or sets the last directory used when saving files.</summary>
