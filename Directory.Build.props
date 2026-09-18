@@ -42,9 +42,9 @@
   <PropertyGroup>
     <Authors>ValveResourceFormat Contributors</Authors>
     <Copyright>Copyright © ValveResourceFormat Contributors</Copyright>
-    <RepositoryUrl>https://github.com/ValveResourceFormat/ValveResourceFormat</RepositoryUrl>
+    <RepositoryUrl>https://github.com/MonsterDomosed/ValveResourceFormat-Linux</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageProjectUrl>https://s2v.app/</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/MonsterDomosed/ValveResourceFormat-Linux</PackageProjectUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 

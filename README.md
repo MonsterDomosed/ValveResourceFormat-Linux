@@ -11,6 +11,23 @@
 Valve's Source 2 resource file format parser, renderer, decompiler, and exporter.
 The library component is called **ValveResourceFormat (VRF)**.
 
+## About this project
+
+This is an independent, Linux-focused continuation/fork of
+[ValveResourceFormat](https://github.com/ValveResourceFormat/ValveResourceFormat),
+developed with extensive AI-assisted coding ("vibe coding"). It adds a native Linux
+desktop shell built with Avalonia and OpenGL so Source 2 assets can be browsed,
+rendered and exported on Linux without Wine or Proton.
+
+It is **not** an official ValveResourceFormat or Valve project. It is not affiliated
+with, endorsed by, or supported by the upstream project or by Valve.
+
+The original ValveResourceFormat project can be found here:
+
+https://github.com/ValveResourceFormat/ValveResourceFormat
+
+Powered by [Source 2 Viewer](https://s2v.app) ([ValveResourceFormat](https://github.com/ValveResourceFormat/ValveResourceFormat)).
+
 > [!IMPORTANT]
 > [**For more information and downloads of _Source 2 Viewer_, visit the website.**](https://s2v.app/)
 >
