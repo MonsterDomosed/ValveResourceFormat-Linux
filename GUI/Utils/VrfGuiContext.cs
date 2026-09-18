@@ -14,7 +14,7 @@ using ValveResourceFormat.ToolsAssetInfo;
 
 namespace GUI.Utils
 {
-    public class VrfGuiContext : GameFileLoader
+    public class VrfGuiContext : GameFileLoader, GUI.Types.Viewers.IViewerContext, GUI.Types.GLViewers.ISceneViewerContext
     {
         public static ILogger Logger { get; } = MakeLogger();
 
@@ -41,7 +41,7 @@ namespace GUI.Utils
         internal Action<GLBaseControl>? GLPostLoadAction { get; set; }
 
         // Loading panel listening for the phase this file is being loaded through, if one is up
-        internal IProgress<string>? LoadingProgress { get; set; }
+        public IProgress<string>? LoadingProgress { get; set; }
 
         private int Children;
         private bool WantsToBeDisposed;
@@ -154,6 +154,13 @@ namespace GUI.Utils
         }
 
         public void ClearCache() => ClearCache(disposeStreamingResources: false);
+
+        /// <summary>Logger exposed to the platform-neutral scene viewer core.</summary>
+        public ILogger SceneLogger => Logger;
+
+        /// <summary>Opens the default IBL cubemap resource.</summary>
+        public Stream? OpenDefaultCubemapStream()
+            => Program.Assembly.GetManifestResourceStream("GUI.Utils.industrial_sunset_puresky.vtex_c");
 
         /// <param name="disposeStreamingResources">Only safe once every renderer context on this loader has been
         /// disposed, since that is what waits for the streaming reads still holding these resources.</param>

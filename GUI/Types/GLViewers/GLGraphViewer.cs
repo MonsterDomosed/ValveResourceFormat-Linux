@@ -1038,7 +1038,7 @@ namespace GUI.Types.GLViewers
 
             var graphPoint = ScreenToGraph(e.Location);
 
-            View.HandleMouseDown(graphPoint, e.Button, Control.ModifierKeys);
+            View.HandleMouseDown(graphPoint, ToGraphButton(e.Button), ToGraphModifiers(Control.ModifierKeys));
 
             if (e.Button == MouseButtons.Left && Control.ModifierKeys == Keys.None)
             {
@@ -1076,7 +1076,7 @@ namespace GUI.Types.GLViewers
                 return;
             }
 
-            View.HandleMouseMove(graphPoint, Control.ModifierKeys);
+            View.HandleMouseMove(graphPoint, ToGraphModifiers(Control.ModifierKeys));
         }
 
         protected override void OnMouseUp(object? sender, MouseEventArgs e)
@@ -1087,7 +1087,7 @@ namespace GUI.Types.GLViewers
             var wasDragging = View.IsMoving;
             var graphPoint = ScreenToGraph(e.Location);
 
-            View.HandleMouseUp(graphPoint, e.Button);
+            View.HandleMouseUp(graphPoint, ToGraphButton(e.Button));
 
             if (e.Button == MouseButtons.Right && !wasDragging)
             {
@@ -1107,6 +1107,50 @@ namespace GUI.Types.GLViewers
             var canvasY = (screenPoint.Y + position.Y) / scale;
 
             return new SKPoint(canvasX + graphBounds.Left, canvasY + graphBounds.Top);
+        }
+
+        private static GraphMouseButton ToGraphButton(MouseButtons button)
+        {
+            var result = GraphMouseButton.None;
+
+            if ((button & MouseButtons.Left) != 0)
+            {
+                result |= GraphMouseButton.Left;
+            }
+
+            if ((button & MouseButtons.Right) != 0)
+            {
+                result |= GraphMouseButton.Right;
+            }
+
+            if ((button & MouseButtons.Middle) != 0)
+            {
+                result |= GraphMouseButton.Middle;
+            }
+
+            return result;
+        }
+
+        private static GraphModifiers ToGraphModifiers(Keys keys)
+        {
+            var result = GraphModifiers.None;
+
+            if ((keys & Keys.Shift) != 0)
+            {
+                result |= GraphModifiers.Shift;
+            }
+
+            if ((keys & Keys.Control) != 0)
+            {
+                result |= GraphModifiers.Control;
+            }
+
+            if ((keys & Keys.Alt) != 0)
+            {
+                result |= GraphModifiers.Alt;
+            }
+
+            return result;
         }
 
         /// <summary>There is no texture or resource behind a graph viewer; the saved image is the graph.</summary>

@@ -1,9 +1,9 @@
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
+using ValveKeyValue;
 using ValveResourceFormat.Blocks;
 using ValveResourceFormat.ResourceTypes;
-using ValveKeyValue;
 using ValveResourceFormat.Serialization.KeyValues;
 
 namespace ValveResourceFormat.IO.ContentFormats.DmxModel;

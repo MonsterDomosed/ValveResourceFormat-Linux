@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
 using GUI.Controls;
+using GUI.Platform;
 using GUI.Types.GLViewers;
 using GUI.Utils;
 using Svg.Skia;
@@ -206,10 +207,7 @@ namespace GUI.Forms
                 throw new ArgumentException($"Refusing to open \"{url}\".", nameof(url));
             }
 
-            Process.Start(new ProcessStartInfo(uri.AbsoluteUri)
-            {
-                UseShellExecute = true,
-            });
+            PlatformServices.Current.Shell.OpenUrl(uri);
         }
 
         private void OnCopyVersionClick(object sender, EventArgs e)

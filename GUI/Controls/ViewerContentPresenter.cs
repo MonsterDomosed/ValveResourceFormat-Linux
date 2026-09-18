@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows.Forms;
 using GUI.Types.Viewers;
 
@@ -67,6 +68,19 @@ static class ViewerContentPresenter
                 return control;
             }
 
+            case ViewerContent.EncodedImage image:
+            {
+                var stream = new MemoryStream(image.Bytes);
+                var picture = new PictureBox
+                {
+                    Dock = DockStyle.Fill,
+                    SizeMode = PictureBoxSizeMode.Zoom,
+                    Image = System.Drawing.Image.FromStream(stream),
+                };
+
+                return picture;
+            }
+
             case ViewerContent.Grid grid:
                 return new DataGridView
                 {
@@ -77,6 +91,16 @@ static class ViewerContentPresenter
                     AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
                     DataSource = new BindingSource(grid.Rows, string.Empty),
                     ScrollBars = ScrollBars.Both,
+                };
+
+            case ViewerContent.GlViewport:
+                // GL scene viewers on Windows use the existing GLBaseControl hierarchy directly; the
+                // generic viewport content is only produced by the Linux shell.
+                return new Label
+                {
+                    Dock = DockStyle.Fill,
+                    Text = "This GPU view is not available in this shell.",
+                    TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
                 };
 
             case ViewerContent.Tabs tabs:

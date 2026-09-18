@@ -132,17 +132,24 @@ public class Framebuffer
     }
 
     #region Default OpenGL Framebuffer instance, and equality checks
-    Framebuffer(int fboHandle)
+    Framebuffer(int fboHandle, string name)
     {
         FboHandle = fboHandle;
         InitialStatus = FramebufferErrorCode.FramebufferComplete;
-        Name = "GLDefaultFramebuffer";
+        Name = name;
         isDefaultFramebuffer = true;
     }
+
     /// <summary>
     /// Creates a <see cref="Framebuffer"/> instance wrapping the default OpenGL framebuffer (handle 0).
     /// </summary>
-    public static Framebuffer GLDefaultFramebuffer => new(fboHandle: 0);
+    public static Framebuffer GLDefaultFramebuffer => new(fboHandle: 0, name: "GLDefaultFramebuffer");
+
+    /// <summary>
+    /// Wraps a framebuffer handle owned by a host (e.g. a platform widget's on-screen target) so the
+    /// renderer can present into it.
+    /// </summary>
+    public static Framebuffer FromExternalHandle(int fboHandle, string name) => new(fboHandle, name);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => obj is Framebuffer other && other.FboHandle == FboHandle;

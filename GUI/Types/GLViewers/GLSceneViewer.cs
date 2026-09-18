@@ -1,12 +1,11 @@
 using System.Diagnostics;
 using System.Drawing;
-using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using GUI.Controls;
 using GUI.Types.Audio;
 using GUI.Utils;
-using OpenTK.Graphics.OpenGL;
+using SkiaSharp;
 using ValveResourceFormat.Renderer;
 using ValveResourceFormat.Renderer.Audio;
 using ValveResourceFormat.Renderer.Input;
@@ -16,20 +15,17 @@ using static ValveResourceFormat.Renderer.PickingTexture;
 
 namespace GUI.Types.GLViewers
 {
-    internal abstract class GLSceneViewer : GLBaseControl
+    /// <summary>
+    /// Windows (WinForms) scene viewer. Keeps the existing WinForms hosting and sidebar, and delegates
+    /// all render/update/load/input logic to the platform-neutral <see cref="GLSceneViewerCore"/> so
+    /// the Linux shell can run the same implementation.
+    /// </summary>
+    internal abstract class GLSceneViewer : GLBaseControl, IGLViewerHost
     {
-        public ValveResourceFormat.Renderer.Renderer Renderer { get; internal set; }
-        public UserInput Input { get; protected set; }
+        private readonly RendererContext rendererContext;
+        private readonly Frustum? cullFrustum;
+        private readonly ViewerInputState hostInput = new();
 
-        public ValveResourceFormat.Renderer.TextRenderer TextRenderer { get; protected set; }
-        private readonly CrosshairRenderer crosshairRenderer;
-
-        protected PickingTexture? Picker { get; set; }
-
-        protected QuadOverdraw? QuadOverdrawRenderer { get; set; }
-
-        public Scene Scene { get; }
-        public Scene? SkyboxScene => Renderer.SkyboxScene;
         public VrfGuiContext GuiContext;
 
         /// <summary>Optional sound event player, created by viewers that play scene audio.</summary>
@@ -51,82 +47,99 @@ namespace GUI.Types.GLViewers
             }
         }
 
-        private bool ShowBaseGrid;
-        private bool ShowLightBackground;
-        private bool ShowSolidBackground;
-
-        private bool showStaticOctree;
-        private bool showDynamicOctree;
-        private bool showVisDebug;
-        protected bool ShowSpeed { get; set; }
-        private bool showPhysicsTraces;
-        private PhysicsTraceDebugRenderer? physicsTraceRenderer;
-
-        private enum PerfDisplay
-        {
-            Off,
-            Stats,
-            Timings,
-            Allocations,
-        }
-
-        private PerfDisplay perfDisplay;
         private ComboBox? perfDisplayComboBox;
-
-        /// <summary>Set by escape to release the mouse in walk mode, cleared by clicking back into the viewport.</summary>
-        private bool mouseReleased;
-        private bool roundStarted;
 
         private readonly List<RenderModes.RenderMode> renderModes = new(RenderModes.Items.Count);
         private int renderModeCurrentIndex;
         private ComboBox? renderModeComboBox;
-        private InfiniteGrid? baseGrid;
-        protected SelectedNodeRenderer? SelectedNodeRenderer;
 
-        static readonly TimeSpan FpsUpdateTimeSpan = TimeSpan.FromSeconds(0.1);
+        private readonly WindowsSceneCore core;
 
-        private readonly float[] frameTimes = new float[30];
-        private int frameTimeNextId;
-        private int frameTimeCount;
+        public ValveResourceFormat.Renderer.Renderer Renderer => core.Renderer;
+        public UserInput Input => core.Input;
+        public ValveResourceFormat.Renderer.TextRenderer TextRenderer => core.TextRenderer;
+        public Scene Scene => core.Scene;
+        public Scene? SkyboxScene => core.SkyboxScene;
+        public PickingTexture? Picker => core.Picker;
+        public SelectedNodeRenderer? SelectedNodeRenderer => core.SelectedNodeRenderer;
 
-        private readonly ValveResourceFormat.Renderer.TextRenderer.TextBuffer fpsText = new("FPS: 10000  CPU: 10000.0ms  GPU: 10000.0ms");
-        private readonly ValveResourceFormat.Renderer.TextRenderer.TextBuffer speedText = new("Speed: 100000.0 u/s");
-        private int frametimeQuery1;
-        private int frametimeQuery2;
-
-        protected GLSceneViewer(VrfGuiContext vrfGuiContext, RendererContext rendererContext, Frustum cullFrustum) : this(vrfGuiContext, rendererContext)
+        public bool ShowSpeed
         {
-            Renderer.LockedCullFrustum = cullFrustum;
+            get => core.ShowSpeed;
+            set => core.ShowSpeed = value;
+        }
+
+        public bool ShowBaseGrid
+        {
+            get => core.ShowBaseGrid;
+            set => core.ShowBaseGrid = value;
+        }
+
+        public bool ShowLightBackground
+        {
+            get => core.ShowLightBackground;
+            set => core.ShowLightBackground = value;
+        }
+
+        public bool ShowSolidBackground
+        {
+            get => core.ShowSolidBackground;
+            set => core.ShowSolidBackground = value;
+        }
+
+        public bool ShowStaticOctree
+        {
+            get => core.ShowStaticOctree;
+            set => core.ShowStaticOctree = value;
+        }
+
+        public bool ShowDynamicOctree
+        {
+            get => core.ShowDynamicOctree;
+            set => core.ShowDynamicOctree = value;
+        }
+
+        public bool ShowVisDebug
+        {
+            get => core.ShowVisDebug;
+            set => core.ShowVisDebug = value;
+        }
+
+        public bool ShowPhysicsTraces
+        {
+            get => core.ShowPhysicsTraces;
+            set => core.ShowPhysicsTraces = value;
+        }
+
+        public Vector2 sunAngles
+        {
+            get => core.SunAngles;
+            set => core.SunAngles = value;
+        }
+
+        protected GLSceneViewer(VrfGuiContext vrfGuiContext, RendererContext rendererContext, Frustum cullFrustum) : base(rendererContext)
+        {
+            GuiContext = vrfGuiContext;
+            this.rendererContext = rendererContext;
+            this.cullFrustum = cullFrustum;
+
+            core = new WindowsSceneCore(this, cullFrustum);
         }
 
         protected GLSceneViewer(VrfGuiContext vrfGuiContext, RendererContext rendererContext) : base(rendererContext)
         {
             GuiContext = vrfGuiContext;
+            this.rendererContext = rendererContext;
 
-            Renderer = new(rendererContext);
-            Input = new UserInput(Renderer);
-            TextRenderer = new(rendererContext, Renderer.Camera);
-            crosshairRenderer = new CrosshairRenderer(rendererContext);
-            Scene = Renderer.Scene;
-
-#if DEBUG
-            ShaderHotReload.ShadersReloaded += OnHotReload;
-#endif
+            core = new WindowsSceneCore(this);
         }
 
         public override void Dispose()
         {
-            // Delete GL resources before the base disposes the GL context
-            physicsTraceRenderer?.Delete();
-            physicsTraceRenderer = null;
-
             soundPlayer?.Dispose();
             soundPlayer = null;
 
-            QuadOverdrawRenderer?.Dispose();
-            QuadOverdrawRenderer = null;
-
-            Renderer?.Dispose();
+            core.Dispose();
 
             base.Dispose();
 
@@ -153,8 +166,8 @@ namespace GUI.Types.GLViewers
                     Renderer.LockedCullPosition = v ? Renderer.Camera.Location : null;
                 });
 
-                UiControl.AddCheckBox("Show Static Octree", showStaticOctree, (v) => showStaticOctree = v);
-                UiControl.AddCheckBox("Show Dynamic Octree", showDynamicOctree, (v) => showDynamicOctree = v);
+                UiControl.AddCheckBox("Show Static Octree", ShowStaticOctree, (v) => ShowStaticOctree = v);
+                UiControl.AddCheckBox("Show Dynamic Octree", ShowDynamicOctree, (v) => ShowDynamicOctree = v);
                 UiControl.AddCheckBox("Show Tool Materials", Scene.ShowToolsMaterials, (v) =>
                 {
                     Scene.ShowToolsMaterials = v;
@@ -168,22 +181,22 @@ namespace GUI.Types.GLViewers
 
                     if (Scene.VoxelVisibility != null)
                     {
-                        UiControl.AddCheckBox("Show Vis Debug", showVisDebug, v => showVisDebug = v);
+                        UiControl.AddCheckBox("Show Vis Debug", ShowVisDebug, v => ShowVisDebug = v);
                     }
                 }
 
                 if (Scene.PhysicsWorld != null)
                 {
-                    UiControl.AddCheckBox("Debug Physics Traces", showPhysicsTraces, v => showPhysicsTraces = v);
+                    UiControl.AddCheckBox("Debug Physics Traces", ShowPhysicsTraces, v => ShowPhysicsTraces = v);
                 }
 
                 UiControl.AddCheckBox("Debug Sound Sources", Renderer.ShowSoundDebug, v => Renderer.ShowSoundDebug = v);
 
                 UiControl.AddCheckBox("Disable threaded sim", !Renderer.ParallelSimulation, v => Renderer.ParallelSimulation = !v);
 
-                perfDisplayComboBox = UiControl.AddSelection("Debug Performance", (_, i) => perfDisplay = (PerfDisplay)i);
-                perfDisplayComboBox.Items.AddRange([nameof(PerfDisplay.Off), nameof(PerfDisplay.Stats), nameof(PerfDisplay.Timings), nameof(PerfDisplay.Allocations)]);
-                perfDisplayComboBox.SelectedIndex = (int)perfDisplay;
+                perfDisplayComboBox = UiControl.AddSelection("Debug Performance", (_, i) => core.PerfDisplayMode = i);
+                perfDisplayComboBox.Items.AddRange(["Off", "Stats", "Timings", "Allocations"]);
+                perfDisplayComboBox.SelectedIndex = core.PerfDisplayMode;
             }
 
             base.AddUiControls();
@@ -191,686 +204,212 @@ namespace GUI.Types.GLViewers
 
         public virtual void PreSceneLoad()
         {
-            Renderer.LoadRendererResources();
+            core.RunPreSceneLoad();
         }
 
-        public Vector2 sunAngles;
-        private bool loadedDefaultLighting;
+        protected void LoadDefaultLighting() => core.LoadDefaultLighting();
 
-        protected virtual void LoadDefaultLighting()
-        {
-            using var stream = Program.Assembly.GetManifestResourceStream("GUI.Utils.industrial_sunset_puresky.vtex_c");
-            Debug.Assert(stream != null);
-
-            using var resource = new ValveResourceFormat.Resource()
-            {
-                FileName = "vrf_default_cubemap.vtex_c"
-            };
-            resource.Read(stream);
-
-            Renderer.LoadDefaultLighting(Scene, resource);
-
-            sunAngles = Renderer.DefaultSunAngles;
-            loadedDefaultLighting = true;
-        }
-
-        protected void UpdateSunAngles()
-        {
-            sunAngles.X = Math.Clamp(sunAngles.X, 0f, 89f);
-            sunAngles.Y %= 360f;
-
-            Scene.LightingInfo.SetSunDirectionFromAngles(new Vector3(sunAngles.X, sunAngles.Y, 0f));
-        }
+        public void UpdateSunAngles() => core.UpdateSunAngles();
 
         public virtual void PostSceneLoad()
         {
-            Scene.Initialize();
-            if (Scene.PhysicsWorld != null)
-            {
-                Input.PhysicsWorld = Scene.PhysicsWorld;
-            }
-
-            SkyboxScene?.Initialize();
-
-            if (Scene.FogInfo.CubeFogActive)
-            {
-                var cubemapTexture = Scene.FogInfo.CubemapFog?.CubemapFogTexture;
-                if (cubemapTexture != null)
-                {
-                    Renderer.Textures.RemoveAll(t => t.Slot == ReservedTextureSlots.FogCubeTexture);
-                    Renderer.Textures.Add(new(ReservedTextureSlots.FogCubeTexture, "g_tFogCubeTexture", cubemapTexture));
-                }
-            }
-
-            if (Scene.AllNodes.Any() && this is not GLWorldViewer)
-            {
-                var first = true;
-                var bbox = new AABB();
-
-                foreach (var node in Scene.AllNodes)
-                {
-                    if (first)
-                    {
-                        first = false;
-                        bbox = node.BoundingBox;
-                        continue;
-                    }
-
-                    bbox = bbox.Union(node.BoundingBox);
-                }
-
-                // If there is no bbox, LookAt will break camera, so +1 to location
-                var offset = Math.Max(bbox.Max.X, Math.Max(bbox.Max.Y, bbox.Max.Z)) + 1f * 1.5f;
-                offset = Math.Clamp(offset, 0f, 2000f);
-                var location = new Vector3(offset, 0, offset);
-
-                if (this is GLAnimationViewer)
-                {
-                    location = new(offset);
-                }
-
-                Input.Camera.SetLocation(location);
-                Input.Camera.LookAt(bbox.Center);
-            }
-
-            Scene.StaticOctree.DebugRenderer = new(Scene.StaticOctree, Scene.RendererContext, false);
-            Scene.DynamicOctree.DebugRenderer = new(Scene.DynamicOctree, Scene.RendererContext);
+            core.RunPostSceneLoad();
         }
 
         protected abstract void LoadScene();
 
         protected abstract void OnPicked(object? sender, PickingTexture.PickingResponse pixelInfo);
 
+        protected void ReportLoadingStatus(string status) => core.ReportLoadingStatus(status);
+
+        public void SetEnabledLayers(HashSet<string> layers) => core.SetEnabledLayers(layers);
+
+        /// <summary>The distinct layer names present in the loaded scene.</summary>
+        public List<string> GetLayerNames() => core.GetLayerNames();
+
+        protected void DrawLowerCornerText(ValveResourceFormat.Renderer.TextRenderer.TextMemory text, Color32 color, int lineFromBottom = 0)
+            => core.DrawLowerCornerText(text, color, lineFromBottom);
+
+        /// <summary>Applies settings that affect camera framing from the shared core.</summary>
+        public void ApplyCoreSettings() => core.ApplySettingsToRenderState();
+
+        /// <summary>When set, exported images render only the main scene over a transparent background.</summary>
+        public bool SaveTransparentImage
+        {
+            set => core.SaveImageWithTransparentBackground = value;
+        }
+
+        protected override SkiaSharp.SKBitmap? ReadPixelsToBitmap() => core.ReadPixelsToBitmap();
+
+        public override void OnDetachedFromRenderLoop()
+        {
+            core.OnDetachedFromRenderLoop();
+            soundPlayer?.Suspended = true;
+        }
+
         protected override void OnResize(int w, int h)
         {
             base.OnResize(w, h);
 
-            Renderer.Camera.SetViewportSize(w, h);
-
-            // The input camera frames objects against its own aspect ratio, so it needs the size too
-            Input.Camera.SetViewportSize(w, h);
-
-            Picker?.Resize(w, h);
+            core.Resize(w, h);
         }
 
         protected override void OnMouseWheel(int delta, Point location)
         {
             base.OnMouseWheel(delta, location);
 
-            if (Input.WalkMode)
-            {
-                return;
-            }
-
-            var modifier = Input.OnMouseWheel(delta);
-
-            if (Input.OrbitMode)
-            {
-                SetMoveSpeedOrZoomLabel($"Orbit distance: {modifier:0.0} (scroll to change)");
-            }
-            else
-            {
-                SetMoveSpeedOrZoomLabel($"Move speed: {modifier:0.0}x (scroll to change)");
-            }
+            core.OnPointerWheel(delta);
         }
 
         protected override void OnMouseUp(object? sender, MouseEventArgs e)
         {
             base.OnMouseUp(sender, e);
 
-            if (Input.WalkMode)
-            {
-                return;
-            }
-
-            if (!MouseDragged)
-            {
-                Picker?.RequestNextFrame(InitialMousePosition.X, InitialMousePosition.Y, PickingIntent.Select);
-            }
+            core.OnPointerUp(e.X, e.Y, MapMouseButtons(e.Button));
         }
 
         protected override void OnMouseDown(object? sender, MouseEventArgs e)
         {
             base.OnMouseDown(sender, e);
 
-            mouseReleased = false;
+            core.OnPointerDown(e.X, e.Y, MapMouseButtons(e.Button), e.Clicks);
+        }
 
-            if (Input.WalkMode)
-            {
-                return;
-            }
+        protected override void OnKeyDown(Keys keyData)
+        {
+            core.OnKeyDown(MapKey(keyData));
 
-            if (e.Button == MouseButtons.Left)
-            {
-                if (e.Clicks == 2)
-                {
-                    var intent = Control.ModifierKeys.HasFlag(Keys.Control)
-                        ? PickingIntent.Open
-                        : PickingIntent.Details;
-                    Picker?.RequestNextFrame(e.X, e.Y, intent);
-                }
-            }
+            base.OnKeyDown(keyData);
         }
 
         protected override void OnGLLoad()
         {
             base.OnGLLoad();
 
-            ReportLoadingStatus("Preparing renderer…");
-
-            frametimeQuery1 = GraphicsDevice.CreateQuery(QueryTarget.TimeElapsed, "Frame Time Query");
-            frametimeQuery2 = GraphicsDevice.CreateQuery(QueryTarget.TimeElapsed, "Frame Time Query");
-
-            // Needed to fix crash on certain drivers
-            GL.BeginQuery(QueryTarget.TimeElapsed, frametimeQuery2);
-            GL.EndQuery(QueryTarget.TimeElapsed);
-
-            TextRenderer.Load();
-            Renderer.Postprocess.Load(NumSamples);
-
-            Renderer.Postprocess.FullScreenGamma = 2.01f; // 100% Brightness
-            Renderer.Postprocess.ExposureCompensation = -0.4f; // eyeballed
-
-            baseGrid = new InfiniteGrid(Scene);
-            SelectedNodeRenderer = new(Scene.RendererContext);
-            Picker = new(Scene.RendererContext, OnPicked);
-
-            QuadOverdrawRenderer = new(Scene.RendererContext);
-            QuadOverdrawRenderer.Load();
-
-            Renderer.ShadowTextureSize = Settings.Config.ShadowResolution;
-            Renderer.Initialize();
-
-            Renderer.MainFramebuffer = MainFramebuffer;
-
-            MainFramebuffer!.Bind(FramebufferTarget.Framebuffer);
-
-            var timer = Stopwatch.StartNew();
-            PreSceneLoad();
-            LoadScene();
-            timer.Stop();
-            Log.Debug(GetType().Name, $"Loading scene time: {timer.Elapsed}, shader variants: {Scene.RendererContext.ShaderLoader.ShaderCount}, materials: {Scene.RendererContext.MaterialLoader.MaterialCount}");
-
-            ReportLoadingStatus("Initializing scene…");
-
-            PostSceneLoad();
-
-            GuiContext.ClearCache();
-            GuiContext.GLPostLoadAction?.Invoke(this);
-            GuiContext.GLPostLoadAction = null;
-        }
-
-        /// <summary>
-        /// Renders one full frame with culling disabled so the driver specializes every
-        /// (program, vertex layout, framebuffer) combination once.
-        ///
-        /// Must run on the render loop thread. Nvidia specializes per thread, so a frame drawn while the
-        /// context still belongs to the loading thread specializes nothing the render loop can use, and every
-        /// program pays for it again on its first real draw.
-        /// </summary>
-        private void PrewarmDrawCalls()
-        {
             Debug.Assert(MainFramebuffer != null);
-
-            Scene.RendererContext.ShaderLoader.LinkLoadedShaders();
-            Renderer.DisableAllCulling = true;
-
-            Renderer.Camera.CopyFrom(Input.Camera);
-            Renderer.Prewarming = true;
-
-            try
-            {
-                // A non-zero delta so that particles actually simulate
-                OnPaint(1f / 60f);
-
-                foreach (var particleNode in Scene.AllNodes.OfType<ParticleSceneNode>())
-                {
-                    particleNode.Prewarm(Renderer.Camera);
-                }
-            }
-            finally
-            {
-                Renderer.DisableAllCulling = false;
-                Renderer.Prewarming = false;
-            }
-        }
-
-        protected void ReportLoadingStatus(string status) => GuiContext.LoadingProgress?.Report(status);
-
-        protected override void PrewarmRenderer()
-        {
-            ReportLoadingStatus("Compiling shaders…");
-
-            var start = Stopwatch.GetTimestamp();
-
-            PrewarmDrawCalls();
-
-            Log.Debug(GetType().Name, $"Prewarm time: {Stopwatch.GetElapsedTime(start)}");
-        }
-
-        /// <summary>
-        /// Creates <see cref="soundPlayer"/> and loads the game's sound events, wiring up the master volume from
-        /// settings and the default mix group volumes. Safe to call once; failures (e.g. no audio device) are logged
-        /// and leave <see cref="soundPlayer"/> null. Intended for scene viewers that want to play scene audio.
-        /// </summary>
-        protected void InitializeSoundPlayer()
-        {
-            if (soundPlayer != null)
-            {
-                return;
-            }
-
-            try
-            {
-                // The player takes ownership of the device and disposes it in its own Dispose (called from ours);
-                // CA2000 cannot see ownership transfer through the constructor, so this is not actually a leak.
-#pragma warning disable CA2000
-                soundPlayer = new SoundEventPlayer(GuiContext, new NAudioDevice(), Scene.RendererContext.Logger);
-#pragma warning restore CA2000
-            }
-            catch (COMException e)
-            {
-                // WASAPI has no usable render endpoint (no audio hardware, headless/RDP session, audio service off).
-                // This is an expected environment, not a bug: run without sound rather than failing the viewer.
-                Log.Warn(nameof(GLSceneViewer), $"No audio device available, sound playback disabled: {e.Message}");
-                return;
-            }
-
-            soundPlayer.LoadSoundEvents();
-            soundPlayer.LoadSoundscapes();
-
-            // todo: collision filter 'default' and 'blocksound'
-            // const float OcclusionEndMargin = 48f;
-            // soundPlayer.OcclusionTrace = (listener, sound) =>
-            //     Scene.PhysicsWorld?.TraceRay(listener, sound) is { Hit: true } hit
-            //         && Vector3.DistanceSquared(hit.HitPosition, sound) > OcclusionEndMargin * OcclusionEndMargin;
-
-            soundPlayer.Suspended = true; // start with fade-in
-            soundPlayer.Volume = Settings.Config.Volume;
-            soundPlayer.MixGroupVolume["Weapons"] = 0.7f;
-            soundPlayer.MixGroupVolume["Foley"] = 0.5f;
-            soundPlayer.MixGroupVolume["Footsteps"] = 0.4f;
-            soundPlayer.MixGroupVolume["PlayerDamage"] = 0.4f;
-            soundPlayer.DefaultMixGroupVolume = 0.1f;
-        }
-
-        public override void OnDetachedFromRenderLoop()
-        {
-            base.OnDetachedFromRenderLoop();
-            soundPlayer?.Suspended = true;
+            core.Load(MainFramebuffer, NumSamples);
         }
 
         protected override void OnUpdate(float frameTime)
         {
-            base.OnUpdate(frameTime);
-
-            if (soundPlayer != null)
-            {
-                soundPlayer.Volume = Settings.Config.Volume;
-                soundPlayer.Suspended = Paused;
-            }
-
-            Input.EnableMouseLook = true;
-
-            if (loadedDefaultLighting && Input.NoClip && (CurrentlyPressedKeys & TrackedKeys.Control) != 0)
-            {
-                var delta = new Vector2(LastMouseDelta.Y, LastMouseDelta.X);
-
-                sunAngles += delta;
-                Scene.AdjustEnvMapSunAngle(Matrix4x4.CreateRotationZ(-delta.Y / 80f));
-                UpdateSunAngles();
-                Scene.UpdateBuffers();
-                Input.EnableMouseLook = false;
-            }
-
-            // Walk mode keeps simulating while the cursor is over the ui, otherwise player
-            // physics and teleports stay frozen until the mouse moves back over the viewport.
-            if (MouseOverRenderArea || Input.ForceUpdate || Input.WalkMode)
-            {
-                Input.MouseSensitivity = Settings.Config.MouseSensitivity;
-                Input.SmoothCameraEnabled = Settings.Config.SmoothCameraEnabled;
-
-                var pressedKeys = ConsumeCurrentlyPressedKeysForUpdate();
-                var modifierKeys = Control.ModifierKeys;
-
-                if ((modifierKeys & Keys.Shift) > 0)
-                {
-                    pressedKeys |= TrackedKeys.Shift;
-                }
-
-                if ((modifierKeys & Keys.Alt) > 0)
-                {
-                    pressedKeys |= TrackedKeys.Alt;
-                }
-
-                var mouseDelta = ConsumePendingMouseDelta();
-                var wheelDelta = ConsumePendingMouseWheelDelta();
-
-                Input.MouseSensitivity = Settings.Config.MouseSensitivity;
-                var wasWalkMode = Input.WalkMode;
-                Input.Tick(frameTime, pressedKeys, new Vector2(mouseDelta.X, mouseDelta.Y), Renderer.Camera);
-                LastMouseDelta = mouseDelta;
-
-                // cancel unintentional selection
-                if (!wasWalkMode && Input.WalkMode)
-                {
-                    SelectedNodeRenderer?.SelectNode(null);
-
-                    if (!roundStarted)
-                    {
-                        roundStarted = true;
-                        Scene.EntitySystem.StartRound();
-                    }
-                }
-
-                // Walk mode aims with the mouse, so it holds the cursor. Leaving walk mode, pausing,
-                // or pressing escape hands it back.
-                var wantsMouseLook = Input.WalkMode && !Paused && !mouseReleased;
-
-                // Taking the cursor needs it over the viewport, but keeping it does not, or a fast
-                // look that outran the pointer would drop the grab on its way past the edge.
-                var alreadyHoldingCursor = GrabbedMouse;
-
-                GrabbedMouse = wantsMouseLook && (alreadyHoldingCursor || MouseOverRenderArea);
-            }
-        }
-
-        /// <summary>
-        /// Advances the sound system and reports its cost. Runs inside the frame's timing bracket rather
-        /// than in <see cref="OnUpdate"/>, which is outside it, so the listener update shows up as a row.
-        /// </summary>
-        private void UpdateSoundPlayer()
-        {
-            if (soundPlayer == null)
-            {
-                return;
-            }
-
-            if (!Paused)
-            {
-                using (new ProfilerScope("Update Sounds"))
-                {
-                    soundPlayer.Update(Renderer.Camera);
-                }
-            }
-        }
-
-        protected void DrawLowerCornerText(ValveResourceFormat.Renderer.TextRenderer.TextMemory text, Color32 color, int lineFromBottom = 0)
-        {
-            Debug.Assert(MainFramebuffer != null);
-
-            TextRenderer.AddText(new ValveResourceFormat.Renderer.TextRenderer.TextRenderRequest
-            {
-                X = 2f,
-                Y = MainFramebuffer.Height - 4f - lineFromBottom * 16f,
-                Scale = 14f,
-                Color = color,
-                Text = text
-            });
-        }
-
-        protected void DrawWorldSpaceText(string text, float size, Vector3 position, Color32 color, Scene.RenderContext renderContext)
-        {
-            Scene.WantsSceneDepth = true;
-            TextRenderer.AddTextBillboard(position, new ValveResourceFormat.Renderer.TextRenderer.TextRenderRequest
-            {
-                Scale = size,
-                Color = color,
-                Text = text,
-                CenterVertical = true,
-                CenterHorizontal = true,
-            }, renderContext.Camera, depthMask: true);
-        }
-
-        protected override void BlitFramebufferToScreen()
-        {
-            Debug.Assert(MainFramebuffer != null);
-            Debug.Assert(GLDefaultFramebuffer != null);
-
-            Renderer.PostprocessRender(MainFramebuffer, GLDefaultFramebuffer);
-        }
-
-        protected override void OnBufferSwapped(double blockedMs, double framePeriodMs)
-        {
-            Renderer.PerfStats.Timings.SetBufferSwapTime(blockedMs, framePeriodMs);
+            BuildHostInput();
+            core.Update(frameTime);
         }
 
         protected override void OnPaint(float frameTime)
         {
-            Debug.Assert(MainFramebuffer != null);
-            Debug.Assert(Picker != null);
-            Debug.Assert(SelectedNodeRenderer != null);
+            core.Paint(frameTime);
+        }
 
-            Renderer.PerfStats.Capture = perfDisplay == PerfDisplay.Stats;
-            Renderer.PerfStats.Timings.Capture = perfDisplay == PerfDisplay.Timings;
-            Renderer.PerfStats.Allocations.Capture = perfDisplay == PerfDisplay.Allocations;
+        protected override void PrewarmRenderer()
+        {
+            core.PrewarmRenderer();
+        }
 
-            Renderer.PerfStats.MarkFrameBegin();
-            GL.BeginQuery(QueryTarget.TimeElapsed, frametimeQuery1);
+        protected override void OnBufferSwapped(double blockedMs, double framePeriodMs)
+        {
+            core.OnBufferSwapped(blockedMs, framePeriodMs);
+        }
 
-            var renderContext = new Scene.RenderContext
+        /// <summary>Pushes the GLBaseControl input state into the neutral state the shared core reads.</summary>
+        private void BuildHostInput()
+        {
+            var pressedKeys = ConsumeCurrentlyPressedKeysForUpdate();
+            var mouseDelta = ConsumePendingMouseDelta();
+
+            hostInput.Keys = MapKeys(pressedKeys);
+            hostInput.Delta = new Vector2(mouseDelta.X, mouseDelta.Y);
+            hostInput.MouseOverViewport = MouseOverRenderArea;
+            hostInput.HasFocus = true;
+        }
+
+        private static ViewerKey MapKeys(TrackedKeys keys)
+        {
+            var result = ViewerKey.None;
+
+            void Set(TrackedKeys tracked, ViewerKey key)
             {
-                Camera = Renderer.Camera,
-                Framebuffer = MainFramebuffer,
-                Textures = Renderer.Textures,
-                Scene = Scene,
+                if ((keys & tracked) != 0)
+                {
+                    result |= key;
+                }
+            }
+
+            Set(TrackedKeys.Shift, ViewerKey.Shift);
+            Set(TrackedKeys.Alt, ViewerKey.Alt);
+            Set(TrackedKeys.Control, ViewerKey.Control);
+            Set(TrackedKeys.W, ViewerKey.W);
+            Set(TrackedKeys.A, ViewerKey.A);
+            Set(TrackedKeys.S, ViewerKey.S);
+            Set(TrackedKeys.D, ViewerKey.D);
+            Set(TrackedKeys.Q, ViewerKey.Q);
+            Set(TrackedKeys.Z, ViewerKey.Z);
+            Set(TrackedKeys.X, ViewerKey.X);
+            Set(TrackedKeys.Space, ViewerKey.Space);
+            Set(TrackedKeys.Escape, ViewerKey.Escape);
+            Set(TrackedKeys.E, ViewerKey.E);
+            Set(TrackedKeys.F, ViewerKey.F);
+            Set(TrackedKeys.Slot1, ViewerKey.Slot1);
+            Set(TrackedKeys.Slot2, ViewerKey.Slot2);
+            Set(TrackedKeys.Slot3, ViewerKey.Slot3);
+            Set(TrackedKeys.Slot4, ViewerKey.Slot4);
+            Set(TrackedKeys.MouseLeft, ViewerKey.MouseLeft);
+            Set(TrackedKeys.MouseRight, ViewerKey.MouseRight);
+
+            return result;
+        }
+
+        private static ViewerKey MapMouseButtons(MouseButtons button) => button switch
+        {
+            MouseButtons.Left => ViewerKey.MouseLeft,
+            MouseButtons.Right => ViewerKey.MouseRight,
+            _ => ViewerKey.None,
+        };
+
+        private static ViewerKey MapKey(Keys keyData)
+        {
+            var key = keyData & Keys.KeyCode;
+            var result = key switch
+            {
+                Keys.W or Keys.Up => ViewerKey.W,
+                Keys.S or Keys.Down => ViewerKey.S,
+                Keys.A or Keys.Left => ViewerKey.A,
+                Keys.D or Keys.Right => ViewerKey.D,
+                Keys.Q => ViewerKey.Q,
+                Keys.Z => ViewerKey.Z,
+                Keys.X => ViewerKey.X,
+                Keys.E => ViewerKey.E,
+                Keys.F => ViewerKey.F,
+                Keys.Space => ViewerKey.Space,
+                Keys.Escape => ViewerKey.Escape,
+                Keys.Delete => ViewerKey.Delete,
+                Keys.Tab => ViewerKey.Tab,
+                Keys.D1 => ViewerKey.Slot1,
+                Keys.D2 => ViewerKey.Slot2,
+                Keys.D3 => ViewerKey.Slot3,
+                Keys.D4 => ViewerKey.Slot4,
+                Keys.LShiftKey or Keys.RShiftKey or Keys.ShiftKey => ViewerKey.Shift,
+                Keys.LMenu or Keys.RMenu or Keys.Menu => ViewerKey.Alt,
+                Keys.LControlKey or Keys.RControlKey or Keys.ControlKey => ViewerKey.Control,
+                _ => ViewerKey.None,
             };
 
-            using (new GLDebugGroup("Update Loop"))
+            if (keyData.HasFlag(Keys.Shift))
             {
-                var updateContext = new Scene.UpdateContext
-                {
-                    TextRenderer = TextRenderer,
-                    Timestep = frameTime,
-                    Camera = Renderer.Camera,
-                };
-
-                Renderer.Update(updateContext);
-
-                Input.LateUpdate(Renderer.Camera);
-
-                SelectedNodeRenderer.Update(renderContext, updateContext);
+                result |= ViewerKey.Shift;
             }
 
-            // After the update, so the listener is placed with this frame's camera vectors rather than
-            // this frame's position and last frame's facing
-            UpdateSoundPlayer();
-
-            Renderer.ForceResolveSceneDepth = ShowBaseGrid;
-
-            var quadOverdrawThisFrame = false;
-
-            using (new GLDebugGroup("Scenes Render"))
+            if (keyData.HasFlag(Keys.Alt))
             {
-                if (Picker.ActiveNextFrame)
-                {
-                    using var _ = new GLDebugGroup("Picker Object Id Render");
-                    renderContext.ReplacementShader = Picker.Shader;
-                    renderContext.Framebuffer = Picker;
-
-                    Renderer.RenderScenesWithView(renderContext);
-                    Picker.Finish();
-                }
-                else if (Picker.IsDebugActive)
-                {
-                    renderContext.ReplacementShader = Picker.DebugShader;
-                }
-                else if (QuadOverdrawRenderer?.IsActive == true)
-                {
-                    QuadOverdrawRenderer.Prepare(MainFramebuffer.Width, MainFramebuffer.Height);
-
-                    quadOverdrawThisFrame = true;
-                }
-
-                Renderer.Render(renderContext);
-
-                if (quadOverdrawThisFrame)
-                {
-                    using (new GLDebugGroup("Quad Overdraw Counting Pass"))
-                    {
-                        QuadOverdrawRenderer!.BeginCountingPass(MainFramebuffer);
-
-                        renderContext.OverdrawShader = QuadOverdrawRenderer.SceneShader;
-                        Renderer.RenderScenesWithView(renderContext);
-                        renderContext.OverdrawShader = null;
-
-                        QuadOverdrawRenderer.EndCountingPass(MainFramebuffer);
-                    }
-
-                    QuadOverdrawRenderer!.Render();
-                }
+                result |= ViewerKey.Alt;
             }
 
-            using (new GLDebugGroup("Lines Render"))
+            if (keyData.HasFlag(Keys.Control))
             {
-                SelectedNodeRenderer.Render();
-
-                if (showStaticOctree && Scene.StaticOctree.DebugRenderer != null)
-                {
-                    Scene.StaticOctree.DebugRenderer.Render();
-                }
-
-                if (showDynamicOctree && Scene.DynamicOctree.DebugRenderer != null)
-                {
-                    Scene.DynamicOctree.DebugRenderer.Render();
-                }
-
-                if (Scene.OcclusionDebugEnabled && Scene.OcclusionDebug != null)
-                {
-                    Scene.OcclusionDebug.Render();
-                }
-
-                if (showPhysicsTraces && Scene.PhysicsWorld != null)
-                {
-                    physicsTraceRenderer ??= new PhysicsTraceDebugRenderer(Scene.RendererContext);
-                    physicsTraceRenderer.Render(Scene.PhysicsWorld, Input, Renderer.Camera);
-                }
-
-                if (ShowBaseGrid && baseGrid != null)
-                {
-                    baseGrid.Render();
-
-                    DrawWorldSpaceText("+X", 10f, Vector3.UnitX * 120f, Color32.Red, renderContext);
-                    DrawWorldSpaceText("-X", 10f, -Vector3.UnitX * 120f, Color32.Red, renderContext);
-                    DrawWorldSpaceText("+Y", 10f, Vector3.UnitY * 120f, Color32.Green, renderContext);
-                    DrawWorldSpaceText("-Y", 10f, -Vector3.UnitY * 120f, Color32.Green, renderContext);
-                }
+                result |= ViewerKey.Control;
             }
 
-            GL.EndQuery(QueryTarget.TimeElapsed);
-
-            if (Paused)
-            {
-                DrawLowerCornerText("Paused", new(255, 100, 0));
-            }
-            else if (Settings.Config.DisplayFps != 0)
-            {
-                var currentTime = Stopwatch.GetTimestamp();
-                var fpsElapsed = Stopwatch.GetElapsedTime(lastFpsUpdate, currentTime);
-
-                // Zero length frames (the first frame after resuming) would inflate the average.
-                if (frameTime > 0f)
-                {
-                    frameTimes[frameTimeNextId++] = frameTime;
-                    frameTimeNextId %= frameTimes.Length;
-                    frameTimeCount = Math.Min(frameTimeCount + 1, frameTimes.Length);
-                }
-
-                if (frameTimeCount > 0 && fpsElapsed >= FpsUpdateTimeSpan)
-                {
-                    var frametimeQuery = frametimeQuery2;
-                    frametimeQuery2 = frametimeQuery1;
-                    frametimeQuery1 = frametimeQuery;
-
-                    GL.GetQueryObject(frametimeQuery, GetQueryObjectParam.QueryResultNoWait, out long gpuTime);
-                    var gpuFrameTime = gpuTime / 1_000_000f;
-
-                    var frameTimeSum = 0f;
-
-                    // Only the samples written so far, the rest of the ring is still zeroed.
-                    for (var i = 0; i < frameTimeCount; i++)
-                    {
-                        frameTimeSum += frameTimes[i];
-                    }
-
-                    var fps = frameTimeCount / frameTimeSum;
-                    var cpuFrameTime = Stopwatch.GetElapsedTime(LastUpdate, currentTime).TotalMilliseconds;
-
-                    lastFpsUpdate = currentTime;
-                    fpsText.Format($"FPS: {fps,-3:0}  CPU: {cpuFrameTime,-4:0.0}ms  GPU: {gpuFrameTime,-4:0.0}ms");
-                }
-
-                DrawLowerCornerText(fpsText, Color32.White);
-            }
-
-            BlitFramebufferToScreen();
-
-            if (Input.ShowCrosshair)
-            {
-                crosshairRenderer.Render(Renderer.Camera);
-            }
-
-            if (GrabbedMouse && ShowSpeed)
-            {
-                TextRenderer.AddTextRelative(new ValveResourceFormat.Renderer.TextRenderer.TextRenderRequest
-                {
-                    X = 0.5f,
-                    Y = 0.85f,
-                    Scale = 12f,
-                    Color = Color32.Yellow,
-                    Text = speedText.Format($"Speed: {Input.Velocity.AsVector2().Length():0.0} u/s"),
-                    CenterHorizontal = true,
-                }, Renderer.Camera);
-            }
-
-            if (showVisDebug && Scene.VoxelVisibility != null)
-            {
-                var pvsPos = Renderer.LockedCullPosition ?? Renderer.Camera.Location;
-                var cluster = Scene.VoxelVisibility.GetClusterForPosition(pvsPos);
-                var y = 18f;
-
-                void AddLine(string text, Color32 color)
-                {
-                    TextRenderer.AddText(new ValveResourceFormat.Renderer.TextRenderer.TextRenderRequest
-                    {
-                        X = 4f,
-                        Y = y,
-                        Scale = 14f,
-                        Color = color,
-                        Text = text,
-                    });
-                    y += 16f;
-                }
-
-                AddLine(
-                    cluster <= 1 ? "No PVS at this position" : $"PVS cluster {cluster}",
-                    cluster <= 1 ? new Color32(255, 0, 0) : Color32.White
-                );
-
-                if (Scene.CurrentFramePvs != null)
-                {
-                    var visCount = Scene.CurrentFramePvs.Sum(b => BitOperations.PopCount(b));
-                    AddLine($"PVS visible: {visCount}/{Scene.VoxelVisibility.BaseClusterCount} clusters", Color32.White);
-                }
-            }
-
-            if (perfDisplay == PerfDisplay.Stats)
-            {
-                Renderer.PerfStats.DisplayStats(TextRenderer, Renderer.Camera, Scene, SkyboxScene);
-            }
-            else if (perfDisplay == PerfDisplay.Timings)
-            {
-                Renderer.PerfStats.Timings.DisplayTimings(TextRenderer, Renderer.Camera);
-            }
-            else if (perfDisplay == PerfDisplay.Allocations)
-            {
-                Renderer.PerfStats.Allocations.DisplayAllocations(TextRenderer, Renderer.Camera);
-            }
-
-            TextRenderer.Render(Renderer.Camera, Renderer.ResolvedSceneDepth);
-            Picker?.TriggerEventIfAny();
-
-            Renderer.PerfStats.MarkFrameEnd();
+            return result;
         }
 
         protected void AddBaseGridControl()
@@ -943,7 +482,7 @@ namespace GUI.Types.GLViewers
                 }
 
                 renderModeCurrentIndex = i;
-                SetRenderMode(renderMode.Name);
+                core.ApplyRenderMode(renderMode.Name);
             }, true, true);
 
             SetAvailableRenderModes();
@@ -955,46 +494,17 @@ namespace GUI.Types.GLViewers
             {
                 var selectedIndex = 0;
                 var currentlySelected = keepCurrentSelection ? renderModeComboBox.SelectedItem?.ToString() : null;
-                var supportedRenderModes = new HashSet<string>(Picker.Shader.RenderModes);
-
-                if (QuadOverdrawRenderer != null)
-                {
-                    supportedRenderModes.UnionWith(QuadOverdrawRenderer.SceneShader.RenderModes);
-                }
-
-                foreach (var node in Scene.AllNodes)
-                {
-                    supportedRenderModes.UnionWith(node.GetSupportedRenderModes());
-                }
 
                 renderModes.Clear();
+                renderModes.AddRange(core.GetAvailableRenderModes());
 
-                for (var i = 0; i < RenderModes.Items.Count; i++)
+                for (var i = 0; i < renderModes.Count; i++)
                 {
-                    var mode = RenderModes.Items[i];
-
-                    if (i > 0)
+                    if (renderModes[i].Name == currentlySelected)
                     {
-                        if (mode.IsHeader)
-                        {
-                            if (renderModes[^1].IsHeader)
-                            {
-                                // If we hit a header and the last added item is also a header, remove it
-                                renderModes.RemoveAt(renderModes.Count - 1);
-                            }
-                        }
-                        else if (!supportedRenderModes.Remove(mode.Name))
-                        {
-                            continue;
-                        }
+                        selectedIndex = i;
+                        break;
                     }
-
-                    if (mode.Name == currentlySelected)
-                    {
-                        selectedIndex = renderModes.Count;
-                    }
-
-                    renderModes.Add(mode);
                 }
 
                 renderModeComboBox.BeginUpdate();
@@ -1011,65 +521,44 @@ namespace GUI.Types.GLViewers
             }
         }
 
-        protected void SetEnabledLayers(HashSet<string> layers)
+        /// <summary>
+        /// Creates <see cref="soundPlayer"/> and loads the game's sound events, wiring up the master volume from
+        /// settings and the default mix group volumes. Safe to call once; failures (e.g. no audio device) are logged
+        /// and leave <see cref="soundPlayer"/> null. Intended for scene viewers that want to play scene audio.
+        /// </summary>
+        protected void InitializeSoundPlayer()
         {
-            Scene.SetEnabledLayers(layers);
-            SkyboxScene?.SetEnabledLayers(layers);
-        }
-
-        private void SetRenderMode(string renderMode)
-        {
-            Debug.Assert(Picker != null);
-            Debug.Assert(SelectedNodeRenderer != null);
-
-            Renderer.ViewBuffer!.Data!.RenderMode = RenderModes.GetShaderId(renderMode);
-
-            Renderer.Postprocess.Enabled = Renderer.ViewBuffer.Data.RenderMode == 0;
-
-            Scene.EnableCompaction = renderMode != "Meshlets";
-            SkyboxScene?.EnableCompaction = Scene.EnableCompaction;
-
-            Picker.SetRenderMode(renderMode);
-            QuadOverdrawRenderer?.SetRenderMode(renderMode);
-            SelectedNodeRenderer.SetRenderMode(renderMode);
-
-            foreach (var node in Scene.AllNodes)
+            if (soundPlayer != null)
             {
-                node.SetRenderMode(renderMode);
-            }
-
-            if (SkyboxScene != null)
-            {
-                foreach (var node in SkyboxScene.AllNodes)
-                {
-                    node.SetRenderMode(renderMode);
-                }
-            }
-        }
-
-        protected override void OnKeyDown(Keys keyData)
-        {
-            Debug.Assert(SelectedNodeRenderer != null);
-
-            if (keyData == Keys.Delete)
-            {
-                SelectedNodeRenderer.DisableSelectedNodes();
                 return;
             }
 
-            if (keyData == Keys.Escape)
+            try
             {
-                SelectedNodeRenderer.SelectNode(null);
-                mouseReleased = true;
+                // The player takes ownership of the device and disposes it in its own Dispose (called from ours);
+                // CA2000 cannot see ownership transfer through the constructor, so this is not actually a leak.
+#pragma warning disable CA2000
+                soundPlayer = new SoundEventPlayer(GuiContext, new NAudioDevice(), Scene.RendererContext.Logger);
+#pragma warning restore CA2000
+            }
+            catch (COMException e)
+            {
+                // WASAPI has no usable render endpoint (no audio hardware, headless/RDP session, audio service off).
+                // This is an expected environment, not a bug: run without sound rather than failing the viewer.
+                Log.Warn(nameof(GLSceneViewer), $"No audio device available, sound playback disabled: {e.Message}");
+                return;
             }
 
-            if (keyData == Keys.Tab && perfDisplayComboBox != null)
-            {
-                // Cycle through the perf display modes (the callback updates perfDisplay)
-                perfDisplayComboBox.SelectedIndex = (perfDisplayComboBox.SelectedIndex + 1) % perfDisplayComboBox.Items.Count;
-            }
+            soundPlayer.LoadSoundEvents();
+            soundPlayer.LoadSoundscapes();
 
-            base.OnKeyDown(keyData);
+            soundPlayer.Suspended = true; // start with fade-in
+            soundPlayer.Volume = Settings.Config.Volume;
+            soundPlayer.MixGroupVolume["Weapons"] = 0.7f;
+            soundPlayer.MixGroupVolume["Foley"] = 0.5f;
+            soundPlayer.MixGroupVolume["Footsteps"] = 0.4f;
+            soundPlayer.MixGroupVolume["PlayerDamage"] = 0.4f;
+            soundPlayer.DefaultMixGroupVolume = 0.1f;
         }
 
 #if DEBUG
@@ -1098,5 +587,85 @@ namespace GUI.Types.GLViewers
             GLControl?.Invalidate();
         }
 #endif
+
+        // IGLViewerHost: the shared core reads input and asks the host to present.
+        ViewerInputState IGLViewerHost.Input => hostInput;
+
+        bool IGLViewerHost.IsVisible => GLControl?.Visible ?? false;
+
+        Framebuffer IGLViewerHost.ScreenFramebuffer => GLDefaultFramebuffer!;
+
+        void IGLViewerHost.RequestFrame() => GLControl?.Invalidate();
+
+        void IGLViewerHost.RequestFullscreen()
+        {
+            // F11 is handled by GLBaseControl.
+        }
+
+        void IGLViewerHost.SetClipboardImage(SKBitmap bitmap) => AppClipboard.SetImage(bitmap);
+
+        private sealed class WindowsSceneCore : GLSceneViewerCore
+        {
+            private readonly GLSceneViewer viewer;
+
+            public WindowsSceneCore(GLSceneViewer viewer)
+                : base(viewer.GuiContext, viewer.rendererContext, viewer)
+            {
+                this.viewer = viewer;
+            }
+
+            public WindowsSceneCore(GLSceneViewer viewer, Frustum cullFrustum)
+                : base(viewer.GuiContext, viewer.rendererContext, viewer, cullFrustum)
+            {
+                this.viewer = viewer;
+            }
+
+            protected override bool CenterCameraOnNodes => viewer is not GLWorldViewer;
+
+            protected override bool IsWorldViewer => viewer is GLWorldViewer;
+
+            protected override bool IsAnimationViewer => viewer is GLAnimationViewer;
+
+            protected override void LoadScene() => viewer.LoadScene();
+
+            protected override void OnPicked(object? sender, PickingResponse pixelInfo) => viewer.OnPicked(sender, pixelInfo);
+
+            public override void PreSceneLoad() => viewer.PreSceneLoad();
+
+            public override void PostSceneLoad() => viewer.PostSceneLoad();
+
+            protected override void DisposeAudio() => viewer.soundPlayer?.Dispose();
+
+            protected override void UpdateAudio(float frameTime)
+            {
+                if (viewer.soundPlayer != null)
+                {
+                    viewer.soundPlayer.Volume = Settings.Config.Volume;
+                    viewer.soundPlayer.Suspended = Paused;
+                }
+            }
+
+            protected override void UpdateAudioInFrame()
+            {
+                if (viewer.soundPlayer == null)
+                {
+                    return;
+                }
+
+                if (!Paused)
+                {
+                    using (new ProfilerScope("Update Sounds"))
+                    {
+                        viewer.soundPlayer.Update(Renderer.Camera);
+                    }
+                }
+            }
+
+            protected override void OnPostLoad()
+            {
+                viewer.GuiContext.GLPostLoadAction?.Invoke(viewer);
+                viewer.GuiContext.GLPostLoadAction = null;
+            }
+        }
     }
 }

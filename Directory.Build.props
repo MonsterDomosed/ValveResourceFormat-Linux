@@ -16,6 +16,10 @@
   <PropertyGroup>
     <SignAssembly>true</SignAssembly>
     <AssemblyOriginatorKeyFile>$(MSBuildThisFileDirectory)/Misc/ValveResourceFormat.snk</AssemblyOriginatorKeyFile>
+    <!-- Full strong-name signing needs the private key, which OpenSSL 3 rejects for this legacy
+         .snk on non-Windows .NET. Public signing embeds the same public key (so InternalsVisibleTo
+         still matches) and is enough to run. Windows keeps full signing. -->
+    <PublicSign Condition="'$(OS)' != 'Windows_NT'">true</PublicSign>
   </PropertyGroup>
 
   <PropertyGroup>

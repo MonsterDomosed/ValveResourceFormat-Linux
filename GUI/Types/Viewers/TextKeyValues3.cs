@@ -17,7 +17,7 @@ namespace GUI.Types.Viewers;
 /// Uncompiled KV3 text files. Shows the document as syntax highlighted KV3 plus a hex tab, and
 /// when the root is an animation graph editor document it adds the graph viewer alongside.
 /// </summary>
-class TextKeyValues3(VrfGuiContext vrfGuiContext) : IViewer, IDisposable
+class TextKeyValues3(VrfGuiContext vrfGuiContext) : IWinFormsViewer, IDisposable
 {
     // A KV3 text file opens with its encoding and format header comment: "<!-- kv3 encoding:...".
     private const uint CommentMagic = 0x2D2D213C; // "<!--"

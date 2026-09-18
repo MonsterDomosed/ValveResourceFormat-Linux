@@ -55,7 +55,7 @@ internal class EntityIOGraphViewer : GLGraphViewer
     }
 
     public EntityIOGraphViewer(VrfGuiContext vrfGuiContext, RendererContext rendererContext, List<EntityLump.Entity> entities, Action<IReadOnlyList<EntityLump.Entity>>? showInMap)
-        : base(vrfGuiContext, rendererContext, new GraphView())
+        : base(vrfGuiContext, rendererContext, new GraphView(WindowsGraphTheme.CreatePalette()))
     {
         this.showInMap = showInMap;
         entityCount = entities.Count;

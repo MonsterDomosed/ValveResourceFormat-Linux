@@ -12,7 +12,7 @@ internal class AG2GraphViewer : GLGraphViewer
     private readonly NmGraphBuilder builder;
 
     public AG2GraphViewer(VrfGuiContext vrfGuiContext, RendererContext rendererContext, KVObject data)
-        : base(vrfGuiContext, rendererContext, new GraphView())
+        : base(vrfGuiContext, rendererContext, new GraphView(WindowsGraphTheme.CreatePalette()))
     {
         builder = new NmGraphBuilder(data)
         {

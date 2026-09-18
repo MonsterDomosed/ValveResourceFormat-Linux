@@ -8,7 +8,7 @@ using SkiaSharp;
 
 namespace GUI.Types.Viewers
 {
-    class Image(VrfGuiContext vrfGuiContext) : IViewer, IDisposable
+    class Image(VrfGuiContext vrfGuiContext) : IWinFormsViewer, IDisposable
     {
         private SKBitmap? bitmap;
         private GLTextureViewer? glViewer;

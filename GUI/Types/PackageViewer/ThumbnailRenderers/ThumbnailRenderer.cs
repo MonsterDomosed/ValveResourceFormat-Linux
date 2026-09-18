@@ -15,15 +15,6 @@ using ValveResourceFormat.Renderer.SceneEnvironment;
 
 namespace GUI.Types.PackageViewer.ThumbnailRenderers;
 
-internal enum ThumbnailSizes : int
-{
-    Tiny = 24,
-    Small = 64,
-    Medium = 128,
-    Big = 192,
-    Huge = 256,
-}
-
 internal abstract class ThumbnailRenderer : IDisposable
 {
     protected Renderer? SceneRenderer;

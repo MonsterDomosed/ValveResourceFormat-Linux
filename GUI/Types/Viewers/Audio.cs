@@ -9,7 +9,7 @@ using NLayer.NAudioSupport;
 
 namespace GUI.Types.Viewers
 {
-    class Audio(VrfGuiContext vrfGuiContext, bool isPreview) : IViewer, IDisposable
+    class Audio(VrfGuiContext vrfGuiContext, bool isPreview) : IWinFormsViewer, IDisposable
     {
         private WaveStream? waveStream;
 

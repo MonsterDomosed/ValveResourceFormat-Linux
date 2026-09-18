@@ -10,7 +10,7 @@ namespace GUI.Types.Graphs;
 internal class PulseGraphViewer : GLGraphViewer
 {
     public PulseGraphViewer(VrfGuiContext vrfGuiContext, RendererContext rendererContext, KVObject data)
-        : base(vrfGuiContext, rendererContext, new GraphView())
+        : base(vrfGuiContext, rendererContext, new GraphView(WindowsGraphTheme.CreatePalette()))
     {
         var builder = new PulseGraphBuilder(data)
         {

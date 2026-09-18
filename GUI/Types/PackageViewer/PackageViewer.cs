@@ -16,7 +16,7 @@ using ValveResourceFormat.IO;
 namespace GUI.Types.PackageViewer
 {
 #pragma warning disable CA1001 // TreeView is not owned by this class, set to null in VPK_Disposed
-    class PackageViewer(VrfGuiContext vrfGuiContext) : IViewer, IDisposable
+    class PackageViewer(VrfGuiContext vrfGuiContext) : IWinFormsViewer, IDisposable
 #pragma warning restore CA1001
     {
 #pragma warning disable CA2213 // TODO: Can we fix TreeView to be owned by this class?

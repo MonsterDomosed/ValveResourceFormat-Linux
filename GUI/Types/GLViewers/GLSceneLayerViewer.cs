@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Linq;
 using System.Windows.Forms;
 using GUI.Utils;
 using ValveResourceFormat.Renderer;
@@ -42,7 +41,7 @@ namespace GUI.Types.GLViewers
 
             AddRenderModeSelectionControl();
 
-            var layerNames = Scene.AllNodes.Select(static x => x.LayerName).OfType<string>().Distinct().ToList();
+            var layerNames = GetLayerNames();
             var enabledLayers = new HashSet<string>(layerNames.Count);
 
             layersListBox = UiControl.AddMultiSelection(LayersControlName, (listBox) =>

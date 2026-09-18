@@ -11,7 +11,7 @@ using ValveResourceFormat.Serialization.KeyValues;
 
 namespace GUI.Types.Viewers
 {
-    class NavView(VrfGuiContext guiContext) : IViewer, IDisposable
+    class NavView(VrfGuiContext guiContext) : IWinFormsViewer, IDisposable
     {
         private readonly NavMeshFile navMeshFile = new();
         private GLNavMeshViewer? glViewer;

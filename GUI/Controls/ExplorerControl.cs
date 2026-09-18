@@ -9,6 +9,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using GUI.Platform;
 using GUI.Utils;
 using ValveKeyValue;
 using ValveResourceFormat.IO;
@@ -653,22 +654,9 @@ namespace GUI.Controls
                 return;
             }
 
-            if (File.Exists(path))
+            if (File.Exists(path) || Directory.Exists(path))
             {
-                Process.Start(new ProcessStartInfo()
-                {
-                    FileName = "explorer.exe",
-                    Arguments = @$"/select, ""{path}"""
-                });
-            }
-            else if (Directory.Exists(path))
-            {
-                Process.Start(new ProcessStartInfo()
-                {
-                    FileName = path + Path.DirectorySeparatorChar,
-                    UseShellExecute = true,
-                    Verb = "open"
-                });
+                PlatformServices.Current.Shell.RevealInFileManager(path);
             }
         }
 

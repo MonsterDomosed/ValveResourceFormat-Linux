@@ -31,7 +31,7 @@ namespace GUI.Types.Viewers
         ResourceBlocksOnly,
     };
 
-    class Resource(VrfGuiContext vrfGuiContext, ResourceViewMode viewMode, bool verifyFileSize) : IViewer, IDisposable
+    class Resource(VrfGuiContext vrfGuiContext, ResourceViewMode viewMode, bool verifyFileSize) : IWinFormsViewer, IDisposable
     {
         private ValveResourceFormat.Resource? resource;
         private RendererContext? rendererContext;
@@ -970,128 +970,22 @@ namespace GUI.Types.Viewers
 
         private static void AddTextViewControl(ResourceType resourceType, Block block, TabPage blockTab)
         {
-            ViewerContentPresenter.Present(blockTab, GetTextViewContent(resourceType, block));
-        }
-
-        private static ViewerContent.Text GetTextViewContent(ResourceType resourceType, Block block)
-        {
-            if (TryGetKvDataBlock(block, out var kvRoot, out var kvHeader))
-            {
-                var doc = new KVDocument(kvHeader, name: null, kvRoot);
-                var (kv3Text, sourceMap) = KVSerializer.Create(KVSerializationFormat.KeyValues3Text).SerializeWithSourceMap(doc);
-                return new ViewerContent.Text(kv3Text, SourceMap: sourceMap);
-            }
-
-            var text = block.ToString();
-            var language = HighlightLanguage.KeyValues;
-
-            if (resourceType == ResourceType.PanoramaLayout && block.Type == BlockType.DATA)
-            {
-                language = HighlightLanguage.XML;
-            }
-            else if (resourceType == ResourceType.PanoramaVectorGraphic && block.Type == BlockType.DATA)
-            {
-                language = HighlightLanguage.XML;
-            }
-            else if (resourceType == ResourceType.PanoramaStyle && block.Type == BlockType.DATA)
-            {
-                language = HighlightLanguage.CSS;
-            }
-            else if ((resourceType == ResourceType.PanoramaScript || resourceType == ResourceType.PanoramaTypescript) && block.Type == BlockType.DATA)
-            {
-                language = HighlightLanguage.JS;
-            }
-
-            return new ViewerContent.Text(text, language);
-        }
-
-        private static bool TryGetKvDataBlock(Block block, [MaybeNullWhen(false)] out KVObject root, out KVHeader? header)
-        {
-            switch (block)
-            {
-                case BinaryKV3 kv3:
-                    root = kv3.Data.Root;
-                    header = kv3.Data.Header;
-                    return true;
-
-                case KeyValuesOrNTRO kvOrNtro:
-                    root = kvOrNtro.Data;
-                    header = null;
-                    return true;
-
-                case NTRO ntro:
-                    root = ntro.Output;
-                    header = null;
-                    return true;
-
-                case ResourceEditInfo2 red2 when red2.Data is not null:
-                    root = red2.Data.Root;
-                    header = red2.Data.Header;
-                    return true;
-
-                default:
-                    root = null;
-                    header = null;
-                    return false;
-            }
+            ViewerContentPresenter.Present(blockTab, ResourceBlockContent.GetTextViewContent(resourceType, block));
         }
 
         private static void AddReconstructedContentTab(VrfGuiContext vrfGuiContext, ValveResourceFormat.Resource resource, ThemedTabControl resTabs)
         {
-            switch (resource.ResourceType)
+            var tabs = ResourceBlockContent.BuildReconstructedTabs(resource, vrfGuiContext.FileLoaderNoCache);
+
+            foreach (var tab in tabs)
             {
-                case ResourceType.Sound when resource.DataBlock is Sound { Sentence: { } sentence }:
-                    ViewerContentPresenter.AddContentTab(resTabs, "Reconstructed phonemes", new ViewerContent.Text(sentence.ToValveSentence()));
-                    break;
+                ViewerContentPresenter.AddContentTab(resTabs, tab);
+            }
 
-                case ResourceType.Material:
-                    ViewerContentPresenter.AddContentTab(resTabs, "Reconstructed vmat", new ViewerContent.LazyText(new MaterialExtract(resource, vrfGuiContext.FileLoaderNoCache).ToValveMaterial));
-                    break;
-
-                case ResourceType.EntityLump:
-                    if (resource.DataBlock is EntityLump entityLump)
-                    {
-                        ViewerContentPresenter.AddContentTab(resTabs, "FGD", new ViewerContent.Text(entityLump.ToForgeGameData()));
-                        ViewerContentPresenter.AddContentTab(resTabs, "Entities-Text", new ViewerContent.Text(entityLump.ToEntityDumpString()), select: true);
-                        // force select the new entities tab for now
-                        resTabs.SelectedTab = resTabs.TabPages[0];
-                    }
-                    break;
-
-                case ResourceType.PostProcessing:
-                    if (resource.DataBlock is PostProcessing postProcessingData)
-                    {
-                        ViewerContentPresenter.AddContentTab(resTabs, "Reconstructed vpost", new ViewerContent.Text(postProcessingData.ToValvePostProcessing()));
-                    }
-                    break;
-
-                case ResourceType.Texture:
-                {
-                    if (FileExtract.IsChildResource(resource))
-                    {
-                        break;
-                    }
-
-                    var textureExtract = new TextureExtract(resource);
-                    ViewerContentPresenter.AddContentTab(resTabs, "Reconstructed vtex", new ViewerContent.Text(textureExtract.ToValveTexture()));
-
-                    if (textureExtract.TryGetMksData(out var _, out var mks))
-                    {
-                        ViewerContentPresenter.AddContentTab(resTabs, "Reconstructed mks", new ViewerContent.Text(mks));
-                    }
-
-                    break;
-                }
-
-                case ResourceType.ParticleSnapshot:
-                {
-                    if (!FileExtract.IsChildResource(resource))
-                    {
-                        ViewerContentPresenter.AddContentTab(resTabs, "Reconstructed vsnap", new ViewerContent.Text(new SnapshotExtract(resource).ToValveSnap()));
-                    }
-
-                    break;
-                }
+            if (resource.ResourceType == ResourceType.EntityLump && resTabs.TabPages.Count > 0)
+            {
+                // force select the new entities tab for now
+                resTabs.SelectedTab = resTabs.TabPages[0];
             }
         }
 

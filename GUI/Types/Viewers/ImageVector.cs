@@ -7,7 +7,7 @@ using Svg.Skia;
 
 namespace GUI.Types.Viewers
 {
-    class ImageVector(VrfGuiContext vrfGuiContext) : IViewer, IDisposable
+    class ImageVector(VrfGuiContext vrfGuiContext) : IWinFormsViewer, IDisposable
     {
         private SKSvg? svg;
         private GLTextureViewer? textureControl;

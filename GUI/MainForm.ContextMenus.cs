@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -7,6 +6,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using GUI.Controls;
 using GUI.Forms;
+using GUI.Platform;
 using GUI.Types.Exporter;
 using GUI.Types.GLViewers;
 using GUI.Types.PackageViewer;
@@ -332,7 +332,7 @@ namespace GUI
 
                 try
                 {
-                    Process.Start(new ProcessStartInfo(tempPath) { UseShellExecute = true });
+                    PlatformServices.Current.Shell.OpenFile(tempPath);
                 }
                 catch (Exception ex)
                 {

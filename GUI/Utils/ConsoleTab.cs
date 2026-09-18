@@ -9,7 +9,7 @@ using GUI.Controls;
 
 namespace GUI.Utils
 {
-    internal class ConsoleTab : IDisposable
+    internal class ConsoleTab : ILogSink, IDisposable
     {
         private class MyLogger : TextWriter
         {
@@ -216,5 +216,7 @@ namespace GUI.Utils
             LogQueue.Clear();
             control?.Clear();
         }
+
+        void ILogSink.Clear() => ClearBuffer();
     }
 }

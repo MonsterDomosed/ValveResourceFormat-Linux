@@ -215,7 +215,7 @@ public class GLTextureDecoder : IHardwareTextureDecoder, IDisposable
         GL.DepthMask(false);
         GL.Disable(EnableCap.DepthTest);
 
-        var textureType = GetTextureTypeDefine(inputTexture.Target);
+        var textureType = TextureViewerShader.GetTextureTypeDefine(inputTexture.Target);
         var shader = RendererContext.ShaderLoader.LoadShader("texture_decode", (textureType, 1));
 
         shader.Use();
@@ -307,13 +307,4 @@ public class GLTextureDecoder : IHardwareTextureDecoder, IDisposable
     public static ImageFormat GetPreferredFramebufferFormat(bool hdr)
         => hdr ? ImageFormat.RGBA32323232F : ImageFormat.RGBA8888;
 
-    public static string GetTextureTypeDefine(TextureTarget target) => target switch
-    {
-        TextureTarget.Texture2D => "S_TYPE_TEXTURE2D",
-        TextureTarget.Texture3D => "S_TYPE_TEXTURE3D",
-        TextureTarget.Texture2DArray => "S_TYPE_TEXTURE2DARRAY",
-        TextureTarget.TextureCubeMap => "S_TYPE_TEXTURECUBEMAP",
-        TextureTarget.TextureCubeMapArray => "S_TYPE_TEXTURECUBEMAPARRAY",
-        _ => throw new UnexpectedMagicException("Unsupported texture type", (int)target, target.ToString())
-    };
 }

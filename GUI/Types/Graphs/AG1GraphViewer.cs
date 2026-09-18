@@ -15,7 +15,7 @@ internal class AG1GraphViewer : GLGraphViewer
     private readonly AnimGraph1Builder builder;
 
     public AG1GraphViewer(VrfGuiContext vrfGuiContext, RendererContext rendererContext, KVObject data)
-        : base(vrfGuiContext, rendererContext, new GraphView())
+        : base(vrfGuiContext, rendererContext, new GraphView(WindowsGraphTheme.CreatePalette()))
     {
         builder = new AnimGraph1Builder(data, vrfGuiContext)
         {

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>UI-toolkit-agnostic types, settings, logging and platform service contracts shared by the Windows (WinForms) and Linux (Avalonia) GUI shells.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="NLayer" Version="3.0.0" />
+    <PackageReference Include="SkiaSharp" Version="4.151.2" />
+    <PackageReference Include="Svg.Skia" Version="5.2.3" />
+    <PackageReference Include="ValveKeyValue" Version="0.70.0.499" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Renderer\Renderer.csproj" />
+    <ProjectReference Include="..\ValveResourceFormat\ValveResourceFormat.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The shared graph renderer draws these icons; link them so the Windows shell and this
+         assembly render identical assets without duplicating the SVGs. -->
+    <EmbeddedResource Include="..\GUI\Icons\About.svg" LogicalName="GUI.Icons.About.svg" />
+    <EmbeddedResource Include="..\GUI\Icons\AssetTypes\anmgrph.svg" LogicalName="GUI.Icons.AssetTypes.anmgrph.svg" />
+    <EmbeddedResource Include="..\GUI\Icons\AssetTypes\anim.svg" LogicalName="GUI.Icons.AssetTypes.anim.svg" />
+  </ItemGroup>
+</Project>

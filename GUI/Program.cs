@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
+using GUI.Platform;
 using GUI.Utils;
 using ValveResourceFormat.Renderer;
 using Windows.Win32;
@@ -39,6 +40,9 @@ namespace GUI
         [STAThread]
         internal static void Main(string[] args)
         {
+            // Register the Windows platform services before anything touches settings or dialogs.
+            WindowsPlatformServices.EnsureRegistered();
+
             // Stop system DLLs (e.g. dinput8.dll requested by GLFW) from being hijacked by a copy next to the exe.
             PInvoke.SetDefaultDllDirectories(LOAD_LIBRARY_FLAGS.LOAD_LIBRARY_SEARCH_SYSTEM32);
 
@@ -85,6 +89,10 @@ namespace GUI
             }
 
             DisplayVersion = FormatDisplayVersion(ProductVersion);
+
+            AppInfo.ProductVersion = ProductVersion;
+            AppInfo.DisplayVersion = DisplayVersion;
+            AppInfo.IsReleaseBuild = IsReleaseBuild;
 
             UpdateInstaller.CleanupPreviousInstall();
 

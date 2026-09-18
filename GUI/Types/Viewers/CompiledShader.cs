@@ -11,7 +11,7 @@ using static ValveResourceFormat.CompiledShader.ShaderUtilHelpers;
 
 namespace GUI.Types.Viewers
 {
-    class CompiledShader : IDisposable, IViewer
+    class CompiledShader : IDisposable, IWinFormsViewer
     {
         private readonly TextControl control;
         private readonly TreeView fileListView;

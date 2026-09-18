@@ -307,8 +307,10 @@ namespace GUI
         {
             base.OnLoad(e);
 
+#pragma warning disable CA2000 // Retained by the static Log sink for the lifetime of the process
             var consoleTab = new ConsoleTab();
-            Log.SetConsoleTab(consoleTab);
+#pragma warning restore CA2000
+            Log.SetSink(consoleTab);
             var consoleTabPage = consoleTab.CreateTab();
             consoleTabPage.ImageIndex = AppIcons.Icons["Log"];
             mainTabs.TabPages.Add(consoleTabPage);
@@ -826,7 +828,19 @@ namespace GUI
                             Debug.Assert(false);
                         }
 
-                        viewer.Create(tab);
+                        if (viewer is Types.Viewers.IWinFormsViewer winFormsViewer)
+                        {
+                            winFormsViewer.Create(tab);
+                        }
+                        else if (viewer.GetContent() is { } viewerContent)
+                        {
+                            ViewerContentPresenter.Present(tab, viewerContent);
+                        }
+                        else
+                        {
+                            throw new NotSupportedException($"{viewer.GetType().Name} does not provide any viewable content");
+                        }
+
                         createdViewer = viewer;
 
                         if (mainTabs.SelectedTab == tab)
