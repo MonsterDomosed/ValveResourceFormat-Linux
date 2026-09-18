@@ -64,6 +64,16 @@ jobs:
       if: matrix.os == 'ubuntu-latest'
       run: dotnet pack --configuration Release ${{ env.SKIP_ANALYSIS }} Renderer/Renderer.csproj
 
+    # Build the full solution (including the WinForms GUI) from Linux through the Windows targeting
+    # packs. This catches Windows-only compile breaks and validates the cross-platform signing path.
+    - name: Build solution with Windows targeting
+      if: matrix.os == 'ubuntu-latest'
+      run: dotnet build --configuration Release -p:EnableWindowsTargeting=true ${{ env.SKIP_ANALYSIS }} ValveResourceFormat.slnx
+
+    - name: Build Linux GUI
+      if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
+      run: dotnet build --configuration Release ${{ env.SKIP_ANALYSIS }} GUI.Linux/GUI.Linux.csproj
+
     - name: Publish CLI (Windows x64)
       if: matrix.os == 'windows-latest'
       run: dotnet publish --configuration Release --self-contained --runtime win-x64 ${{ env.SKIP_ANALYSIS }} ${{ env.PUBLISH_ARGS }} CLI/CLI.csproj

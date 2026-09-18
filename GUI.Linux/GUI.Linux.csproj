@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <Description>Native Linux GUI shell for Source 2 Viewer. Phase 2 establishes the Avalonia application foundation and Linux platform services; the full shell is added in a later phase.</Description>
+    <AssemblyName>Source2Viewer</AssemblyName>
+    <RootNamespace>GUI.Linux</RootNamespace>
+    <RollForward>LatestMajor</RollForward>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <GarbageCollectionAdaptationMode>1</GarbageCollectionAdaptationMode>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Wayland" Version="12.1.2" />
+    <!-- Avalonia.Skia pins SkiaSharp.NativeAssets.Linux to an older release than the managed
+         SkiaSharp used by ValveResourceFormat/GUI.Shared. Reference the matching native assets
+         explicitly so the managed and native Skia versions cannot drift apart. -->
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.151.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\GUI.Shared\GUI.Shared.csproj" />
+    <ProjectReference Include="..\Renderer\Renderer.csproj" />
+    <ProjectReference Include="..\ValveResourceFormat\ValveResourceFormat.csproj" />
+  </ItemGroup>
+</Project>
