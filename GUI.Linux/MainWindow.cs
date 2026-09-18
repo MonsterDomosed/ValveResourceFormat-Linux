@@ -10,6 +10,7 @@ using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform;
 using Avalonia.VisualTree;
 using GUI.Linux.GL;
 using GUI.Linux.Shell;
@@ -49,6 +50,7 @@ internal sealed class MainWindow : Window
         this.args = args;
 
         Title = "Source 2 Viewer";
+        Icon = new WindowIcon(AssetLoader.Open(new Uri("avares://Source2Viewer/Assets/source2viewer.png")));
         Width = 1100;
         Height = 720;
         MinWidth = 640;

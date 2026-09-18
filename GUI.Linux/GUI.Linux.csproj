@@ -1,12 +1,21 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <Description>Native Linux GUI shell for Source 2 Viewer. Phase 2 establishes the Avalonia application foundation and Linux platform services; the full shell is added in a later phase.</Description>
+    <Description>Native Linux GUI shell for Source 2 Viewer, built on Avalonia.</Description>
     <AssemblyName>Source2Viewer</AssemblyName>
     <RootNamespace>GUI.Linux</RootNamespace>
     <RollForward>LatestMajor</RollForward>
     <ServerGarbageCollection>true</ServerGarbageCollection>
     <GarbageCollectionAdaptationMode>1</GarbageCollectionAdaptationMode>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <!-- A self-contained single-file build is reliable here: SkiaSharp and Avalonia native assets
+         are extracted alongside the app on first run. Only applies to RID-specific publishes so
+         the plain solution build stays framework-dependent. -->
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.2" />
@@ -22,5 +31,10 @@
     <ProjectReference Include="..\GUI.Shared\GUI.Shared.csproj" />
     <ProjectReference Include="..\Renderer\Renderer.csproj" />
     <ProjectReference Include="..\ValveResourceFormat\ValveResourceFormat.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Reused for the window icon and shipped in the Linux tarball so the desktop entry,
+         the window manager and the app all show the same Source 2 Viewer icon. -->
+    <AvaloniaResource Include="..\Misc\Icons\source2viewer.png" Link="Assets\source2viewer.png" />
   </ItemGroup>
 </Project>

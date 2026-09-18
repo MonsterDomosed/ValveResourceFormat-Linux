@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Source 2 Viewer
+GenericName=Source 2 Resource Viewer
+Comment=View, decompile and export Source 2 resources
+Exec=Source2Viewer %F
+Icon=source2viewer
+Terminal=false
+Categories=Graphics;Utility;Development;
+MimeType=application/octet-stream;
+StartupNotify=true
+StartupWMClass=Source2Viewer
