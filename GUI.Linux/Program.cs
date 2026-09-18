@@ -10,8 +10,21 @@ namespace GUI.Linux;
 
 internal static class Program
 {
-    /// <summary>Whether to run the non-interactive startup and platform-service check and exit.</summary>
-    internal static bool SelfCheck { get; private set; }
+    /// <summary>Selects how much of the non-interactive startup check runs before exiting.</summary>
+    internal enum SelfCheckMode
+    {
+        /// <summary>Run the interactive application.</summary>
+        None,
+
+        /// <summary>Start the shell, render one lightweight GL frame and exit.</summary>
+        Smoke,
+
+        /// <summary>Run the full content and viewer validation suite.</summary>
+        Full,
+    }
+
+    /// <summary>How much of the non-interactive startup and platform-service check to run.</summary>
+    internal static SelfCheckMode SelfCheck { get; private set; }
 
     /// <summary>Command line arguments passed to the shell.</summary>
     internal static string[] Args { get; private set; } = [];
@@ -31,7 +44,7 @@ internal static class Program
         CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
         CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 
-        SelfCheck = args.Contains("--self-check", StringComparer.Ordinal);
+        SelfCheck = ParseSelfCheck(args);
         Args = args;
         FileArgs = [.. args.Where(static arg => !arg.StartsWith("--", StringComparison.Ordinal))];
 
@@ -39,6 +52,24 @@ internal static class Program
         LinuxPlatform.Initialize();
 
         return BuildAvaloniaApp(args).StartWithClassicDesktopLifetime(args);
+    }
+
+    private static SelfCheckMode ParseSelfCheck(string[] args)
+    {
+        foreach (var arg in args)
+        {
+            if (arg.Equals("--self-check=smoke", StringComparison.Ordinal))
+            {
+                return SelfCheckMode.Smoke;
+            }
+
+            if (arg.Equals("--self-check", StringComparison.Ordinal))
+            {
+                return SelfCheckMode.Full;
+            }
+        }
+
+        return SelfCheckMode.None;
     }
 
     public static AppBuilder BuildAvaloniaApp(string[] args)
@@ -72,6 +103,10 @@ internal static class Program
 
         AppInfo.ProductVersion = informational;
         AppInfo.DisplayVersion = informational;
+#if CI_RELEASE_BUILD
+        AppInfo.IsReleaseBuild = true;
+#else
         AppInfo.IsReleaseBuild = false;
+#endif
     }
 }

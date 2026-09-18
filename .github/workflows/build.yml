@@ -196,6 +196,41 @@ jobs:
         archive: false
         path: 'GUI/bin/Release/win-x64/publish/Source2Viewer.exe'
 
+  source2viewer-linux:
+    name: Source2Viewer (linux-x64)
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      attestations: write
+
+    steps:
+    - uses: actions/checkout@v7
+    - uses: ./.github/actions/setup-dotnet-cache
+
+    - name: Package
+      run: ./Misc/Linux/package-linux.sh
+
+    - name: Smoke test (Xvfb + llvmpipe)
+      env:
+        MESA_GLSL_VERSION_OVERRIDE: '460'
+        MESA_GL_VERSION_OVERRIDE: '4.6'
+        GALLIUM_DRIVER: 'llvmpipe'
+        LIBGL_ALWAYS_SOFTWARE: '1'
+      run: xvfb-run -a -s "-screen 0 1280x720x24" ./artifacts/Source2Viewer/Source2Viewer --self-check=smoke --x11
+
+    - name: Attest build provenance
+      if: github.event_name != 'pull_request'
+      uses: actions/attest-build-provenance@v4
+      with:
+        subject-path: artifacts/source2viewer-linux-x64-*.tar.gz
+
+    - name: Upload
+      uses: actions/upload-artifact@v7
+      with:
+        name: source2viewer-linux-x64
+        path: artifacts/source2viewer-linux-x64-*.tar.gz
+
   analyze:
     name: Run all analyzers
     runs-on: windows-latest
@@ -210,7 +245,7 @@ jobs:
   release:
     name: Create release
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [build, analyze, source2viewer-rel]
+    needs: [build, analyze, source2viewer-rel, source2viewer-linux]
     runs-on: ubuntu-latest
 
     permissions:
@@ -273,6 +308,7 @@ jobs:
        zip -9j release/cli-linux-arm64.zip artifacts/cli-linux-arm64/*
        zip -9j release/cli-macos-arm64.zip artifacts/cli-macos-arm64/*
        mv signed/Source2Viewer/Source2Viewer.exe release/
+       mv artifacts/source2viewer-linux-x64/*.tar.gz release/
        mv artifacts/nupkg/ValveResourceFormat.*.nupkg release/ValveResourceFormat.nupkg
        mv artifacts/renderer-nupkg/ValveResourceFormat.Renderer.*.nupkg release/ValveResourceFormat.Renderer.nupkg
 

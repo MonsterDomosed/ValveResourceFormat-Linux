@@ -42,7 +42,7 @@ internal sealed class App : Application
             desktop.MainWindow = window;
             LinuxPlatform.MainWindow = window;
 
-            if (Program.SelfCheck)
+            if (Program.SelfCheck != Program.SelfCheckMode.None)
             {
                 window.Opened += (_, _) => RunSelfCheck(window);
             }
@@ -106,9 +106,12 @@ internal sealed class App : Application
             output.WriteLine($"[self-check] message dialog failed: {e.GetType().Name}: {e.Message}");
         }
 
+        var presentersOk = false;
+
         try
         {
-            output.WriteLine($"[self-check] presenter checks: {RunPresenterChecks()}");
+            presentersOk = RunPresenterChecks();
+            output.WriteLine($"[self-check] presenter checks: {presentersOk}");
 
             var temp = Path.Combine(Path.GetTempPath(), $"s2v-selfcheck-{Guid.NewGuid():N}.txt");
             await File.WriteAllTextAsync(temp, "Source 2 Viewer self check\nLine two\n").ConfigureAwait(true);
@@ -120,6 +123,32 @@ internal sealed class App : Application
         catch (Exception e)
         {
             output.WriteLine($"[self-check] content path failed: {e.GetType().Name}: {e.Message}");
+        }
+
+        if (Program.SelfCheck == Program.SelfCheckMode.Smoke)
+        {
+            var glOk = await RunGlInfrastructureCheckAsync().ConfigureAwait(true);
+            var passed = presentersOk && glOk;
+
+            output.WriteLine(passed
+                ? "[self-check] smoke complete, exiting"
+                : "[self-check] smoke failed, exiting with error");
+
+            var desktop = (IClassicDesktopStyleApplicationLifetime)Application.Current!.ApplicationLifetime!;
+            DispatcherTimer.RunOnce(
+                () =>
+                {
+                    if (passed)
+                    {
+                        window.Close();
+                    }
+                    else
+                    {
+                        desktop.Shutdown(1);
+                    }
+                },
+                TimeSpan.FromSeconds(1));
+            return;
         }
 
         await RunViewerFactoryChecksAsync().ConfigureAwait(true);
@@ -576,7 +605,7 @@ internal sealed class App : Application
         }
     }
 
-    private static async Task RunGlInfrastructureCheckAsync()
+    private static async Task<bool> RunGlInfrastructureCheckAsync()
     {
         try
         {
@@ -602,10 +631,13 @@ internal sealed class App : Application
                 : "[self-check] GL viewport did not render within timeout").ConfigureAwait(true);
 
             glWindow.Close();
+
+            return completed == firstFrame.Task;
         }
         catch (Exception e)
         {
             await Program.StdOut.WriteLineAsync($"[self-check] GL infrastructure failed: {e.GetType().Name}: {e.Message}").ConfigureAwait(true);
+            return false;
         }
     }
 

@@ -3,21 +3,18 @@ using ValveResourceFormat;
 namespace GUI.Linux.Viewers;
 
 /// <summary>
-/// Messages and type checks for views that need the GL viewport. Phase 4 ports the non-GL content;
-/// these boundaries keep the missing GPU views explicit instead of silently absent.
+/// Messages and type checks for resource types whose GPU-backed preview is not available in this
+/// shell. These boundaries keep the missing views explicit instead of silently absent.
 /// </summary>
 internal static class LinuxGlBoundary
 {
-    public const string NavMesh =
-        "Rendering the nav mesh requires the GL viewport, which is not implemented on Linux yet (Phase 5).";
-
     public const string Graph =
-        "Rendering this uncompiled AG1 animation graph is not ported to Linux yet; compiled AG2 animation graphs "
-        + "render in the AG2 ANIMATION GRAPH tab.";
+        "Rendering uncompiled AG1 animation graphs is not supported on Linux yet; compiled AG2 animation "
+        + "graphs render in the ANIMATION GRAPH tab.";
 
     public const string Resource =
-        "This resource has a GPU rendered view (model/texture/map/particle). The GL viewport is not implemented "
-        + "on Linux yet (Phase 5). The tabs above show the data that does not need GL.";
+        "This resource has a GPU rendered preview that is not supported on Linux yet. The tabs above show "
+        + "the data that does not require a viewport.";
 
     public static bool IsGlBacked(ResourceType type) => type switch
     {

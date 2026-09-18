@@ -5,8 +5,8 @@ using GUI.Types.Viewers;
 namespace GUI.Linux.Viewers;
 
 /// <summary>
-/// Appends an explicit "not ported yet" tab to another viewer's content. Used to mark the boundary
-/// between the non-GL viewers ported in Phase 4 and the GL-backed views that arrive later.
+/// Appends an explicit "not supported yet" tab to another viewer's content, so resource types that
+/// still lack a Linux preview remain visible instead of silently missing.
 /// </summary>
 internal sealed class BoundaryViewer(IViewer inner, string tabName, string message) : IViewer
 {
