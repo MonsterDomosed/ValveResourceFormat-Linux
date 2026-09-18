@@ -159,7 +159,8 @@ jobs:
 
     - name: Upload test coverage
       uses: codecov/codecov-action@v7
-      if: matrix.os == 'ubuntu-latest' && github.ref == 'refs/heads/master'
+      # Coverage is only uploaded from the upstream repository; forks have no Codecov token.
+      if: matrix.os == 'ubuntu-latest' && github.ref == 'refs/heads/master' && github.repository == 'ValveResourceFormat/ValveResourceFormat'
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: ./TestResults/coverage.cobertura.xml
@@ -184,6 +185,7 @@ jobs:
 
     - name: Attest build provenance
       if: github.event_name != 'pull_request'
+      continue-on-error: true # Attestations need a public repository; skipped on the private fork
       uses: actions/attest-build-provenance@v4
       with:
         subject-path: GUI/bin/Release/win-x64/publish/Source2Viewer.exe
@@ -216,11 +218,11 @@ jobs:
         MESA_GLSL_VERSION_OVERRIDE: '460'
         MESA_GL_VERSION_OVERRIDE: '4.6'
         GALLIUM_DRIVER: 'llvmpipe'
-        LIBGL_ALWAYS_SOFTWARE: '1'
       run: xvfb-run -a -s "-screen 0 1280x720x24" ./artifacts/Source2Viewer/Source2Viewer --self-check=smoke --x11
 
     - name: Attest build provenance
       if: github.event_name != 'pull_request'
+      continue-on-error: true # Attestations need a public repository; skipped on the private fork
       uses: actions/attest-build-provenance@v4
       with:
         subject-path: artifacts/source2viewer-linux-x64-*.tar.gz
@@ -318,6 +320,7 @@ jobs:
 
     - name: Attest build provenance
       # Signing changed the viewer executable, so the release files are attested again here
+      continue-on-error: true # Attestations need a public repository; skipped on the private fork
       uses: actions/attest-build-provenance@v4
       with:
         subject-path: release/*
