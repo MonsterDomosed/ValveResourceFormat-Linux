@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -48,6 +49,13 @@ internal static class Program
         Args = args;
         FileArgs = [.. args.Where(static arg => !arg.StartsWith("--", StringComparison.Ordinal))];
 
+        if (SelfCheck != SelfCheckMode.None)
+        {
+            // Surface Avalonia's own trace on stdout so headless runs can report why GL init failed.
+            Trace.Listeners.Add(new TextWriterTraceListener(StdOut));
+            Trace.AutoFlush = true;
+        }
+
         SetAppInfo();
         LinuxPlatform.Initialize();
 
@@ -76,7 +84,7 @@ internal static class Program
     {
         var builder = AppBuilder.Configure<App>()
             .UsePlatformDetect()
-            .LogToTrace(LogEventLevel.Information);
+            .LogToTrace(SelfCheck != SelfCheckMode.None ? LogEventLevel.Verbose : LogEventLevel.Information);
 
         if (OperatingSystem.IsLinux())
         {
