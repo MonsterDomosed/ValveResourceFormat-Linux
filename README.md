@@ -18,6 +18,8 @@ ship a Windows application.**
 
 Powered by [Source 2 Viewer](https://s2v.app) ([ValveResourceFormat](https://github.com/ValveResourceFormat/ValveResourceFormat)).
 
+<img src="./Misc/Screenshots/readmeimage.jpg" width="1100" height="595" alt="Source 2 Viewer Linux preview">
+
 ## Linux
 
 This repository provides a native Linux application built with Avalonia and OpenGL,
