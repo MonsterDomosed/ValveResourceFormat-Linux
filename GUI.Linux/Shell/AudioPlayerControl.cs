@@ -22,14 +22,15 @@ internal sealed class AudioPlayerControl : UserControl, IDisposable
     private readonly DecodedSound? sound;
     private readonly PulseAudioPlayer? player;
     private readonly WaveformView? waveform;
-    private readonly Button playButton = new() { Content = "Play", Width = 72 };
-    private readonly Button rewindButton = new() { Content = "|<", Width = 40 };
-    private readonly ToggleButton loopButton = new() { Content = "Loop", IsEnabled = false };
+    private readonly Button playButton = new() { Width = 72 };
+    private readonly Button rewindButton = new() { Width = 40 };
+    private readonly ToggleButton loopButton = new() { IsEnabled = false };
     private readonly Slider volumeSlider = new() { Minimum = 0, Maximum = 1, Width = 140 };
     private readonly TextBlock timeLabel = new();
     private readonly DispatcherTimer timer = new() { Interval = System.TimeSpan.FromMilliseconds(100) };
 
     private bool disposed;
+    private bool? lastPlayingState;
 
     /// <summary>The playback backend, for the self-check.</summary>
     internal PulseAudioPlayer? Player => player;
@@ -66,6 +67,10 @@ internal sealed class AudioPlayerControl : UserControl, IDisposable
 
             playButton.Click += (_, _) => TogglePlayPause();
             rewindButton.Click += (_, _) => SeekTo(0);
+
+            playButton.Content = new GUI.Linux.UI.SvgIcon("AudioPlay", 16);
+            rewindButton.Content = new GUI.Linux.UI.SvgIcon("AudioRewindLeft", 16);
+            loopButton.Content = new GUI.Linux.UI.SvgIcon("AudioRepeat", 16);
 
             volumeSlider.Value = Math.Clamp(Settings.Config.Volume, 0, 1);
             volumeSlider.PropertyChanged += (_, e) =>
@@ -104,12 +109,13 @@ internal sealed class AudioPlayerControl : UserControl, IDisposable
 
             if (!player.Available)
             {
-                layout.Children.Add(new TextBlock
+                var error = new TextBlock
                 {
                     Text = player.ErrorMessage ?? "Playback is unavailable.",
-                    Foreground = Brushes.OrangeRed,
                     TextWrapping = TextWrapping.Wrap,
-                });
+                };
+                GUI.Linux.UI.ThemeResources.Bind(error, TextBlock.ForegroundProperty, "Danger");
+                layout.Children.Add(error);
             }
 
             timer.Tick += (_, _) => UpdatePlaybackState();
@@ -118,12 +124,13 @@ internal sealed class AudioPlayerControl : UserControl, IDisposable
         }
         else
         {
-            layout.Children.Add(new TextBlock
+            var error = new TextBlock
             {
                 Text = unsupportedReason ?? "This sound could not be decoded on Linux.",
-                Foreground = Brushes.OrangeRed,
                 TextWrapping = TextWrapping.Wrap,
-            });
+            };
+            GUI.Linux.UI.ThemeResources.Bind(error, TextBlock.ForegroundProperty, "Danger");
+            layout.Children.Add(error);
         }
 
         layout.Children.Add(BuildMetadata(metadata));
@@ -206,7 +213,13 @@ internal sealed class AudioPlayerControl : UserControl, IDisposable
 
         var position = System.TimeSpan.FromSeconds(sound.SampleRate <= 0 ? 0 : (double)player.PositionFrame / sound.SampleRate);
         timeLabel.Text = $"{FormatTime(position)} / {FormatTime(sound.Duration)}";
-        playButton.Content = player.IsPlaying ? "Pause" : "Play";
+
+        if (lastPlayingState != player.IsPlaying)
+        {
+            lastPlayingState = player.IsPlaying;
+            playButton.Content = new GUI.Linux.UI.SvgIcon(player.IsPlaying ? "AudioPause" : "AudioPlay", 16);
+        }
+
         waveform!.Position = sound.FrameCount <= 0 ? 0f : (float)player.PositionFrame / sound.FrameCount;
         waveform!.InvalidateVisual();
     }
@@ -230,12 +243,6 @@ internal sealed class AudioPlayerControl : UserControl, IDisposable
     /// <summary>Draws the decoded waveform with a playhead and reports clicks as a seek fraction.</summary>
     private sealed class WaveformView(DecodedSound sound) : Control
     {
-        private static readonly IBrush PlayedBrush = new SolidColorBrush(Color.FromRgb(99, 161, 255));
-        private static readonly IBrush UnplayedBrush = new SolidColorBrush(Color.FromRgb(90, 96, 112));
-        private static readonly IBrush PlayheadBrush = new SolidColorBrush(Color.FromRgb(235, 235, 235));
-        private static readonly IBrush BackgroundBrush = new SolidColorBrush(Color.FromRgb(28, 32, 42));
-        private static readonly IPen PlayheadPen = new Pen(PlayheadBrush, 1.5);
-
         private SoundWaveform.Peak[] peaks = [];
         private int peakWidth;
         private float peakMax = 1f;
@@ -251,7 +258,12 @@ internal sealed class AudioPlayerControl : UserControl, IDisposable
             var width = (int)Bounds.Width;
             var height = Bounds.Height;
 
-            context.FillRectangle(BackgroundBrush, new Rect(0, 0, Bounds.Width, height));
+            var playedBrush = GUI.Linux.UI.ThemeResources.Brush("Accent");
+            var unplayedBrush = GUI.Linux.UI.ThemeResources.Brush("BorderSubtle");
+            var playheadBrush = GUI.Linux.UI.ThemeResources.Brush("TextPrimary");
+            var playheadPen = new Pen(playheadBrush, 1.5);
+
+            context.FillRectangle(GUI.Linux.UI.ThemeResources.Brush("InputBackground"), new Rect(0, 0, Bounds.Width, height));
 
             if (width <= 0 || height <= 0 || sound.FrameCount == 0)
             {
@@ -287,12 +299,12 @@ internal sealed class AudioPlayerControl : UserControl, IDisposable
                     bottom = top + 1;
                 }
 
-                context.DrawLine(new Pen(x <= playedX ? PlayedBrush : UnplayedBrush, 1), new Point(x + 0.5, top), new Point(x + 0.5, bottom));
+                context.DrawLine(new Pen(x <= playedX ? playedBrush : unplayedBrush, 1), new Point(x + 0.5, top), new Point(x + 0.5, bottom));
             }
 
             if (Position > 0)
             {
-                context.DrawLine(PlayheadPen, new Point(playedX, 0), new Point(playedX, height));
+                context.DrawLine(playheadPen, new Point(playedX, 0), new Point(playedX, height));
             }
         }
 

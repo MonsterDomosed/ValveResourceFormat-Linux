@@ -6,6 +6,8 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Markup.Xaml.Styling;
+using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
 using Avalonia.Threading;
@@ -33,7 +35,17 @@ internal sealed class App : Application
     public override void Initialize()
     {
         RequestedThemeVariant = ThemeVariant.Dark;
+
+        Resources.MergedDictionaries.Add(new ResourceInclude((Uri?)null)
+        {
+            Source = new Uri("avares://Source2Viewer/Styles/Tokens.axaml"),
+        });
+
         Styles.Add(new FluentTheme());
+        Styles.Add(new StyleInclude((Uri?)null)
+        {
+            Source = new Uri("avares://Source2Viewer/Styles/Controls.axaml"),
+        });
     }
 
     /// <summary>Applies the configured theme to the running application.</summary>
@@ -158,10 +170,12 @@ internal sealed class App : Application
             output.WriteLine($"[self-check] settings tab failed: {e.GetType().Name}: {e.Message}");
         }
 
+        var themeOk = RunThemeResourcesCheck(output);
+
         if (Program.SelfCheck == Program.SelfCheckMode.Smoke)
         {
             var glOk = await RunGlInfrastructureCheckAsync().ConfigureAwait(true);
-            var passed = presentersOk && glOk;
+            var passed = presentersOk && glOk && themeOk;
 
             output.WriteLine(passed
                 ? "[self-check] smoke complete, exiting"
@@ -214,6 +228,77 @@ internal sealed class App : Application
 
         output.WriteLine("[self-check] shell opened, exiting");
         DispatcherTimer.RunOnce(window.Close, TimeSpan.FromSeconds(1));
+    }
+
+    /// <summary>
+    /// Verifies the semantic theme tokens resolve in both variants, that the light and dark values
+    /// differ, and that SVG icons rasterize and cache per theme.
+    /// </summary>
+    private static bool RunThemeResourcesCheck(TextWriter output)
+    {
+        string[] tokens =
+        [
+            "SurfaceBackground", "SurfacePanel", "SurfacePanelElevated", "BorderSubtle",
+            "TextPrimary", "TextSecondary", "TextDisabled", "Accent", "AccentHover",
+            "Danger", "Warning", "Success", "SelectionBackground", "InputBackground",
+            "SpacingXS", "SpacingS", "SpacingM", "SpacingL", "CornerRadiusS", "CornerRadiusM",
+        ];
+
+        if (Application.Current is not { } application)
+        {
+            output.WriteLine("[self-check] theme: no application");
+            return false;
+        }
+
+        var original = application.RequestedThemeVariant;
+        var tokensOk = true;
+        var surfaces = new Dictionary<ThemeVariant, string>();
+
+        foreach (var variant in new[] { ThemeVariant.Dark, ThemeVariant.Light })
+        {
+            application.RequestedThemeVariant = variant;
+
+            foreach (var token in tokens)
+            {
+                if (application.TryGetResource(token, variant, out var value) && value is not null)
+                {
+                    continue;
+                }
+
+                output.WriteLine($"[self-check] theme: missing token '{token}' in {variant}");
+                tokensOk = false;
+            }
+
+            var surface = application.TryGetResource("SurfaceBackground", variant, out var surfaceValue) && surfaceValue is IBrush surfaceBrush
+                ? surfaceBrush
+                : Brushes.Transparent;
+            surfaces[variant] = surface is ISolidColorBrush solid ? solid.Color.ToString() : surface.ToString() ?? "";
+        }
+
+        application.RequestedThemeVariant = ThemeVariant.Dark;
+        // Icon bitmaps are owned by the IconFactory cache and must not be disposed here.
+#pragma warning disable CA2000
+        var darkIcon = UI.IconFactory.Get("Settings", 16);
+        var darkIconCached = UI.IconFactory.Get("Settings", 16);
+
+        application.RequestedThemeVariant = ThemeVariant.Light;
+        var lightIcon = UI.IconFactory.Get("Settings", 16);
+#pragma warning restore CA2000
+
+        application.RequestedThemeVariant = original;
+
+        var iconsOk = darkIcon is not null
+            && ReferenceEquals(darkIcon, darkIconCached)
+            && lightIcon is not null
+            && !ReferenceEquals(darkIcon, lightIcon);
+
+        var themesDiffer = !string.Equals(surfaces[ThemeVariant.Dark], surfaces[ThemeVariant.Light], StringComparison.Ordinal);
+
+        output.WriteLine(
+            $"[self-check] theme: tokens={tokensOk}, themesDiffer={themesDiffer}, icons={iconsOk}, "
+            + $"darkSurface={surfaces[ThemeVariant.Dark]}, lightSurface={surfaces[ThemeVariant.Light]}");
+
+        return tokensOk && iconsOk && themesDiffer;
     }
 
     private static async Task RunGameContentCheckAsync()

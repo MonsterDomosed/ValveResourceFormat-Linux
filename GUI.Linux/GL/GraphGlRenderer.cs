@@ -60,7 +60,7 @@ internal sealed class GraphGlRenderer : ViewportGlRenderer
         rendererContext = new RendererContext(FileLoader!, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
 #pragma warning restore CA2000
 
-        view = new GraphView(GraphPalette.Default);
+        view = new GraphView(GraphPalette.ForTheme(!GUI.Linux.UI.ThemeResources.IsLightTheme));
         builder = build(view);
 
         shader = rendererContext.ShaderLoader.LoadShader(

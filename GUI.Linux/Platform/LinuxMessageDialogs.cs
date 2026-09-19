@@ -33,6 +33,23 @@ internal sealed class LinuxMessageDialogs : IMessageDialogService
             Spacing = 8,
         };
 
+        var messageRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 12,
+            Children =
+            {
+                new GUI.Linux.UI.SvgIcon(IconName(icon), 20),
+                new TextBlock
+                {
+                    Text = message,
+                    TextWrapping = TextWrapping.Wrap,
+                    MaxWidth = 440,
+                    VerticalAlignment = VerticalAlignment.Center,
+                },
+            },
+        };
+
         var window = new Window
         {
             Title = title,
@@ -48,12 +65,7 @@ internal sealed class LinuxMessageDialogs : IMessageDialogService
                 Spacing = 16,
                 Children =
                 {
-                    new TextBlock
-                    {
-                        Text = $"{IconLabel(icon)} {message}",
-                        TextWrapping = TextWrapping.Wrap,
-                        MaxWidth = 480,
-                    },
+                    messageRow,
                     buttonPanel,
                 },
             },
@@ -102,11 +114,11 @@ internal sealed class LinuxMessageDialogs : IMessageDialogService
         return await completion.Task.ConfigureAwait(true);
     }
 
-    private static string IconLabel(MessageIcon icon) => icon switch
+    private static string IconName(MessageIcon icon) => icon switch
     {
-        MessageIcon.Warning => "(!)",
-        MessageIcon.Error => "(x)",
-        MessageIcon.Question => "(?)",
-        _ => "(i)",
+        MessageIcon.Warning => "Warning",
+        MessageIcon.Error => "Error",
+        MessageIcon.Question => "Question",
+        _ => "Info",
     };
 }

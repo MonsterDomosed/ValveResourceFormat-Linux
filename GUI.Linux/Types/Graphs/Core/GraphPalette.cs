@@ -100,4 +100,10 @@ internal class GraphPalette
 
     /// <summary>The standard dark palette, used when a host does not resolve its own theme colors.</summary>
     public static GraphPalette Default { get; } = new(isDark: true, GraphChromeColors.Dark);
+
+    /// <summary>The light palette, used when the application runs in the light theme.</summary>
+    public static GraphPalette Light { get; } = new(isDark: false, GraphChromeColors.Light);
+
+    /// <summary>Picks the palette matching the requested theme brightness.</summary>
+    public static GraphPalette ForTheme(bool isDark) => isDark ? Default : Light;
 }

@@ -79,16 +79,18 @@ internal static class AvaloniaViewerContentPresenter
     private static ScrollViewer CreateText(string text, HighlightLanguage language)
     {
         // Syntax highlighting for the custom language definitions is not ported yet; the text is
-        // shown verbatim in a selectable monospace view.
+        // shown verbatim in a selectable monospace view at the configured text size.
         _ = language;
 
         var block = new SelectableTextBlock
         {
             Text = text,
             FontFamily = MonospaceFont,
+            FontSize = Settings.Config.TextViewerFontSize,
             TextWrapping = TextWrapping.NoWrap,
             Padding = new Thickness(8),
         };
+        UI.ThemeResources.Bind(block, SelectableTextBlock.ForegroundProperty, "TextPrimary");
 
         return new ScrollViewer
         {

@@ -33,11 +33,12 @@ internal sealed class ConsoleView : UserControl, ILogSink
             AcceptsReturn = true,
             TextWrapping = TextWrapping.NoWrap,
             FontFamily = new FontFamily("monospace"),
-            Background = new SolidColorBrush(Color.FromRgb(24, 24, 24)),
-            Foreground = new SolidColorBrush(Color.FromRgb(235, 235, 235)),
             BorderThickness = new Avalonia.Thickness(0),
             VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Top,
         };
+
+        GUI.Linux.UI.ThemeResources.Bind(textBox, TextBox.BackgroundProperty, "InputBackground");
+        GUI.Linux.UI.ThemeResources.Bind(textBox, TextBox.ForegroundProperty, "TextPrimary");
 
         Content = textBox;
 

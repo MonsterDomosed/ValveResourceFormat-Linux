@@ -108,8 +108,7 @@ internal sealed class MainWindow : Window
 
         var statusBar = new Border
         {
-            BorderThickness = new Thickness(0, 1, 0, 0),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(40, 128, 128, 128)),
+            Classes = { "statusBar" },
             Child = statusText,
             Height = 26,
         };
@@ -640,7 +639,7 @@ internal sealed class MainWindow : Window
         var headerPanel = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
+            Spacing = 6,
             Children = { title },
         };
 
@@ -655,11 +654,8 @@ internal sealed class MainWindow : Window
         {
             var closeButton = new Button
             {
-                Content = "x",
-                FontSize = 11,
-                Padding = new Thickness(4, 0),
-                Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
+                Content = new GUI.Linux.UI.SvgIcon("CloseTab", 12),
+                Classes = { "icon" },
                 VerticalAlignment = VerticalAlignment.Center,
             };
 

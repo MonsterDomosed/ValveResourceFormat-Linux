@@ -1,0 +1,54 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        Semantic design tokens for the Linux application. Application and viewer logic in C#
+        references these keys, never raw colors, so the look can change with the theme.
+    -->
+    <ResourceDictionary.ThemeDictionaries>
+
+        <ResourceDictionary x:Key="Dark">
+            <SolidColorBrush x:Key="SurfaceBackground">#1B1B1F</SolidColorBrush>
+            <SolidColorBrush x:Key="SurfacePanel">#232327</SolidColorBrush>
+            <SolidColorBrush x:Key="SurfacePanelElevated">#2B2B31</SolidColorBrush>
+            <SolidColorBrush x:Key="BorderSubtle">#3A3A40</SolidColorBrush>
+            <SolidColorBrush x:Key="TextPrimary">#E6E6E9</SolidColorBrush>
+            <SolidColorBrush x:Key="TextSecondary">#A8A8B0</SolidColorBrush>
+            <SolidColorBrush x:Key="TextDisabled">#6B6B74</SolidColorBrush>
+            <SolidColorBrush x:Key="Accent">#63A1FF</SolidColorBrush>
+            <SolidColorBrush x:Key="AccentHover">#7CB2FF</SolidColorBrush>
+            <SolidColorBrush x:Key="Danger">#E5484D</SolidColorBrush>
+            <SolidColorBrush x:Key="Warning">#E5A13A</SolidColorBrush>
+            <SolidColorBrush x:Key="Success">#46A758</SolidColorBrush>
+            <SolidColorBrush x:Key="SelectionBackground">#33415A</SolidColorBrush>
+            <SolidColorBrush x:Key="InputBackground">#17171A</SolidColorBrush>
+        </ResourceDictionary>
+
+        <ResourceDictionary x:Key="Light">
+            <SolidColorBrush x:Key="SurfaceBackground">#F4F4F6</SolidColorBrush>
+            <SolidColorBrush x:Key="SurfacePanel">#FFFFFF</SolidColorBrush>
+            <SolidColorBrush x:Key="SurfacePanelElevated">#FFFFFF</SolidColorBrush>
+            <SolidColorBrush x:Key="BorderSubtle">#D8D8DE</SolidColorBrush>
+            <SolidColorBrush x:Key="TextPrimary">#1B1B1F</SolidColorBrush>
+            <SolidColorBrush x:Key="TextSecondary">#5A5A64</SolidColorBrush>
+            <SolidColorBrush x:Key="TextDisabled">#9A9AA4</SolidColorBrush>
+            <SolidColorBrush x:Key="Accent">#2F6FE0</SolidColorBrush>
+            <SolidColorBrush x:Key="AccentHover">#4C86EA</SolidColorBrush>
+            <SolidColorBrush x:Key="Danger">#C62828</SolidColorBrush>
+            <SolidColorBrush x:Key="Warning">#9A6A00</SolidColorBrush>
+            <SolidColorBrush x:Key="Success">#2E7D32</SolidColorBrush>
+            <SolidColorBrush x:Key="SelectionBackground">#D6E2F7</SolidColorBrush>
+            <SolidColorBrush x:Key="InputBackground">#FFFFFF</SolidColorBrush>
+        </ResourceDictionary>
+
+    </ResourceDictionary.ThemeDictionaries>
+
+    <x:Double x:Key="SpacingXS">4</x:Double>
+    <x:Double x:Key="SpacingS">8</x:Double>
+    <x:Double x:Key="SpacingM">12</x:Double>
+    <x:Double x:Key="SpacingL">20</x:Double>
+
+    <CornerRadius x:Key="CornerRadiusS">3</CornerRadius>
+    <CornerRadius x:Key="CornerRadiusM">6</CornerRadius>
+
+</ResourceDictionary>

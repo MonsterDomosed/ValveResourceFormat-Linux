@@ -7,6 +7,11 @@
     <RollForward>LatestMajor</RollForward>
     <ServerGarbageCollection>true</ServerGarbageCollection>
     <GarbageCollectionAdaptationMode>1</GarbageCollectionAdaptationMode>
+    <!-- The Avalonia XAML compiler re-signs the assembly and cannot handle the repository's legacy
+         .snk under OpenSSL 3 on Linux (AVLN9999). Delay-signing keeps the public key identity, and
+         .NET Core does not verify strong-name signatures at run time. -->
+    <PublicSign Condition="'$(OS)' != 'Windows_NT'">false</PublicSign>
+    <DelaySign Condition="'$(OS)' != 'Windows_NT'">true</DelaySign>
   </PropertyGroup>
   <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
     <!-- A self-contained single-file build is reliable here: SkiaSharp and Avalonia native assets
@@ -43,5 +48,7 @@
     <!-- Graph presenter icons, resolved by logical name from the assembly that defines GraphView. -->
     <EmbeddedResource Include="Assets\Icons\About.svg" LogicalName="GUI.Linux.Icons.About.svg" />
     <EmbeddedResource Include="Assets\Icons\AssetTypes\*.svg" LogicalName="GUI.Linux.Icons.AssetTypes.%(Filename)%(Extension)" />
+    <!-- UI chrome icons, rasterized at runtime by IconFactory. -->
+    <EmbeddedResource Include="Assets\Icons\ui\*.svg" LogicalName="GUI.Linux.Icons.Ui.%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

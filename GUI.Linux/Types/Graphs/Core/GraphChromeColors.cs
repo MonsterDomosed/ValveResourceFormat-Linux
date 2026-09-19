@@ -22,4 +22,13 @@ internal readonly record struct GraphChromeColors(
         new SKColor(158, 159, 164),
         new SKColor(51, 57, 74),
         new SKColor(99, 161, 255));
+
+    /// <summary>The light chrome, mirroring the light theme's semantic tokens.</summary>
+    public static GraphChromeColors Light { get; } = new(
+        new SKColor(0xF4, 0xF4, 0xF6),
+        new SKColor(0xFF, 0xFF, 0xFF),
+        new SKColor(0x1B, 0x1B, 0x1F),
+        new SKColor(0x5A, 0x5A, 0x64),
+        new SKColor(0xC9, 0xC9, 0xD0),
+        new SKColor(0x2F, 0x6F, 0xE0));
 }
