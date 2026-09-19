@@ -40,6 +40,7 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
     private long lastTicks;
     private Point lastPointer;
     private Framebuffer screenFramebuffer = Framebuffer.GLDefaultFramebuffer;
+    private bool cursorHidden;
 
     public AvaloniaGlViewport()
     {
@@ -180,6 +181,13 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         Input.Captured = true;
         UpdateButtons(e.GetCurrentPoint(this).Properties);
 
+        // Hide the pointer while dragging the camera so it does not run into the window edges or
+        // distract from the model being inspected.
+        if (Input.Left || Input.Right)
+        {
+            HideCursor();
+        }
+
         RequestNextFrameRendering();
     }
 
@@ -224,6 +232,7 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         e.Pointer.Capture(null);
         Input.Captured = false;
         UpdateButtons(e.GetCurrentPoint(this).Properties);
+        RestoreCursor();
         RequestNextFrameRendering();
     }
 
@@ -242,6 +251,29 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         base.OnPointerCaptureLost(e);
         Input.Captured = false;
         UpdateButtons(default);
+        RestoreCursor();
+    }
+
+    private void HideCursor()
+    {
+        if (cursorHidden)
+        {
+            return;
+        }
+
+        cursorHidden = true;
+        Cursor = new Cursor(StandardCursorType.None);
+    }
+
+    private void RestoreCursor()
+    {
+        if (!cursorHidden)
+        {
+            return;
+        }
+
+        cursorHidden = false;
+        Cursor = Cursor.Default;
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
@@ -319,6 +351,7 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         Input.Middle = false;
         Input.Right = false;
         Input.Keys = ViewerKey.None;
+        RestoreCursor();
         RequestNextFrameRendering();
     }
 

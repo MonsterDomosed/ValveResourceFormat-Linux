@@ -1461,7 +1461,7 @@ internal sealed class App : Application
         var panDistance = System.Numerics.Vector3.Distance(beforePan, renderer.CameraLocation);
 
         var beforeZoom = core.Input.OrbitDistance;
-        await SimulateMouseWheelAsync(viewport, 2f, 6).ConfigureAwait(true);
+        await SimulateMouseWheelAsync(viewport, 1f, 4).ConfigureAwait(true);
         var afterZoom = core.Input.OrbitDistance;
 
         var beforeReset = core.Input.OrbitDistance;

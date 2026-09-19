@@ -93,8 +93,14 @@ public abstract class GLSceneViewerCore : IDisposable
     private Vector2 lastMouseDelta;
     private Vector2 pointerDownPosition;
 
+    // Avalonia reports one wheel unit per notch; the input zoom math expects the classic 120-unit delta.
+    private const float MouseWheelNotch = 120f;
+
     /// <summary>Whether the scene is centered on the first node's bounds after loading.</summary>
     protected virtual bool CenterCameraOnNodes => true;
+
+    /// <summary>Multiplier applied to the configured mouse sensitivity for this viewer.</summary>
+    protected virtual float CameraSensitivityScale => 1f;
 
     /// <summary>Uses the world viewer's camera offset mode.</summary>
     protected virtual bool IsWorldViewer => false;
@@ -480,7 +486,7 @@ public abstract class GLSceneViewerCore : IDisposable
             return;
         }
 
-        Input.MouseSensitivity = Settings.Config.MouseSensitivity;
+        Input.MouseSensitivity = Settings.Config.MouseSensitivity * CameraSensitivityScale;
         Input.SmoothCameraEnabled = Settings.Config.SmoothCameraEnabled;
 
         var pressedKeys = ToTrackedKeys(input.Keys);
@@ -488,8 +494,9 @@ public abstract class GLSceneViewerCore : IDisposable
         lastMouseDelta = mouseDelta;
 
         // The viewport accumulates wheel notches; apply them before the camera tick so an orbit zoom
-        // is reflected in the same frame.
-        Input.OnMouseWheel(input.Wheel);
+        // is reflected in the same frame. Avalonia reports one unit per notch, while the input code's
+        // zoom math was written for the traditional 120-unit wheel delta.
+        Input.OnMouseWheel(input.Wheel * MouseWheelNotch);
 
         var wasWalkMode = Input.WalkMode;
         Input.Tick(frameTime, pressedKeys, mouseDelta, Renderer.Camera);

@@ -39,6 +39,9 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
     /// <summary>Current world bounds of the rendered model, used by the self-check.</summary>
     internal ValveResourceFormat.Utils.AABB ModelBounds => modelSceneNode?.BoundingBox ?? default;
 
+    /// <summary>The model viewer rotates a little faster than the shared default.</summary>
+    protected override float CameraSensitivityScale => 1.75f;
+
     public override void PreSceneLoad()
     {
         RunPreSceneLoad();
