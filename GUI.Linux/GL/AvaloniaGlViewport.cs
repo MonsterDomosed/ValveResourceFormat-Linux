@@ -162,6 +162,7 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         base.OnPointerPressed(e);
 
         Focus();
+        Input.MouseOverViewport = true;
         e.Pointer.Capture(this);
         lastPointer = e.GetPosition(this);
         Input.X = (float)lastPointer.X;
@@ -176,6 +177,10 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
     {
         base.OnPointerMoved(e);
 
+        // The scene core only advances the camera while the pointer is over the viewport, so track the
+        // real pointer presence here rather than relying on callers to set it.
+        Input.MouseOverViewport = true;
+
         var position = e.GetPosition(this);
         Input.Delta += new Vector2((float)(position.X - lastPointer.X), (float)(position.Y - lastPointer.Y));
         lastPointer = position;
@@ -183,6 +188,22 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         Input.Y = (float)position.Y;
         UpdateButtons(e.GetCurrentPoint(this).Properties);
 
+        RequestNextFrameRendering();
+    }
+
+    protected override void OnPointerEntered(PointerEventArgs e)
+    {
+        base.OnPointerEntered(e);
+
+        Input.MouseOverViewport = true;
+        RequestNextFrameRendering();
+    }
+
+    protected override void OnPointerExited(PointerEventArgs e)
+    {
+        base.OnPointerExited(e);
+
+        Input.MouseOverViewport = false;
         RequestNextFrameRendering();
     }
 
@@ -200,6 +221,7 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
     {
         base.OnPointerWheelChanged(e);
 
+        Input.MouseOverViewport = true;
         Input.Wheel += (float)e.Delta.Y;
         RequestNextFrameRendering();
         e.Handled = true;

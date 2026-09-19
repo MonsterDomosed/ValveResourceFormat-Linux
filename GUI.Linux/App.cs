@@ -770,7 +770,7 @@ internal sealed class App : Application
 
             // Camera movement via the viewport input.
             var before = renderer.CameraLocation;
-            viewport.Input.MouseOverViewport = true;
+            RaisePointerEntered(viewport);
             viewport.Input.Keys |= GUI.Linux.Types.GLViewers.ViewerKey.W;
             await Task.Delay(700).ConfigureAwait(true);
             viewport.Input.Keys = GUI.Linux.Types.GLViewers.ViewerKey.None;
@@ -868,7 +868,7 @@ internal sealed class App : Application
             var aBefore = rendererA.CameraLocation;
             var bCameraBefore = rendererB.CameraLocation;
 
-            viewportA.Input.MouseOverViewport = true;
+            RaisePointerEntered(viewportA);
             viewportA.Input.Keys |= GUI.Linux.Types.GLViewers.ViewerKey.W;
             await Task.Delay(700).ConfigureAwait(true);
             viewportA.Input.Keys = GUI.Linux.Types.GLViewers.ViewerKey.None;
@@ -947,7 +947,7 @@ internal sealed class App : Application
                 : "[self-check] mesh tab rendered only a flat frame").ConfigureAwait(true);
 
             var before = renderer.CameraLocation;
-            viewport.Input.MouseOverViewport = true;
+            RaisePointerEntered(viewport);
             viewport.Input.Keys |= GUI.Linux.Types.GLViewers.ViewerKey.W;
             await Task.Delay(600).ConfigureAwait(true);
             viewport.Input.Keys = GUI.Linux.Types.GLViewers.ViewerKey.None;
@@ -1217,7 +1217,7 @@ internal sealed class App : Application
                 : "[self-check] model tab rendered only a flat frame").ConfigureAwait(true);
 
             var before = renderer.CameraLocation;
-            viewport.Input.MouseOverViewport = true;
+            RaisePointerEntered(viewport);
             viewport.Input.Keys |= GUI.Linux.Types.GLViewers.ViewerKey.W;
             await Task.Delay(600).ConfigureAwait(true);
             viewport.Input.Keys = GUI.Linux.Types.GLViewers.ViewerKey.None;
@@ -1421,6 +1421,18 @@ internal sealed class App : Application
             return;
         }
 
+        // Verify the viewport derives the pointer-over state from real Avalonia pointer events.
+        RaisePointerEntered(viewport);
+        await Task.Delay(80).ConfigureAwait(true);
+        var pointerEntered = viewport.Input.MouseOverViewport;
+
+        RaisePointerExited(viewport);
+        await Task.Delay(80).ConfigureAwait(true);
+        var pointerExited = !viewport.Input.MouseOverViewport;
+
+        RaisePointerEntered(viewport);
+        await Task.Delay(80).ConfigureAwait(true);
+
         var start = renderer.CameraLocation;
         var startDistance = core.Input.OrbitDistance;
 
@@ -1457,14 +1469,16 @@ internal sealed class App : Application
         }
 
         var resetOk = centerOk && afterReset > 0.01f;
+        var pointerOk = pointerEntered && pointerExited;
 
         await Program.StdOut.WriteLineAsync(
             $"[self-check] {label} camera: orbit={orbitDistance:0.00}, pan={panDistance:0.00}, "
-            + $"zoom {beforeZoom:0.00}->{afterZoom:0.00}, reset {beforeReset:0.00}->{afterReset:0.00}, startDistance={startDistance:0.00}").ConfigureAwait(true);
+            + $"zoom {beforeZoom:0.00}->{afterZoom:0.00}, reset {beforeReset:0.00}->{afterReset:0.00}, "
+            + $"startDistance={startDistance:0.00}, pointerEnter/exit={pointerOk}").ConfigureAwait(true);
 
-        await Program.StdOut.WriteLineAsync(orbitOk && panOk && zoomOk && resetOk
+        await Program.StdOut.WriteLineAsync(orbitOk && panOk && zoomOk && resetOk && pointerOk
             ? $"[self-check] {label} camera: orbit, pan, zoom and reset view all responded"
-            : $"[self-check] {label} camera: incomplete (orbit={orbitOk}, pan={panOk}, zoom={zoomOk}, reset={resetOk})").ConfigureAwait(true);
+            : $"[self-check] {label} camera: incomplete (orbit={orbitOk}, pan={panOk}, zoom={zoomOk}, reset={resetOk}, pointer={pointerOk})").ConfigureAwait(true);
     }
 
     private static async Task ExerciseModelAnimationControlsAsync(ModelViewerControl control, ModelAnimationSession session, string label)
@@ -1536,7 +1550,7 @@ internal sealed class App : Application
 
     private static async Task SimulatePointerDragAsync(AvaloniaGlViewport viewport, ViewerKey button, System.Numerics.Vector2 delta, int frames)
     {
-        viewport.Input.MouseOverViewport = true;
+        RaisePointerEntered(viewport);
         viewport.Input.Keys |= button;
 
         for (var i = 0; i < frames; i++)
@@ -1554,7 +1568,7 @@ internal sealed class App : Application
 
     private static async Task SimulateMouseWheelAsync(AvaloniaGlViewport viewport, float delta, int frames)
     {
-        viewport.Input.MouseOverViewport = true;
+        RaisePointerEntered(viewport);
 
         for (var i = 0; i < frames; i++)
         {
@@ -1569,6 +1583,32 @@ internal sealed class App : Application
     }
 
     private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+    /// <summary>
+    /// Raises a real Avalonia pointer-entered event on a viewport, exercising the same handler the
+    /// shell uses, so the self-check does not have to write the pointer-over state directly.
+    /// </summary>
+    private static void RaisePointerEntered(AvaloniaGlViewport viewport)
+        => RaisePointerEvent(viewport, InputElement.PointerEnteredEvent);
+
+    /// <summary>Raises a real Avalonia pointer-exited event on a viewport.</summary>
+    private static void RaisePointerExited(AvaloniaGlViewport viewport)
+        => RaisePointerEvent(viewport, InputElement.PointerExitedEvent);
+
+    private static void RaisePointerEvent(AvaloniaGlViewport viewport, RoutedEvent pointerEvent)
+    {
+        using var pointer = new Pointer(1, PointerType.Mouse, true);
+        var properties = new PointerPointProperties();
+        viewport.RaiseEvent(new PointerEventArgs(
+            pointerEvent,
+            viewport,
+            pointer,
+            viewport,
+            new Point(8, 8),
+            0,
+            properties,
+            KeyModifiers.None));
+    }
 
     private static async Task<bool> WaitForAsync(Func<bool> condition, int attempts)
     {
