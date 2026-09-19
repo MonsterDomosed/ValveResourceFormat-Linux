@@ -22,10 +22,6 @@ rendered and exported on Linux without Wine or Proton.
 It is **not** an official ValveResourceFormat or Valve project. It is not affiliated
 with, endorsed by, or supported by the upstream project or by Valve.
 
-The original ValveResourceFormat project can be found here:
-
-https://github.com/ValveResourceFormat/ValveResourceFormat
-
 Powered by [Source 2 Viewer](https://s2v.app) ([ValveResourceFormat](https://github.com/ValveResourceFormat/ValveResourceFormat)).
 
 ## Linux
