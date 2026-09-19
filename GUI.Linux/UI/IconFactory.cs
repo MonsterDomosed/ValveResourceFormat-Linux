@@ -16,6 +16,7 @@ namespace GUI.Linux.UI;
 internal static class IconFactory
 {
     private const string ResourcePrefix = "GUI.Linux.Icons.Ui.";
+    private const string AssetTypePrefix = "GUI.Linux.Icons.AssetTypes.";
 
     private readonly record struct IconKey(string Name, int Size, bool Light);
 
@@ -66,8 +67,10 @@ internal static class IconFactory
         var assembly = typeof(IconFactory).Assembly;
         var lightSuffix = key.Light ? "_light" : string.Empty;
 
+        // UI chrome icons live under Ui/, asset-type badges under AssetTypes/.
         var stream = (lightSuffix.Length > 0 ? assembly.GetManifestResourceStream($"{ResourcePrefix}{key.Name}{lightSuffix}.svg") : null)
-            ?? assembly.GetManifestResourceStream($"{ResourcePrefix}{key.Name}.svg");
+            ?? assembly.GetManifestResourceStream($"{ResourcePrefix}{key.Name}.svg")
+            ?? assembly.GetManifestResourceStream($"{AssetTypePrefix}{key.Name}.svg");
 
         if (stream is null)
         {

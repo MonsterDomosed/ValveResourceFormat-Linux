@@ -98,7 +98,7 @@ internal sealed class MainWindow : Window
             return presenter;
         });
 
-        consoleTab = CreateTab("Console", consoleView, close: null, select: false);
+        consoleTab = CreateTab("Console", consoleView, close: null, select: false, iconName: "Log");
         mainTabs.Items.Add(consoleTab);
         mainTabs.SelectedItem = consoleTab;
         UpdateContentVisibility();
@@ -127,8 +127,11 @@ internal sealed class MainWindow : Window
 
     private MenuItem BuildFileMenu()
     {
-        var open = new MenuItem { Header = "_Open..." };
+        var open = new MenuItem { Header = "_Open...", Icon = new GUI.Linux.UI.SvgIcon("Open", 16) };
         open.Click += (_, _) => OpenFilesFromDialog();
+
+        recentFilesMenu.Icon = new GUI.Linux.UI.SvgIcon("History", 16);
+        bookmarksMenu.Icon = new GUI.Linux.UI.SvgIcon("Bookmarks", 16);
 
         var exit = new MenuItem { Header = "E_xit" };
         exit.Click += (_, _) => Close();
@@ -145,30 +148,26 @@ internal sealed class MainWindow : Window
 
     private MenuItem BuildViewMenu()
     {
-        var browser = new MenuItem { Header = "_Browser" };
+        var browser = new MenuItem { Header = "_Browser", Icon = new GUI.Linux.UI.SvgIcon("Explorer", 16) };
         browser.Click += (_, _) => OpenBrowser();
 
-        var console = new MenuItem { Header = "_Console" };
+        var console = new MenuItem { Header = "_Console", Icon = new GUI.Linux.UI.SvgIcon("Log", 16) };
         console.Click += (_, _) => SelectTab(consoleTab);
 
-        var welcome = new MenuItem { Header = "_Welcome" };
-        welcome.Click += (_, _) => OpenWelcome();
-
-        var settings = new MenuItem { Header = "_Settings" };
+        var settings = new MenuItem { Header = "_Settings", Icon = new GUI.Linux.UI.SvgIcon("Settings", 16) };
         settings.Click += (_, _) => OpenSettings();
 
         var viewMenu = new MenuItem { Header = "_View" };
         viewMenu.Items.Add(browser);
         viewMenu.Items.Add(console);
-        viewMenu.Items.Add(welcome);
         viewMenu.Items.Add(settings);
 
         return viewMenu;
     }
 
-    private static MenuItem BuildHelpMenu()
+    private MenuItem BuildHelpMenu()
     {
-        var about = new MenuItem { Header = "_About" };
+        var about = new MenuItem { Header = "_About", Icon = new GUI.Linux.UI.SvgIcon("About", 16) };
         about.Click += (_, _) => ShowAbout();
 
         var helpMenu = new MenuItem { Header = "_Help" };
@@ -190,7 +189,7 @@ internal sealed class MainWindow : Window
         }
         else
         {
-            OpenWelcome();
+            OpenBrowser();
         }
     }
 
@@ -227,6 +226,12 @@ internal sealed class MainWindow : Window
 
         if (!control)
         {
+            if (e.Key == Key.F5 && mainTabs.SelectedItem is TabItem active)
+            {
+                ReloadTab(active);
+                e.Handled = true;
+            }
+
             return;
         }
 
@@ -244,10 +249,42 @@ internal sealed class MainWindow : Window
                 CloseAllTabs();
                 e.Handled = true;
                 break;
+            case Key.E:
+                if (mainTabs.SelectedItem is TabItem right)
+                {
+                    CloseTabsRightOf(right);
+                }
+
+                e.Handled = true;
+                break;
+            case Key.R:
+                if (mainTabs.SelectedItem is TabItem reload)
+                {
+                    ReloadTab(reload);
+                }
+
+                e.Handled = true;
+                break;
+            case Key.Tab:
+                CycleTab(e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1);
+                e.Handled = true;
+                break;
         }
     }
 
-    private void OpenFilesFromDialog()
+    private void CycleTab(int direction)
+    {
+        if (mainTabs.Items.Count < 2 || mainTabs.SelectedItem is not TabItem current)
+        {
+            return;
+        }
+
+        var index = mainTabs.Items.IndexOf(current);
+        var next = (index + direction + mainTabs.Items.Count) % mainTabs.Items.Count;
+        mainTabs.SelectedItem = mainTabs.Items[next];
+    }
+
+    internal void OpenFilesFromDialog()
     {
         var files = AppFileDialogs.OpenFiles("Open files", "Valve Resource Format (*.*_c, *.vpk, *.vcs)|*.*_c;*.vpk;*.vcs|All files (*.*)|*.*");
 
@@ -283,13 +320,22 @@ internal sealed class MainWindow : Window
         path = Path.GetFullPath(path);
         Log.Info(nameof(MainWindow), $"Opening {path}");
 
-        var loading = new TextBlock
+        var loading = new StackPanel
         {
-            Text = $"Loading {Path.GetFileName(path)}...",
-            Margin = new Thickness(16),
+            Margin = new Thickness(24),
+            Spacing = 12,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                new GUI.Linux.UI.SvgIcon(IconForFile(path) ?? "File", 48),
+                new TextBlock { Text = Path.GetFileName(path), Classes = { "section" }, HorizontalAlignment = HorizontalAlignment.Center },
+                new ProgressBar { IsIndeterminate = true, Width = 240 },
+                new TextBlock { Text = "Loading...", Classes = { "hint" }, HorizontalAlignment = HorizontalAlignment.Center },
+            },
         };
 
-        var tab = CreateTab(Path.GetFileName(path), loading, CloseTab, select: true);
+        var tab = CreateTab(Path.GetFileName(path), loading, CloseTab, select: true, iconName: IconForFile(path));
         tab.Tag = path;
         tabPaths[tab] = path;
         mainTabs.Items.Add(tab);
@@ -338,12 +384,41 @@ internal sealed class MainWindow : Window
             IsVisible = false,
         };
 
-        var toggle = new Button { Content = "Show details", HorizontalAlignment = HorizontalAlignment.Left };
+        GUI.Linux.UI.ThemeResources.Bind(details, TextBox.BackgroundProperty, "InputBackground");
+        GUI.Linux.UI.ThemeResources.Bind(details, TextBox.ForegroundProperty, "TextPrimary");
+
+        var toggle = new Button { Content = "Show details", Classes = { "tool" } };
         toggle.Click += (_, _) =>
         {
             details.IsVisible = !details.IsVisible;
             toggle.Content = details.IsVisible ? "Hide details" : "Show details";
         };
+
+        var copy = new Button { Content = "Copy details", Classes = { "tool" } };
+        copy.Click += (_, _) => AppClipboard.SetText(exception.ToString());
+
+        var heading = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 10,
+            Children =
+            {
+                new GUI.Linux.UI.SvgIcon("Error", 20),
+                new TextBlock
+                {
+                    Text = $"Could not open {Path.GetFileName(path)}",
+                    FontSize = 18,
+                    FontWeight = FontWeight.SemiBold,
+                },
+            },
+        };
+
+        var message = new TextBlock
+        {
+            Text = $"{exception.GetType().Name}: {exception.Message}",
+            TextWrapping = TextWrapping.Wrap,
+        };
+        GUI.Linux.UI.ThemeResources.Bind(message, TextBlock.ForegroundProperty, "TextSecondary");
 
         return new StackPanel
         {
@@ -351,18 +426,14 @@ internal sealed class MainWindow : Window
             Spacing = 10,
             Children =
             {
-                new TextBlock
+                heading,
+                message,
+                new StackPanel
                 {
-                    Text = $"Could not open {Path.GetFileName(path)}",
-                    FontSize = 18,
-                    FontWeight = FontWeight.SemiBold,
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    Children = { toggle, copy },
                 },
-                new TextBlock
-                {
-                    Text = $"{exception.GetType().Name}: {exception.Message}",
-                    TextWrapping = TextWrapping.Wrap,
-                },
-                toggle,
                 details,
             },
         };
@@ -378,7 +449,7 @@ internal sealed class MainWindow : Window
         }
 
         var browser = new BrowserView(this);
-        var tab = CreateTab("Browser", browser, CloseTab, select: true);
+        var tab = CreateTab("Browser", browser, CloseTab, select: true, iconName: "Explorer");
         mainTabs.Items.Add(tab);
         mainTabs.SelectedItem = tab;
         return browser;
@@ -394,7 +465,7 @@ internal sealed class MainWindow : Window
         }
 
         var view = new PackageBrowserView(vpkPath, this);
-        var tab = CreateTab(Path.GetFileName(vpkPath), view, CloseTab, select: true);
+        var tab = CreateTab(Path.GetFileName(vpkPath), view, CloseTab, select: true, iconName: "vpk");
         tab.Tag = view;
         mainTabs.Items.Add(tab);
         mainTabs.SelectedItem = tab;
@@ -556,58 +627,6 @@ internal sealed class MainWindow : Window
     private string? GetSelectedFilePath()
         => mainTabs.SelectedItem is TabItem tab && tabPaths.TryGetValue(tab, out var path) ? path : null;
 
-    private void OpenWelcome()
-    {
-        if (FindTab("Welcome") is { } existing)
-        {
-            SelectTab(existing);
-            return;
-        }
-
-        var panel = new StackPanel
-        {
-            Margin = new Thickness(32),
-            Spacing = 12,
-            Children =
-            {
-                new TextBlock
-                {
-                    Text = "Source 2 Viewer",
-                    FontSize = 28,
-                    FontWeight = FontWeight.SemiBold,
-                },
-                new TextBlock
-                {
-                    Text = $"Native Linux shell, version {AppInfo.DisplayVersion}",
-                    Opacity = 0.75,
-                },
-                new TextBlock
-                {
-                    Text = "Use File > Open to load a file, or open an installed game from View > Browser.\n"
-                        + "You can also pass file or package paths on the command line.",
-                    TextWrapping = TextWrapping.Wrap,
-                },
-                CreateOpenButton(),
-            },
-        };
-
-        var tab = CreateTab("Welcome", panel, CloseTab, select: true);
-        mainTabs.Items.Add(tab);
-        mainTabs.SelectedItem = tab;
-    }
-
-    private Button CreateOpenButton()
-    {
-        var button = new Button
-        {
-            Content = "Open file...",
-            HorizontalAlignment = HorizontalAlignment.Left,
-        };
-
-        button.Click += (_, _) => OpenFilesFromDialog();
-        return button;
-    }
-
     internal void OpenSettings()
     {
         if (FindTab("Settings") is { } existing)
@@ -616,19 +635,17 @@ internal sealed class MainWindow : Window
             return;
         }
 
-        var tab = CreateTab("Settings", SettingsView.Create(), CloseTab, select: true);
+        var tab = CreateTab("Settings", SettingsView.Create(), CloseTab, select: true, iconName: "Settings");
         mainTabs.Items.Add(tab);
         mainTabs.SelectedItem = tab;
     }
 
-    private static void ShowAbout()
+    private void ShowAbout()
     {
-        _ = AppMessageDialogs.ShowMessageAsync(
-            $"Source 2 Viewer {AppInfo.DisplayVersion}\n\nNative Linux shell built on Avalonia.",
-            "About Source 2 Viewer");
+        _ = AboutDialog.ShowAsync(this);
     }
 
-    private TabItem CreateTab(string header, Control content, Action<TabItem>? close, bool select)
+    private TabItem CreateTab(string header, Control content, Action<TabItem>? close, bool select, string? iconName = null)
     {
         var title = new TextBlock
         {
@@ -640,15 +657,22 @@ internal sealed class MainWindow : Window
         {
             Orientation = Orientation.Horizontal,
             Spacing = 6,
-            Children = { title },
+            VerticalAlignment = VerticalAlignment.Center,
         };
+
+        if (iconName is not null)
+        {
+            headerPanel.Children.Add(new GUI.Linux.UI.SvgIcon(iconName, 14));
+        }
+
+        headerPanel.Children.Add(title);
 
         var tab = new TabItem
         {
             Header = headerPanel,
         };
 
-        SetTabContent(tab, content);
+        ToolTip.SetTip(headerPanel, header);
 
         if (close is not null)
         {
@@ -663,12 +687,165 @@ internal sealed class MainWindow : Window
             headerPanel.Children.Add(closeButton);
         }
 
+        // Middle-click closes, and right-click opens the tab actions.
+        headerPanel.PointerPressed += (_, e) =>
+        {
+            var properties = e.GetCurrentPoint(headerPanel).Properties;
+
+            if (properties.IsMiddleButtonPressed && tab != consoleTab)
+            {
+                CloseTab(tab);
+                e.Handled = true;
+            }
+        };
+
+        headerPanel.ContextMenu = BuildTabContextMenu(tab);
+
+        SetTabContent(tab, content);
+
         if (select)
         {
             mainTabs.SelectedItem = tab;
         }
 
         return tab;
+    }
+
+    private ContextMenu BuildTabContextMenu(TabItem tab)
+    {
+        var menu = new ContextMenu();
+        List<Control> items = [];
+
+        var reload = new MenuItem { Header = "Reload", InputGesture = new KeyGesture(Key.R, KeyModifiers.Control) };
+        reload.Click += (_, _) => ReloadTab(tab);
+        reload.IsEnabled = tabPaths.ContainsKey(tab);
+        items.Add(reload);
+
+        items.Add(new Separator());
+
+        var close = new MenuItem { Header = "Close", InputGesture = new KeyGesture(Key.W, KeyModifiers.Control) };
+        close.Click += (_, _) => CloseTab(tab);
+        items.Add(close);
+
+        var closeOthers = new MenuItem { Header = "Close others" };
+        closeOthers.Click += (_, _) => CloseOtherTabs(tab);
+        items.Add(closeOthers);
+
+        var closeRight = new MenuItem { Header = "Close to the right", InputGesture = new KeyGesture(Key.E, KeyModifiers.Control) };
+        closeRight.Click += (_, _) => CloseTabsRightOf(tab);
+        items.Add(closeRight);
+
+        var closeLeft = new MenuItem { Header = "Close to the left" };
+        closeLeft.Click += (_, _) => CloseTabsLeftOf(tab);
+        items.Add(closeLeft);
+
+        menu.ItemsSource = items;
+        return menu;
+    }
+
+    private void ReloadTab(TabItem tab)
+    {
+        if (!tabPaths.TryGetValue(tab, out var path))
+        {
+            return;
+        }
+
+        var index = mainTabs.Items.IndexOf(tab);
+        CloseTab(tab);
+        _ = OpenFileAsync(path);
+
+        // OpenFileAsync appends the new tab; move it back to the original position.
+        if (index >= 0 && mainTabs.Items.Count > index && mainTabs.Items[index] is TabItem reopened)
+        {
+            mainTabs.Items.Remove(reopened);
+            mainTabs.Items.Insert(Math.Min(index, mainTabs.Items.Count), reopened);
+            mainTabs.SelectedItem = reopened;
+        }
+    }
+
+    private void CloseOtherTabs(TabItem keep)
+    {
+        foreach (var item in mainTabs.Items.OfType<TabItem>().ToList())
+        {
+            if (item != consoleTab && item != keep)
+            {
+                CloseTab(item);
+            }
+        }
+
+        SelectTab(keep);
+    }
+
+    private void CloseTabsRightOf(TabItem reference)
+    {
+        var index = mainTabs.Items.IndexOf(reference);
+
+        foreach (var item in mainTabs.Items.OfType<TabItem>().Skip(index + 1).ToList())
+        {
+            if (item != consoleTab)
+            {
+                CloseTab(item);
+            }
+        }
+
+        SelectTab(reference);
+    }
+
+    private void CloseTabsLeftOf(TabItem reference)
+    {
+        var index = mainTabs.Items.IndexOf(reference);
+
+        foreach (var item in mainTabs.Items.OfType<TabItem>().Take(index).ToList())
+        {
+            if (item != consoleTab)
+            {
+                CloseTab(item);
+            }
+        }
+
+        SelectTab(reference);
+    }
+
+    /// <summary>Maps a file path to the asset-type icon shown on its tab.</summary>
+    internal static string? IconForFile(string path)
+    {
+        var extension = Path.GetExtension(path).ToLowerInvariant();
+
+        return extension switch
+        {
+            ".vmdl_c" => "mdl",
+            ".vmesh_c" => "mesh",
+            ".vmat_c" => "mat",
+            ".vtex_c" => "tex",
+            ".vcompmat_c" => "compmat",
+            ".vwrld_c" or ".vmap_c" => "map",
+            ".vwnod_c" => "wnod",
+            ".vpcf_c" => "pcf",
+            ".vsnd_c" or ".vsndstck_c" => "snd",
+            ".vsvg_c" => "svg",
+            ".vphys_c" => "phys",
+            ".vnav_c" => "nav",
+            ".vanmgrph_c" => "anmgrph",
+            ".vpulse_c" => "pulse",
+            ".vents_c" => "ents",
+            ".vsnap_c" => "snap",
+            ".vvis_c" => "vis",
+            ".vpost_c" => "post",
+            ".vsmart_c" => "vsmart",
+            ".vnmclip_c" or ".vnmskel_c" or ".vnmgraph_c" => "anim",
+            ".vpk" => "vpk",
+            ".kv3" => "kv3",
+            ".kv2" => "kv2",
+            ".txt" => "txt",
+            ".csv" or ".vdata_c" => "vdata",
+            ".wav" => "wav",
+            ".png" or ".jpg" or ".jpeg" => "png",
+            ".json" => "json",
+            ".xml" => "xml",
+            ".css" => "css",
+            ".js" => "js",
+            _ => null,
+        };
     }
 
     private void CloseTab(TabItem tab)
