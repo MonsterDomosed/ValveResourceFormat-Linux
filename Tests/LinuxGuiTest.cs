@@ -4,9 +4,11 @@ using System.Threading.Tasks;
 using GUI.Linux.Types.Audio;
 using GUI.Linux.Types.Browser;
 using GUI.Linux.Types.Graphs.Core;
+using GUI.Linux.Types.Viewers;
 using ValveKeyValue;
 using ValvePak;
 using ValveResourceFormat;
+using ValveResourceFormat.Blocks;
 using ValveResourceFormat.Graphs;
 using ValveResourceFormat.IO;
 using ValveResourceFormat.ResourceTypes;
@@ -21,6 +23,40 @@ namespace Tests
     {
         private static string FilePath(string name)
             => Path.Combine(TestContext.TestDirectory!, "Files", name);
+
+        [Test]
+        public async Task ResourceViewerHidesRawMeshBufferTabs()
+        {
+            var path = FilePath("lod_test.vmdl_c");
+
+            using (var resource = new Resource())
+            {
+                resource.Read(path);
+
+                // The fixture must actually contain the raw buffers, or this test proves nothing.
+                await Assert.That(resource.Blocks.Any(static block => block.Type is BlockType.MVTX or BlockType.MIDX or BlockType.MADJ))
+                    .IsTrue().Because("the fixture should have raw mesh buffers");
+            }
+
+            using var viewer = new ResourceDataViewer(new LocalViewerContext(path));
+            await viewer.LoadAsync(stream: null);
+
+            var content = viewer.GetContent();
+            var tabs = ((ViewerContent.Tabs)content).Items.Select(static tab => tab.Name).ToArray();
+
+            using (Assert.Multiple())
+            {
+                await Assert.That(tabs).DoesNotContain("MVTX");
+                await Assert.That(tabs).DoesNotContain("MIDX");
+                await Assert.That(tabs).DoesNotContain("MADJ");
+                await Assert.That(tabs).Contains("Resource");
+            }
+        }
+
+        private sealed class LocalViewerContext(string fileName) : IViewerContext
+        {
+            public string FileName { get; } = fileName;
+        }
 
         [Test]
         [Arguments("beep.vsnd_c")]

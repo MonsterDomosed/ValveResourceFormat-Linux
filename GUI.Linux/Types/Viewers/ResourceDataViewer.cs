@@ -54,6 +54,13 @@ public sealed class ResourceDataViewer(IViewerContext viewerContext, IFileLoader
 
         foreach (var block in res.Blocks)
         {
+            // Raw mesh buffers are just binary blobs whose layout lives in CTRL, so a tab of hex bytes
+            // is not useful.
+            if (block is RawBinary && block.Type is BlockType.MVTX or BlockType.MIDX or BlockType.MADJ)
+            {
+                continue;
+            }
+
             tabs.Add(new ViewerTab(block.Type.ToString(), ResourceBlockContent.GetBlockContent(res, block)));
 
             if (block is ResourceIntrospectionManifest manifest)
