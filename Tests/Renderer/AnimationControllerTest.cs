@@ -110,6 +110,92 @@ namespace Tests.Renderer
             }
         }
 
+        [Test]
+        public async Task LoopingWrapsInsteadOfPausing()
+        {
+            using var resource = new Resource();
+            resource.Read(TestFixtures.Path("box_creature_ik_model.vmdl_c"));
+            var model = (Model)resource.DataBlock!;
+
+            var controller = new AnimationController(model.Skeleton, model.FlexControllers)
+            {
+                Looping = true,
+            };
+
+            var walk = model.GetEmbeddedAnimations().First(a => a.Name == "box_creature_leggy_walk");
+            controller.SetAnimation(walk);
+
+            await Assert.That(controller.Update(walk.Duration * 1.5f)).IsTrue();
+
+            using (Assert.Multiple())
+            {
+                await Assert.That(controller.IsPaused).IsFalse();
+                await Assert.That(controller.ActiveClipFinished).IsFalse();
+                await Assert.That(controller.Time).IsGreaterThan(walk.Duration).Because("looping keeps advancing past the first cycle");
+            }
+        }
+
+        [Test]
+        public async Task FrametimeMultiplierScalesAdvancement()
+        {
+            using var resource = new Resource();
+            resource.Read(TestFixtures.Path("box_creature_ik_model.vmdl_c"));
+            var model = (Model)resource.DataBlock!;
+            var walk = model.GetEmbeddedAnimations().First(a => a.Name == "box_creature_leggy_walk");
+
+            var normal = new AnimationController(model.Skeleton, model.FlexControllers);
+            normal.SetAnimation(walk);
+            normal.Update(0.1f);
+
+            var fast = new AnimationController(model.Skeleton, model.FlexControllers)
+            {
+                FrametimeMultiplier = 2f,
+            };
+            fast.SetAnimation(walk);
+            fast.Update(0.1f);
+
+            await Assert.That(fast.Time).IsEqualTo(normal.Time * 2f).Within(0.001f);
+        }
+
+        [Test]
+        public async Task SeekingToAFrameUpdatesThePose()
+        {
+            using var resource = new Resource();
+            resource.Read(TestFixtures.Path("box_creature_ik_model.vmdl_c"));
+            var model = (Model)resource.DataBlock!;
+
+            var controller = new AnimationController(model.Skeleton, model.FlexControllers);
+            var walk = model.GetEmbeddedAnimations().First(a => a.Name == "box_creature_leggy_walk");
+            controller.SetAnimation(walk);
+            controller.Update(0.05f);
+
+            controller.Frame = 10;
+
+            using (Assert.Multiple())
+            {
+                await Assert.That(controller.Frame).IsEqualTo(10);
+                await Assert.That(controller.Update(0f)).IsTrue().Because("a seek forces a pose update");
+            }
+        }
+
+        [Test]
+        public async Task ControllerWithoutAnimationIsInert()
+        {
+            using var resource = new Resource();
+            resource.Read(TestFixtures.Path("wooden_crate_01.vmdl_c"));
+            var model = (Model)resource.DataBlock!;
+
+            var controller = new AnimationController(model.Skeleton, model.FlexControllers);
+
+            using (Assert.Multiple())
+            {
+                await Assert.That(controller.ActiveAnimation).IsNull();
+                await Assert.That(controller.Frame).IsEqualTo(0);
+                await Assert.That(controller.Time).IsEqualTo(0f);
+                await Assert.That(controller.Update(0.1f)).IsFalse().Because("nothing is animating");
+            }
+        }
+
         private static AnimationClip FindClipForSkeleton(AnimationClip clip, string skeletonNameSuffix)
         {
             if (clip.SkeletonName.EndsWith(skeletonNameSuffix, StringComparison.Ordinal))

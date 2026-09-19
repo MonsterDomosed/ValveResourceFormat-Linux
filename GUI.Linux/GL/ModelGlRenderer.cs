@@ -1,4 +1,5 @@
 using System;
+using GUI.Linux.Viewers;
 using ValveResourceFormat.ResourceTypes;
 
 namespace GUI.Linux.GL;
@@ -9,12 +10,18 @@ namespace GUI.Linux.GL;
 /// </summary>
 internal sealed class ModelGlRenderer : SceneCoreGlRenderer
 {
-    public ModelGlRenderer(string fileName)
-        : base("model", (context, rendererContext, host) => CreateCore(context, rendererContext, host, fileName))
+    private readonly ModelAnimationSession session;
+
+    public ModelGlRenderer(string fileName, ModelAnimationSession session)
+        : base("model", (context, rendererContext, host) => CreateCore(context, rendererContext, host, fileName, session))
     {
+        this.session = session;
     }
 
-    private static ModelSceneCore CreateCore(LinuxSceneViewerContext context, ValveResourceFormat.Renderer.RendererContext rendererContext, GUI.Linux.Types.GLViewers.IGLViewerHost host, string fileName)
+    /// <summary>The animation bridge between the shell controls and the render thread.</summary>
+    internal ModelAnimationSession AnimationSession => session;
+
+    private static ModelSceneCore CreateCore(LinuxSceneViewerContext context, ValveResourceFormat.Renderer.RendererContext rendererContext, GUI.Linux.Types.GLViewers.IGLViewerHost host, string fileName, ModelAnimationSession session)
     {
         var resource = new ValveResourceFormat.Resource
         {
@@ -28,6 +35,6 @@ internal sealed class ModelGlRenderer : SceneCoreGlRenderer
             throw new InvalidOperationException($"Resource is not a model: {fileName}");
         }
 
-        return new ModelSceneCore(context, rendererContext, host, resource, model);
+        return new ModelSceneCore(context, rendererContext, host, resource, model, session);
     }
 }

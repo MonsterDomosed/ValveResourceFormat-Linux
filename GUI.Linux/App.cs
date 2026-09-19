@@ -5,9 +5,11 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using GUI.Linux.GL;
 using GUI.Linux.Platform;
 using GUI.Linux.Shell;
@@ -22,6 +24,7 @@ using ValveResourceFormat.Renderer.World;
 using ValveResourceFormat.ResourceTypes;
 using ValveResourceFormat.ResourceTypes.ModelAnimation2;
 using ValveResourceFormat.Serialization.KeyValues;
+using ViewerKey = GUI.Linux.Types.GLViewers.ViewerKey;
 
 namespace GUI.Linux;
 
@@ -199,6 +202,7 @@ internal sealed class App : Application
         await RunFixtureGlRenderCheckAsync<GUI.Linux.GL.GraphGlRenderer>(window, "Tests/Files/default_ents.vents_c", "entity io graph").ConfigureAwait(true);
         await RunVoxelVisibilityRenderCheckAsync(window).ConfigureAwait(true);
         await RunModelRenderCheckAsync(window).ConfigureAwait(true);
+        await RunModelAnimationCheckAsync(window).ConfigureAwait(true);
         await RunKeyboardRoutingCheckAsync(window).ConfigureAwait(true);
         await RunMaterialRenderCheckAsync(window).ConfigureAwait(true);
         await RunAnimationRenderCheckAsync(window).ConfigureAwait(true);
@@ -1231,6 +1235,361 @@ internal sealed class App : Application
         catch (Exception e)
         {
             await Program.StdOut.WriteLineAsync($"[self-check] model tab failed: {e.GetType().Name}: {e.Message}").ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>
+    /// Exercises the interactive model viewer through the real application path: real models opened
+    /// through the shell, the real Avalonia viewport and animation controls, and the real renderer,
+    /// camera and animation controller. Camera interactions mirror what the pointer handlers write
+    /// into <see cref="GUI.Linux.Types.GLViewers.ViewerInputState"/>, and the animation controls are
+    /// driven through their real Avalonia events and properties.
+    /// </summary>
+    private static async Task RunModelAnimationCheckAsync(MainWindow window)
+    {
+        await ExerciseModelViewerAsync(window, "Tests/Files/box_creature_ik_model.vmdl_c", "animated fixture", checkInteractions: true).ConfigureAwait(true);
+        await ExerciseModelViewerAsync(window, "Tests/Files/wooden_crate_01.vmdl_c", "static fixture", checkInteractions: true).ConfigureAwait(true);
+
+        if (LinuxGameContent.Context.Install is not { } install)
+        {
+            return;
+        }
+
+        try
+        {
+            var vpkPath = Path.Combine(install.ContentRoot, "pak01_dir.vpk");
+            using var package = new Package();
+            package.Read(vpkPath);
+
+            var entries = package.Entries?.GetValueOrDefault("vmdl_c")?
+                .Select(static entry => entry.GetFullPath())
+                .Where(static path => path.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray() ?? [];
+
+            var tempDir = Path.Combine(Path.GetTempPath(), "s2v-model-anim");
+            Directory.CreateDirectory(tempDir);
+
+            var tested = 0;
+            var animated = 0;
+            var withoutAnimations = 0;
+            var index = 0;
+
+            foreach (var entryPath in entries)
+            {
+                if ((animated >= 2 && withoutAnimations >= 1) || tested >= 10 || index >= 24)
+                {
+                    break;
+                }
+
+                index++;
+
+                var entry = package.FindEntry(entryPath);
+                if (entry is null)
+                {
+                    continue;
+                }
+
+                var modelPath = Path.Combine(tempDir, $"model_{index}.vmdl_c");
+
+                try
+                {
+                    using (var stream = GameFileLoader.GetPackageEntryStream(package, entry))
+                    using (var file = File.Create(modelPath))
+                    {
+                        await stream.CopyToAsync(file).ConfigureAwait(true);
+                    }
+
+                    var hasAnimations = await ExerciseModelViewerAsync(window, modelPath, $"game {entryPath}", checkInteractions: animated < 2).ConfigureAwait(true);
+
+                    tested++;
+
+                    if (hasAnimations)
+                    {
+                        animated++;
+                    }
+                    else
+                    {
+                        withoutAnimations++;
+                    }
+                }
+                catch (Exception e)
+                {
+                    await Program.StdOut.WriteLineAsync($"[self-check] model animation {entryPath} failed: {e.GetType().Name}: {e.Message}").ConfigureAwait(true);
+                }
+                finally
+                {
+                    if (File.Exists(modelPath))
+                    {
+                        File.Delete(modelPath);
+                    }
+                }
+            }
+
+            await Program.StdOut.WriteLineAsync(
+                $"[self-check] model animation game models: tested={tested}, animated={animated}, withoutAnimations={withoutAnimations}").ConfigureAwait(true);
+        }
+        catch (Exception e)
+        {
+            await Program.StdOut.WriteLineAsync($"[self-check] model animation game models failed: {e.GetType().Name}: {e.Message}").ConfigureAwait(true);
+        }
+    }
+
+    private static async Task<bool> ExerciseModelViewerAsync(MainWindow window, string path, string label, bool checkInteractions)
+    {
+        if (!File.Exists(path))
+        {
+            await Program.StdOut.WriteLineAsync($"[self-check] model animation sample missing: {path}").ConfigureAwait(true);
+            return false;
+        }
+
+        try
+        {
+            await window.OpenFileAsync(path).ConfigureAwait(true);
+            var (viewport, renderer) = await WaitForRendererAsync<ModelGlRenderer>(window, 1, 45000).ConfigureAwait(true);
+
+            if (viewport is null)
+            {
+                await Program.StdOut.WriteLineAsync($"[self-check] {label}: model viewer timed out").ConfigureAwait(true);
+                return false;
+            }
+
+            for (var i = 0; i < 60 && renderer.RenderedFrames < 3; i++)
+            {
+                await Task.Delay(50).ConfigureAwait(true);
+            }
+
+            var control = viewport.GetVisualAncestors().OfType<ModelViewerControl>().FirstOrDefault();
+
+            if (control is null)
+            {
+                await Program.StdOut.WriteLineAsync($"[self-check] {label}: model viewer control not found").ConfigureAwait(true);
+                window.CloseTabContaining(viewport);
+                return false;
+            }
+
+            var session = renderer.AnimationSession;
+            var snapshot = session.GetSnapshot();
+            var hasAnimations = snapshot.HasAnimations;
+
+            await Program.StdOut.WriteLineAsync(
+                $"[self-check] {label}: animations={snapshot.Animations.Length}, active={snapshot.ActiveAnimation}, playing={snapshot.Playing}, looping={snapshot.Looping}").ConfigureAwait(true);
+
+            if (!checkInteractions)
+            {
+                window.CloseTabContaining(viewport);
+                await WaitForRendererDisposalAsync(renderer).ConfigureAwait(true);
+                return hasAnimations;
+            }
+
+            await ExerciseModelCameraAsync(viewport, renderer, control, label).ConfigureAwait(true);
+
+            if (hasAnimations)
+            {
+                await ExerciseModelAnimationControlsAsync(control, session, label).ConfigureAwait(true);
+            }
+            else
+            {
+                for (var i = 0; i < 20 && control.AnimationControlsVisible; i++)
+                {
+                    await Task.Delay(50).ConfigureAwait(true);
+                }
+
+                await Program.StdOut.WriteLineAsync(control.AnimationControlsVisible
+                    ? $"[self-check] {label}: animation controls visible without animations"
+                    : $"[self-check] {label}: bind pose shown, animation controls hidden").ConfigureAwait(true);
+            }
+
+            window.CloseTabContaining(viewport);
+            await WaitForRendererDisposalAsync(renderer).ConfigureAwait(true);
+
+            await Program.StdOut.WriteLineAsync($"[self-check] {label}: closed, renderer disposed={renderer.Disposed}").ConfigureAwait(true);
+
+            return hasAnimations;
+        }
+        catch (Exception e)
+        {
+            await Program.StdOut.WriteLineAsync($"[self-check] {label} failed: {e.GetType().Name}: {e.Message}").ConfigureAwait(true);
+            return false;
+        }
+    }
+
+    private static async Task ExerciseModelCameraAsync(AvaloniaGlViewport viewport, ModelGlRenderer renderer, ModelViewerControl control, string label)
+    {
+        if (renderer.SceneCore is not { } core)
+        {
+            return;
+        }
+
+        var start = renderer.CameraLocation;
+        var startDistance = core.Input.OrbitDistance;
+
+        await SimulatePointerDragAsync(viewport, ViewerKey.MouseLeft, new System.Numerics.Vector2(12, 4), 8).ConfigureAwait(true);
+        var orbitDistance = System.Numerics.Vector3.Distance(start, renderer.CameraLocation);
+
+        var beforePan = renderer.CameraLocation;
+        await SimulatePointerDragAsync(viewport, ViewerKey.MouseRight, new System.Numerics.Vector2(10, 0), 8).ConfigureAwait(true);
+        var panDistance = System.Numerics.Vector3.Distance(beforePan, renderer.CameraLocation);
+
+        var beforeZoom = core.Input.OrbitDistance;
+        await SimulateMouseWheelAsync(viewport, 2f, 6).ConfigureAwait(true);
+        var afterZoom = core.Input.OrbitDistance;
+
+        var beforeReset = core.Input.OrbitDistance;
+        control.ResetViewButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        await Task.Delay(300).ConfigureAwait(true);
+        var afterReset = core.Input.OrbitDistance;
+
+        var orbitOk = orbitDistance > 0.05f;
+        var panOk = panDistance > 0.01f;
+        var zoomOk = afterZoom < beforeZoom;
+
+        // Reset must frame the model bounds and point the orbit target at their center.
+        var modelCore = renderer.SceneCore as ModelSceneCore;
+        var orbitTarget = core.Input.OrbitTarget;
+        var centerOk = false;
+
+        if (modelCore is not null && orbitTarget is { } target)
+        {
+            var bounds = modelCore.ModelBounds;
+            var tolerance = 1f + bounds.Size.Length() * 0.05f;
+            centerOk = System.Numerics.Vector3.Distance(target, bounds.Center) <= tolerance;
+        }
+
+        var resetOk = centerOk && afterReset > 0.01f;
+
+        await Program.StdOut.WriteLineAsync(
+            $"[self-check] {label} camera: orbit={orbitDistance:0.00}, pan={panDistance:0.00}, "
+            + $"zoom {beforeZoom:0.00}->{afterZoom:0.00}, reset {beforeReset:0.00}->{afterReset:0.00}, startDistance={startDistance:0.00}").ConfigureAwait(true);
+
+        await Program.StdOut.WriteLineAsync(orbitOk && panOk && zoomOk && resetOk
+            ? $"[self-check] {label} camera: orbit, pan, zoom and reset view all responded"
+            : $"[self-check] {label} camera: incomplete (orbit={orbitOk}, pan={panOk}, zoom={zoomOk}, reset={resetOk})").ConfigureAwait(true);
+    }
+
+    private static async Task ExerciseModelAnimationControlsAsync(ModelViewerControl control, ModelAnimationSession session, string label)
+    {
+        var names = session.GetSnapshot().Animations;
+        var target = names.Length > 1 ? names[1] : names[0];
+
+        // Select through the real combo box so its SelectionChanged handler queues the command.
+        control.AnimationSelector.SelectedItem = target;
+        var selected = await WaitForAsync(() => string.Equals(session.GetSnapshot().ActiveAnimation, target, StringComparison.Ordinal), 60).ConfigureAwait(true);
+
+        // Play through the real button.
+        if (!session.GetSnapshot().Playing)
+        {
+            Click(control.PlayPauseButton);
+        }
+
+        var advanced = await WaitForAsync(() => session.GetSnapshot().Playing && session.GetSnapshot().Time > 0.05f, 60).ConfigureAwait(true);
+
+        // Pause through the real button and confirm the clock stops.
+        Click(control.PlayPauseButton);
+        await WaitForAsync(() => !session.GetSnapshot().Playing, 60).ConfigureAwait(true);
+
+        var pausedA = session.GetSnapshot().Time;
+        await Task.Delay(350).ConfigureAwait(true);
+        var pausedB = session.GetSnapshot().Time;
+        var pauseOk = Math.Abs(pausedB - pausedA) < 0.001f;
+
+        // Scrub through the real timeline drag path. It was paused, so it must stay paused.
+        control.BeginTimelineDrag();
+        control.Timeline.Value = 0.5;
+        await Task.Delay(150).ConfigureAwait(true);
+        control.EndTimelineDrag();
+        await Task.Delay(250).ConfigureAwait(true);
+
+        var scrubbed = session.GetSnapshot();
+        var cycleFrames = Math.Max(1, scrubbed.FrameCount - 1);
+        var expectedFrame = (int)MathF.Round(0.5f * cycleFrames);
+        var scrubOk = Math.Abs(scrubbed.Frame - expectedFrame) <= 2;
+        var stayedPaused = !scrubbed.Playing;
+
+        // Speed through the real slider.
+        control.SpeedBar.Value = 2.0;
+        var speedOk = await WaitForAsync(() => Math.Abs(session.GetSnapshot().Speed - 2f) < 0.01f, 60).ConfigureAwait(true);
+        control.SpeedBar.Value = 1.0;
+        await WaitForAsync(() => Math.Abs(session.GetSnapshot().Speed - 1f) < 0.01f, 60).ConfigureAwait(true);
+
+        // Loop through the real checkbox.
+        control.LoopCheckBox.IsChecked = false;
+        var loopOff = await WaitForAsync(() => !session.GetSnapshot().Looping, 60).ConfigureAwait(true);
+        control.LoopCheckBox.IsChecked = true;
+        var loopOn = await WaitForAsync(() => session.GetSnapshot().Looping, 60).ConfigureAwait(true);
+
+        // Restart through the real button while paused.
+        Click(control.RestartButton);
+        var restartOk = await WaitForAsync(() => session.GetSnapshot().Time < 0.05f, 60).ConfigureAwait(true);
+
+        await Program.StdOut.WriteLineAsync(
+            $"[self-check] {label} animation: select={target}, advanced={advanced}, pauseStable={pauseOk}, "
+            + $"scrub={scrubbed.Frame}/{cycleFrames} (expected {expectedFrame}), stayedPaused={stayedPaused}, "
+            + $"speed={speedOk}, loop={loopOff && loopOn}, restart={restartOk}").ConfigureAwait(true);
+
+        var ok = selected && advanced && pauseOk && scrubOk && stayedPaused && speedOk && loopOff && loopOn && restartOk;
+
+        await Program.StdOut.WriteLineAsync(ok
+            ? $"[self-check] {label} animation: select, play, pause, scrub, speed, loop and restart all verified"
+            : $"[self-check] {label} animation: interaction check incomplete").ConfigureAwait(true);
+    }
+
+    private static async Task SimulatePointerDragAsync(AvaloniaGlViewport viewport, ViewerKey button, System.Numerics.Vector2 delta, int frames)
+    {
+        viewport.Input.MouseOverViewport = true;
+        viewport.Input.Keys |= button;
+
+        for (var i = 0; i < frames; i++)
+        {
+            viewport.Input.Delta = delta;
+            viewport.RequestFrame();
+            await Task.Delay(30).ConfigureAwait(true);
+        }
+
+        viewport.Input.Keys &= ~button;
+        viewport.Input.Delta = System.Numerics.Vector2.Zero;
+        viewport.RequestFrame();
+        await Task.Delay(80).ConfigureAwait(true);
+    }
+
+    private static async Task SimulateMouseWheelAsync(AvaloniaGlViewport viewport, float delta, int frames)
+    {
+        viewport.Input.MouseOverViewport = true;
+
+        for (var i = 0; i < frames; i++)
+        {
+            viewport.Input.Wheel = delta;
+            viewport.RequestFrame();
+            await Task.Delay(30).ConfigureAwait(true);
+        }
+
+        viewport.Input.Wheel = 0;
+        viewport.RequestFrame();
+        await Task.Delay(80).ConfigureAwait(true);
+    }
+
+    private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+    private static async Task<bool> WaitForAsync(Func<bool> condition, int attempts)
+    {
+        for (var i = 0; i < attempts; i++)
+        {
+            if (condition())
+            {
+                return true;
+            }
+
+            await Task.Delay(50).ConfigureAwait(true);
+        }
+
+        return condition();
+    }
+
+    private static async Task WaitForRendererDisposalAsync(SceneCoreGlRenderer renderer)
+    {
+        for (var i = 0; i < 60 && !renderer.Disposed; i++)
+        {
+            await Task.Delay(50).ConfigureAwait(true);
         }
     }
 

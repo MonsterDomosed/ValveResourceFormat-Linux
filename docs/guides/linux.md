@@ -100,11 +100,16 @@ meshes, voxel visibility, animation clips, skeletons, smart props, panorama vect
 graphics, color correction LUTs, animation graphs (AG1 and AG2), pulse graphs, entity I/O
 graphs, and sound. The VPK browser, console, and portable data viewers are also available.
 
+The model viewer includes an interactive inspection camera (left-drag orbit, right-drag pan,
+wheel zoom, reset view) and a native animation sidebar (animation selection, play/pause,
+timeline scrubbing, playback speed, looping and restart), with models that have animations
+autoplaying their first sequence.
+
 Known limitations:
 
-- Advanced per-viewer sidebar controls (render modes, wireframe, debug toggles, model
-  animation controls, texture mip/channel/cube controls, world layer and entity controls,
-  graph search and filters) are not ported yet.
+- Advanced per-viewer sidebar controls (render modes, wireframe, debug toggles, texture
+  mip/channel/cube controls, world layer and entity controls, graph search and filters) are
+  not ported yet.
 - Some views are not implemented: the interactive compiled-shader tree, the panorama image
   grid, and the choreography viewer.
 - AAC and WAV ADPCM audio cannot be decoded, because no managed decoder is available.

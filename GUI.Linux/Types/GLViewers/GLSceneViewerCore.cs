@@ -299,25 +299,10 @@ public abstract class GLSceneViewerCore : IDisposable
             }
         }
 
-        if (CenterCameraOnNodes && Scene.AllNodes.Any())
+        if (CenterCameraOnNodes && TryGetSceneBounds(out var bounds))
         {
-            var first = true;
-            var bbox = new AABB();
-
-            foreach (var node in Scene.AllNodes)
-            {
-                if (first)
-                {
-                    first = false;
-                    bbox = node.BoundingBox;
-                    continue;
-                }
-
-                bbox = bbox.Union(node.BoundingBox);
-            }
-
             // If there is no bbox, LookAt will break camera, so +1 to location
-            var offset = Math.Max(bbox.Max.X, Math.Max(bbox.Max.Y, bbox.Max.Z)) + 1f * 1.5f;
+            var offset = Math.Max(bounds.Max.X, Math.Max(bounds.Max.Y, bounds.Max.Z)) + 1f * 1.5f;
             offset = Math.Clamp(offset, 0f, 2000f);
             var location = new Vector3(offset, 0, offset);
 
@@ -327,11 +312,51 @@ public abstract class GLSceneViewerCore : IDisposable
             }
 
             Input.Camera.SetLocation(location);
-            Input.Camera.LookAt(bbox.Center);
+            Input.Camera.LookAt(bounds.Center);
         }
 
         Scene.StaticOctree.DebugRenderer = new(Scene.StaticOctree, Scene.RendererContext, false);
         Scene.DynamicOctree.DebugRenderer = new(Scene.DynamicOctree, Scene.RendererContext);
+    }
+
+    /// <summary>Computes the union of the bounds of every node currently in the scene.</summary>
+    protected bool TryGetSceneBounds(out AABB bounds)
+    {
+        var first = true;
+        bounds = default;
+
+        foreach (var node in Scene.AllNodes)
+        {
+            if (first)
+            {
+                first = false;
+                bounds = node.BoundingBox;
+                continue;
+            }
+
+            bounds = bounds.Union(node.BoundingBox);
+        }
+
+        return !first;
+    }
+
+    /// <summary>
+    /// Frames the camera on the scene bounds and points the orbit target at their center. Used by
+    /// inspection viewers such as the model viewer and by their reset-view action.
+    /// </summary>
+    public void ResetCamera()
+    {
+        if (!TryGetSceneBounds(out var bounds))
+        {
+            return;
+        }
+
+        var size = bounds.Size;
+
+        // View the model from a raised front-right angle so all three dimensions are visible.
+        Input.Camera.FrameObjectFromAngle(bounds.Center, size.X, size.Y, size.Z, yaw: 0.72f, pitch: 0.32f);
+        Input.OrbitTarget = bounds.Center;
+        Input.ForceUpdate = true;
     }
 
     protected abstract void LoadScene();
@@ -392,17 +417,6 @@ public abstract class GLSceneViewerCore : IDisposable
         {
             Picker?.RequestNextFrame((int)pointerDownPosition.X, (int)pointerDownPosition.Y, PickingIntent.Select);
         }
-    }
-
-    /// <summary>Handles a wheel event; updates the zoom/move-speed label.</summary>
-    public void OnPointerWheel(float delta)
-    {
-        if (Input.WalkMode || delta == 0)
-        {
-            return;
-        }
-
-        Input.OnMouseWheel(delta);
     }
 
     /// <summary>Handles a keyboard key press for viewer shortcuts.</summary>
@@ -472,6 +486,10 @@ public abstract class GLSceneViewerCore : IDisposable
         var pressedKeys = ToTrackedKeys(input.Keys);
         var mouseDelta = input.Delta;
         lastMouseDelta = mouseDelta;
+
+        // The viewport accumulates wheel notches; apply them before the camera tick so an orbit zoom
+        // is reflected in the same frame.
+        Input.OnMouseWheel(input.Wheel);
 
         var wasWalkMode = Input.WalkMode;
         Input.Tick(frameTime, pressedKeys, mouseDelta, Renderer.Camera);

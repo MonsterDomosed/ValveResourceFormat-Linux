@@ -1,6 +1,7 @@
 using System;
 using System.Buffers;
 using System.Runtime.InteropServices;
+using System.Threading;
 using ValveResourceFormat.Renderer.Audio;
 
 namespace GUI.Linux.Audio;
@@ -51,6 +52,7 @@ internal sealed class PulseAudioDevice : IAudioDevice
     private static extern void PaSimpleFree(IntPtr simple);
 #pragma warning restore CA2101
 
+    private readonly Lock sync = new();
     private IntPtr handle;
     private volatile bool disposed;
 
@@ -85,7 +87,7 @@ internal sealed class PulseAudioDevice : IAudioDevice
     /// <inheritdoc/>
     public void SubmitSamples(ReadOnlySpan<float> samples)
     {
-        if (!Available || disposed || samples.IsEmpty)
+        if (!Available || samples.IsEmpty)
         {
             return;
         }
@@ -96,7 +98,18 @@ internal sealed class PulseAudioDevice : IAudioDevice
         try
         {
             MemoryMarshal.AsBytes(samples).CopyTo(bytes);
-            _ = PaSimpleWrite(handle, bytes, (nuint)byteCount, out _);
+
+            // The mixer thread and the GL thread that disposes this device both reach the stream, so
+            // the write and the free are serialized; otherwise a free could land mid-write.
+            lock (sync)
+            {
+                if (disposed || handle == IntPtr.Zero)
+                {
+                    return;
+                }
+
+                _ = PaSimpleWrite(handle, bytes, (nuint)byteCount, out _);
+            }
         }
         finally
         {
@@ -106,17 +119,20 @@ internal sealed class PulseAudioDevice : IAudioDevice
 
     public void Dispose()
     {
-        if (disposed)
+        lock (sync)
         {
-            return;
-        }
+            if (disposed)
+            {
+                return;
+            }
 
-        disposed = true;
+            disposed = true;
 
-        if (handle != IntPtr.Zero)
-        {
-            PaSimpleFree(handle);
-            handle = IntPtr.Zero;
+            if (handle != IntPtr.Zero)
+            {
+                PaSimpleFree(handle);
+                handle = IntPtr.Zero;
+            }
         }
 
         GC.SuppressFinalize(this);
@@ -124,10 +140,13 @@ internal sealed class PulseAudioDevice : IAudioDevice
 
     ~PulseAudioDevice()
     {
-        if (handle != IntPtr.Zero)
+        lock (sync)
         {
-            PaSimpleFree(handle);
-            handle = IntPtr.Zero;
+            if (handle != IntPtr.Zero)
+            {
+                PaSimpleFree(handle);
+                handle = IntPtr.Zero;
+            }
         }
     }
 }
