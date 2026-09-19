@@ -1,12 +1,4 @@
-<h1 align="center"><img src="./Misc/Icons/source2viewer.png" width="64" height="64" align="center"> Source 2 Viewer</h1>
-
-<p align="center">
-    <a href="https://github.com/ValveResourceFormat/ValveResourceFormat/actions" title="Build Status"><img alt="Build Status" src="https://img.shields.io/github/actions/workflow/status/ValveResourceFormat/ValveResourceFormat/build.yml?logo=github&label=Build&logoColor=ffffff&style=for-the-badge&branch=master"></a>
-    <a href="https://www.nuget.org/packages/ValveResourceFormat/" title="NuGet Library Downloads"><img alt="NuGet Library Downloads" src="https://img.shields.io/nuget/dt/ValveResourceFormat.svg?logo=nuget&label=Library&logoColor=ffffff&color=004880&style=for-the-badge"></a>
-    <a href="https://www.nuget.org/packages/ValveResourceFormat.Renderer/" title="NuGet Renderer Downloads"><img alt="NuGet Renderer Downloads" src="https://img.shields.io/nuget/dt/ValveResourceFormat.Renderer.svg?logo=nuget&label=Renderer&logoColor=ffffff&color=004880&style=for-the-badge"></a>
-    <a href="https://app.codecov.io/gh/ValveResourceFormat/ValveResourceFormat" title="Code Coverage"><img alt="Code Coverage" src="https://img.shields.io/codecov/c/github/ValveResourceFormat/ValveResourceFormat/master?logo=codecov&label=Coverage&logoColor=ffffff&color=F01F7A&style=for-the-badge"></a>
-    <a href="https://discord.gg/s9QQ7Wg7r4" title="Discord"><img alt="Discord" src="https://img.shields.io/discord/1408482312060145725?logo=discord&label=Discord&logoColor=ffffff&color=5865F2&style=for-the-badge"></a>
-</p>
+<h1 align="center"><img src="./Misc/Icons/source2viewer.png" width="64" height="64" align="center"> Source 2 Viewer Linux</h1>
 
 Valve's Source 2 resource file format parser, renderer, decompiler, and exporter.
 The library component is called **ValveResourceFormat (VRF)**.
@@ -19,8 +11,8 @@ developed with extensive AI-assisted coding ("vibe coding"). It adds a native Li
 desktop shell built with Avalonia and OpenGL so Source 2 assets can be browsed,
 rendered and exported on Linux without Wine or Proton.
 
-It is **not** an official ValveResourceFormat or Valve project. It is not affiliated
-with, endorsed by, or supported by the upstream project or by Valve.
+⚠️ **It is _not_ an official ValveResourceFormat or Valve project. It is not affiliated
+with, endorsed by, or supported by the upstream project or by Valve.**
 
 Powered by [Source 2 Viewer](https://s2v.app) ([ValveResourceFormat](https://github.com/ValveResourceFormat/ValveResourceFormat)).
 
