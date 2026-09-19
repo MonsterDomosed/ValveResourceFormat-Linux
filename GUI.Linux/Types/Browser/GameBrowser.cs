@@ -16,7 +16,7 @@ internal enum BrowserSourceKind
 
 /// <summary>
 /// A node in the source tree the browser starts from: an installed game, a VPK inside it, a map VPK,
-/// or a recently opened file. Portable so both shells can present the same sources.
+/// or a recently opened file. Portable so the shell can present these sources.
 /// </summary>
 internal sealed class BrowserSourceNode(string name, string path, BrowserSourceKind kind, int appId)
 {
@@ -118,7 +118,7 @@ internal static partial class GameBrowser
             .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase);
     }
 
-    // Mirrors the Windows source scan: skip chunk archives when the _dir.vpk they belong to exists,
+    // Source scan: skip chunk archives when the _dir.vpk they belong to exists,
     // and skip the baker's per-resource cache, which is not user content.
     private static bool IsSelectableVpk(string path)
     {

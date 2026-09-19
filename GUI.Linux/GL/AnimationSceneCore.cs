@@ -9,8 +9,8 @@ namespace GUI.Linux.GL;
 
 /// <summary>
 /// Shared scene core configured for a navigation skeleton and, when a clip is supplied, its animation.
-/// Loads the default lighting and adds a <see cref="SkeletonSceneNode"/>. The Linux counterpart of the
-/// Windows animation viewer's scene loading, sharing <see cref="GLSceneViewerCore"/> for all rendering.
+/// Loads the default lighting and adds a <see cref="SkeletonSceneNode"/>, sharing
+/// <see cref="GLSceneViewerCore"/> for all rendering.
 /// </summary>
 internal sealed class AnimationSceneCore : GLSceneViewerCore
 {
@@ -43,7 +43,7 @@ internal sealed class AnimationSceneCore : GLSceneViewerCore
 
     protected override void LoadScene()
     {
-        // A clip resolves its skeleton through the game file loader, like the Windows viewer does.
+        // A clip resolves its skeleton through the game file loader.
         if (skeletonData is null && animationClip is not null)
         {
             using var skeletonResource = Scene.RendererContext.FileLoader.LoadFileCompiled(animationClip.SkeletonName);

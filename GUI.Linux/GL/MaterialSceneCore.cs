@@ -6,8 +6,7 @@ namespace GUI.Linux.GL;
 
 /// <summary>
 /// Shared scene core configured for a material preview: loads default lighting and adds the material
-/// preview quad. The Linux counterpart of the Windows material viewer's core scene loading, sharing
-/// <see cref="GLSceneViewerCore"/> for all rendering.
+/// preview quad, sharing <see cref="GLSceneViewerCore"/> for all rendering.
 /// </summary>
 internal sealed class MaterialSceneCore : GLSceneViewerCore
 {

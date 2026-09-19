@@ -8,8 +8,8 @@ namespace GUI.Linux.GL;
 
 /// <summary>
 /// Shared scene core configured for a particle system: loads default lighting, adds a
-/// <see cref="ParticleSceneNode"/> and frames the camera. The Linux counterpart of the Windows
-/// particle viewer's scene loading, sharing <see cref="GLSceneViewerCore"/> for all rendering.
+/// <see cref="ParticleSceneNode"/> and frames the camera, sharing <see cref="GLSceneViewerCore"/> for
+/// all rendering.
 /// </summary>
 internal sealed class ParticleSceneCore : GLSceneViewerCore
 {

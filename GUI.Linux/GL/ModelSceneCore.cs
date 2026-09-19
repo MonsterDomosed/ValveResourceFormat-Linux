@@ -7,8 +7,7 @@ namespace GUI.Linux.GL;
 
 /// <summary>
 /// Shared scene core configured for a single model: loads the default lighting and adds a
-/// <see cref="ModelSceneNode"/>. The Linux counterpart of the Windows model viewer's core scene
-/// loading, sharing <see cref="GLSceneViewerCore"/> for all rendering.
+/// <see cref="ModelSceneNode"/>, sharing <see cref="GLSceneViewerCore"/> for all rendering.
 /// </summary>
 internal sealed class ModelSceneCore : GLSceneViewerCore
 {

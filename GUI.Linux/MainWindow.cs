@@ -14,11 +14,11 @@ using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.VisualTree;
 using GUI.Linux.GL;
-using GUI.Linux.Shell;
-using GUI.Linux.Viewers;
 using GUI.Linux.Platform;
+using GUI.Linux.Shell;
 using GUI.Linux.Types.Viewers;
 using GUI.Linux.Utils;
+using GUI.Linux.Viewers;
 using ValvePak;
 using ValveResourceFormat.IO;
 

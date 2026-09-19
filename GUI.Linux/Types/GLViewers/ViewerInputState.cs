@@ -2,7 +2,7 @@ namespace GUI.Linux.Types.GLViewers;
 
 /// <summary>
 /// Platform-neutral key/button state, mirroring the Renderer's <c>TrackedKeys</c> so a viewer core
-/// can consume it without depending on WinForms or Avalonia input types.
+/// can consume it without depending on Avalonia input types.
 /// </summary>
 [Flags]
 #pragma warning disable CA2217 // Do not mark enums with FlagsAttribute; mirrors the Renderer's TrackedKeys, which has the same shape
@@ -39,7 +39,7 @@ public enum ViewerKey : long
 }
 
 /// <summary>
-/// Per-viewport input state. Both the WinForms and Avalonia hosts fill this from their native events;
+/// Per-viewport input state. The Avalonia host fills this from its native events;
 /// the viewer core reads it. Deltas and wheel are consumed and cleared once per frame.
 /// </summary>
 public sealed class ViewerInputState

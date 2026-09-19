@@ -13,7 +13,7 @@ namespace GUI.Linux.Shell;
 
 /// <summary>
 /// Renders the UI-agnostic <see cref="ViewerContent"/> model into native Avalonia controls.
-/// This is the Avalonia counterpart of the WinForms presenter; the content model is shared.
+/// Presents the portable viewer content model in the Avalonia shell.
 /// </summary>
 internal static class AvaloniaViewerContentPresenter
 {

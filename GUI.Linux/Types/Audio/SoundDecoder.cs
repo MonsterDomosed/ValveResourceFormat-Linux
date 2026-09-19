@@ -7,14 +7,13 @@ namespace GUI.Linux.Types.Audio;
 
 /// <summary>
 /// Portable decoder for compiled sound resources and loose audio files. WAV PCM and MP3 decode with
-/// managed code (MP3 through NLayer, the same decoder the Windows viewer uses underneath NAudio).
-/// Formats whose only decoder in the codebase is Windows-only (AAC through Media Foundation, WAV
-/// ADPCM through ACM) are reported as unsupported rather than replaced.
+/// managed code (MP3 through NLayer). Formats that have no managed decoder (AAC, WAV ADPCM) are
+/// reported as unsupported rather than replaced.
 /// </summary>
 internal static class SoundDecoder
 {
     /// <summary>Decodes a compiled sound resource to interleaved 16-bit PCM.</summary>
-    /// <exception cref="NotSupportedException">The format needs a Windows-only decoder.</exception>
+    /// <exception cref="NotSupportedException">The format has no decoder available on Linux.</exception>
     public static DecodedSound Decode(Sound sound)
     {
         ArgumentNullException.ThrowIfNull(sound);
@@ -24,7 +23,7 @@ internal static class SoundDecoder
             Sound.AudioFileType.WAV => DecodeWav(sound),
             Sound.AudioFileType.MP3 => DecodeMp3(sound.GetSoundStream(), sound.LoopStart, sound.LoopEnd),
             _ => throw new NotSupportedException(
-                $"{sound.SoundType} decoding is not available on Linux (the Windows viewer uses Media Foundation)."),
+                $"{sound.SoundType} decoding is not available on Linux (no managed decoder)."),
         };
     }
 
@@ -94,7 +93,7 @@ internal static class SoundDecoder
         if (sound.AudioFormat != Sound.WaveAudioFormat.PCM)
         {
             throw new NotSupportedException(
-                $"WAV {sound.AudioFormat} decoding is not available on Linux (the Windows viewer uses the ACM converter).");
+                $"WAV {sound.AudioFormat} decoding is not available on Linux (only PCM is supported).");
         }
 
         if (sound.Bits is not (8 or 16))

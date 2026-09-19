@@ -1,6 +1,6 @@
 namespace GUI.Linux.Utils;
 
-// Shared between the Windows and Linux shells so that callers do not need to know which UI toolkit is in use.
+// Icon and button options for the platform message dialogs.
 public enum MessageIcon
 {
     Info,

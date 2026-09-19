@@ -3,8 +3,7 @@ using ValvePak;
 namespace GUI.Linux.Types.Browser;
 
 /// <summary>
-/// A folder in a package's virtual directory tree. Mirrors the Windows browser's virtual node model
-/// without its WinForms tree-node realization cache, so both shells can share the navigation data.
+/// A folder in a package's virtual directory tree, without any toolkit-specific tree-node state.
 /// </summary>
 internal sealed class PackageTreeNode(string name, long size, PackageTreeNode? parent)
 {

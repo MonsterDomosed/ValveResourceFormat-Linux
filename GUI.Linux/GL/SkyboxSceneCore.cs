@@ -6,8 +6,7 @@ namespace GUI.Linux.GL;
 
 /// <summary>
 /// Shared scene core configured for a standalone skybox material preview: loads default lighting and
-/// sets the renderer's 2D skybox to the material, matching the Windows skybox viewer. The scene has
-/// no nodes; only the skybox is drawn.
+/// sets the renderer's 2D skybox to the material. The scene has no nodes; only the skybox is drawn.
 /// </summary>
 internal sealed class SkyboxSceneCore : GLSceneViewerCore
 {

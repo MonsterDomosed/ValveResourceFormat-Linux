@@ -7,7 +7,7 @@ namespace GUI.Linux.Utils;
 
 /// <summary>
 /// Portable game/content context: a configured <see cref="GameFileLoader"/> for the selected installed
-/// game, or for the user-configured search paths. No UI-toolkit dependency, so both shells can share it.
+/// game, or for the user-configured search paths. No UI-toolkit dependency.
 /// </summary>
 public sealed class GameContentContext : IDisposable
 {
@@ -27,7 +27,7 @@ public sealed class GameContentContext : IDisposable
     }
 
     /// <summary>
-    /// Builds a context. User-configured search paths take precedence (matching the Windows shell);
+    /// Builds a context. User-configured search paths take precedence;
     /// otherwise installed Steam games are discovered and <paramref name="preferredGameName"/> (or the
     /// first game found) is selected.
     /// </summary>
@@ -96,7 +96,7 @@ public sealed class GameContentContext : IDisposable
 
     /// <summary>
     /// A <see cref="GameFileLoader"/> that normalizes Windows-style backslash paths to forward slashes
-    /// before lookup, matching the Windows shell's loader and the format world-node names use.
+    /// before lookup, matching how the format stores world-node names.
     /// </summary>
     private sealed class NormalizingFileLoader(Package? currentPackage, string? currentFileName)
         : GameFileLoader(currentPackage, currentFileName)

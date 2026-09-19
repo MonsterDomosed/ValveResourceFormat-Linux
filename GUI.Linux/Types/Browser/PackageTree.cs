@@ -4,8 +4,8 @@ using ValvePak;
 namespace GUI.Linux.Types.Browser;
 
 /// <summary>
-/// How a package search query is matched against entries, mirroring the Windows browser's search
-/// modes for the parts that do not need to scan archive bytes.
+/// How a package search query is matched against entries, for the modes that do not need to scan
+/// archive bytes.
 /// </summary>
 internal enum PackageSearchMode
 {
@@ -17,7 +17,7 @@ internal enum PackageSearchMode
 
 /// <summary>
 /// Builds and searches the virtual directory tree of a <see cref="Package"/>. Portable counterpart of
-/// the Windows browser's tree building and search, so both shells navigate packages the same way.
+/// package tree building and search.
 /// </summary>
 internal static class PackageTree
 {
@@ -96,7 +96,7 @@ internal static class PackageTree
     }
 
     /// <summary>
-    /// Searches a subtree the way the Windows browser does: partial file-name matching, full path
+    /// Searches a subtree: partial file-name matching, full path
     /// matching (also selected automatically when the query contains a directory separator), exact
     /// file names, or a regular expression against file names.
     /// </summary>

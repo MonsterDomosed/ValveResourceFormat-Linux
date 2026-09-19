@@ -40,7 +40,7 @@ internal static class LinuxViewerFactory
             magicResourceVersion = BitConverter.ToUInt16(magicData[4..]);
         }
 
-        // Ordered like the Windows factory for the viewers that are portable.
+        // Ordered so more specific accepted types win over the byte-viewer fallback.
         if (CompiledShaderViewer.IsAccepted(magic))
         {
             return await LoadAsync(new CompiledShaderViewer(context)).ConfigureAwait(false);

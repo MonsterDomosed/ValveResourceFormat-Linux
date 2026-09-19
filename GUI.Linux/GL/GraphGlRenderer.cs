@@ -16,7 +16,7 @@ namespace GUI.Linux.GL;
 /// Linux graph viewer renderer. The shared <see cref="GraphView"/> draws the graph into a CPU
 /// <see cref="SKSurface"/>, the bitmap is uploaded through the shared material loader and shown with
 /// the internal <c>texture_decode</c> shader. Pan/zoom and node interaction are driven from the
-/// neutral <see cref="ViewerInputState"/>, so the graph presenter itself is identical on Windows.
+/// neutral <see cref="ViewerInputState"/>, so the graph presenter itself is toolkit-independent.
 /// </summary>
 internal sealed class GraphGlRenderer : ViewportGlRenderer
 {

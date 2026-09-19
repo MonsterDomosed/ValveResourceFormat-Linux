@@ -5,7 +5,7 @@ namespace GUI.Linux.Types.GLViewers;
 
 /// <summary>
 /// Shared mapping from an OpenGL texture target to the <c>texture_decode</c> shader's
-/// <c>S_TYPE_*</c> combo name. Used by the Windows and Linux texture viewers.
+/// <c>S_TYPE_*</c> combo name. Used by the texture viewer.
 /// </summary>
 public static class TextureViewerShader
 {

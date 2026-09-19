@@ -2,7 +2,7 @@ namespace GUI.Linux.Types.Audio;
 
 /// <summary>
 /// Fully decoded audio: interleaved 16-bit PCM plus the format needed to play it. Container parsing
-/// and decoding are portable, so both shells can consume the same decoded sound.
+/// and decoding are portable.
 /// </summary>
 internal sealed class DecodedSound
 {

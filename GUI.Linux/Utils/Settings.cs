@@ -112,10 +112,6 @@ namespace GUI.Linux.Utils
             public int OpenExplorerOnStart { get; set; }
             /// <summary>Gets or sets the font size used in the text viewer.</summary>
             public int TextViewerFontSize { get; set; }
-            /// <summary>Gets or sets whether the package file list uses grid view (1) or list view (0).</summary>
-            public int PackageGridView { get; set; }
-            /// <summary>Gets or sets the grid thumbnail size index (0-4, mapping to <see cref="GUI.Linux.Types.PackageViewer.ThumbnailRenderers.ThumbnailSizes"/> enum).</summary>
-            public int PackageGridSize { get; set; }
             /// <summary>Internal settings file version used to apply migrations when upgrading from older versions. Do not modify manually.</summary>
             public int _VERSION_DO_NOT_MODIFY { get; set; }
             /// <summary>Gets or sets the application update check state.</summary>
@@ -250,7 +246,6 @@ namespace GUI.Linux.Utils
             Config.AntiAliasingSamples = Math.Clamp(Config.AntiAliasingSamples, 0, 64);
             Config.Volume = MathUtils.Saturate(Config.Volume);
             Config.TextViewerFontSize = Math.Clamp(Config.TextViewerFontSize, 8, 24);
-            Config.PackageGridSize = Math.Clamp(Config.PackageGridSize, 0, Enum.GetValues<Types.PackageViewer.ThumbnailRenderers.ThumbnailSizes>().Length - 1);
 
             if (!Enum.IsDefined(Config.Update.Channel))
             {
@@ -295,12 +290,6 @@ namespace GUI.Linux.Utils
             if (currentVersion < 12) // version 12: enable automatic update checks by default
             {
                 Config.Update.CheckAutomatically = true;
-            }
-
-            if (currentVersion < 13) // version 13: added package grid view and grid size
-            {
-                Config.PackageGridView = 1;
-                Config.PackageGridSize = 2;
             }
 
             if (currentVersion < 14) // version 14: added mouse sensitivity

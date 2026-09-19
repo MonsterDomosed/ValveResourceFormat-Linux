@@ -11,8 +11,8 @@ using ValveResourceFormat.Serialization.KeyValues;
 namespace GUI.Linux.Types.Viewers;
 
 /// <summary>
-/// Builds <see cref="ViewerContent"/> for the data blocks of a compiled resource. Shared by the
-/// WinForms and Avalonia resource viewers so both show identical non-GL content.
+/// Builds <see cref="ViewerContent"/> for the data blocks of a compiled resource, so the resource
+/// viewers show consistent non-GL content.
 /// </summary>
 public static class ResourceBlockContent
 {
@@ -99,8 +99,8 @@ public static class ResourceBlockContent
     }
 
     /// <summary>
-    /// Builds the reconstructed-content tabs (decompiled text) for a resource, matching the Windows
-    /// resource viewer. <paramref name="fileLoader"/> may be null when no package context is available.
+    /// Builds the reconstructed-content tabs (decompiled text) for a resource.
+    /// <paramref name="fileLoader"/> may be null when no package context is available.
     /// </summary>
     public static List<ViewerTab> BuildReconstructedTabs(ValveResourceFormat.Resource resource, IFileLoader? fileLoader)
     {

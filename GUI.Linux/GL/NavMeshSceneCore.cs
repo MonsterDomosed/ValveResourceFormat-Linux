@@ -6,9 +6,8 @@ using ValveResourceFormat.Renderer.SceneNodes;
 namespace GUI.Linux.GL;
 
 /// <summary>
-/// Linux navigation mesh viewer. The rendering itself lives entirely in the shared
-/// <see cref="GLSceneViewerCore"/>; this only supplies the viewer-specific scene contents, exactly like
-/// the Windows <c>GLNavMeshViewer</c>.
+/// Scene core configured for a navigation mesh. The rendering itself lives entirely in the shared
+/// <see cref="GLSceneViewerCore"/>; this only supplies the viewer-specific scene contents.
 /// </summary>
 internal sealed class NavMeshSceneCore : GLSceneViewerCore
 {

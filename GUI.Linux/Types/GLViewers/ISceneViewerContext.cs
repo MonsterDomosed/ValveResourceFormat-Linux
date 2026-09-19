@@ -5,7 +5,7 @@ namespace GUI.Linux.Types.GLViewers;
 
 /// <summary>
 /// What the platform-neutral scene viewer core needs from the file it was opened from. Implemented by
-/// each shell's GUI context; deliberately smaller than the Windows <c>VrfGuiContext</c>.
+/// the shell's GUI context; deliberately small.
 /// </summary>
 public interface ISceneViewerContext
 {

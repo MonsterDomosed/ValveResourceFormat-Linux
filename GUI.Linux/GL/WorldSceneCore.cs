@@ -13,10 +13,9 @@ namespace GUI.Linux.GL;
 /// <summary>
 /// Shared scene core configured for a world/map: runs the existing <see cref="WorldLoader"/> to stream
 /// world geometry, entities, static props and lighting into the scene, then spawns the player entity.
-/// The Linux counterpart of the Windows world viewer's scene loading, sharing
-/// <see cref="GLSceneViewerCore"/> for all rendering. Entity sound events play through the portable
-/// <see cref="SoundEventPlayer"/> and a PulseAudio device; the Windows-only sidebar, entity info
-/// popup, saved-camera controls and streaming world-node UI are intentionally not ported.
+/// It shares <see cref="GLSceneViewerCore"/> for all rendering. Entity sound events play through the
+/// portable <see cref="SoundEventPlayer"/> and a PulseAudio device; advanced sidebar controls, the
+/// entity info popup, saved-camera controls and streaming world-node UI are not implemented.
 /// </summary>
 internal sealed class WorldSceneCore : GLSceneViewerCore
 {

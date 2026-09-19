@@ -4,8 +4,7 @@ namespace GUI.Linux.Types.Graphs.Core;
 
 /// <summary>
 /// The chrome colours a <see cref="GraphPalette"/> derives its non-hue slots from, decoupled from any
-/// windowing toolkit's theme model. The Windows shell fills it from <c>Themer</c>; other hosts supply
-/// their own or use <see cref="Dark"/>.
+/// windowing toolkit's theme model. The shell supplies its own values or uses <see cref="Dark"/>.
 /// </summary>
 internal readonly record struct GraphChromeColors(
     SKColor AppMiddle,

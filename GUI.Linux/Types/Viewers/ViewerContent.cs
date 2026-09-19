@@ -5,8 +5,8 @@ using ValveKeyValue;
 
 namespace GUI.Linux.Types.Viewers;
 
-// UI agnostic description of what a viewer wants to display.
-// The WinForms rendering lives in GUI.Controls.ViewerContentPresenter, the Avalonia one will live in GUI.Linux.
+// UI agnostic description of what a viewer wants to display. The Avalonia presenter that turns
+// this into controls lives in GUI.Linux/Shell/AvaloniaViewerContentPresenter.cs.
 public abstract record ViewerContent
 {
     // Plain or syntax highlighted text
@@ -29,8 +29,8 @@ public abstract record ViewerContent
     public sealed record GlViewport(Func<IGLViewportRenderer> CreateRenderer) : ViewerContent;
 
     // A platform-native control produced by the shell. The factory returns the shell's own control
-    // type (WinForms Control / Avalonia Control); the shared model only carries it as object so this
-    // project stays toolkit-agnostic. Used for interactive views such as audio playback.
+    // type (an Avalonia Control); the model carries it as object so this file stays toolkit-agnostic.
+    // Used for interactive views such as audio playback.
     public sealed record CustomControl(Func<object> CreateControl) : ViewerContent;
 
     // Multiple named tabs of content

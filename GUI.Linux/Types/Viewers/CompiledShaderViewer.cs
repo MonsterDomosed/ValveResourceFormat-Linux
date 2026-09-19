@@ -9,7 +9,7 @@ namespace GUI.Linux.Types.Viewers;
 
 /// <summary>
 /// Compiled shader collections. Presents the summary of every program in the collection as text.
-/// The interactive program/combo tree and bytecode export are WinForms shell features.
+/// The interactive program/combo tree and bytecode export are not part of this portable viewer.
 /// </summary>
 public sealed class CompiledShaderViewer(IViewerContext viewerContext) : IViewer
 {

@@ -4,8 +4,8 @@ using ValveResourceFormat.Renderer;
 namespace GUI.Linux.Types.GLViewers;
 
 /// <summary>
-/// The window-side responsibilities a GL viewer core needs from whatever is hosting it (WinForms or
-/// Avalonia). Kept deliberately small; the host owns the surface, frame scheduling and shell actions.
+/// The window-side responsibilities a GL viewer core needs from the Avalonia viewport host.
+/// Kept deliberately small; the host owns the surface, frame scheduling and shell actions.
 /// </summary>
 public interface IGLViewerHost
 {

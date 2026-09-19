@@ -8,8 +8,7 @@ namespace GUI.Linux.GL;
 
 /// <summary>
 /// Shared scene core configured for a single world node: loads default lighting and the node's own
-/// geometry, entities and props through the existing <see cref="WorldNodeLoader"/>. The Linux
-/// counterpart of the Windows world viewer's world-node path.
+/// geometry, entities and props through the existing <see cref="WorldNodeLoader"/>.
 /// </summary>
 internal sealed class WorldNodeSceneCore : GLSceneViewerCore
 {

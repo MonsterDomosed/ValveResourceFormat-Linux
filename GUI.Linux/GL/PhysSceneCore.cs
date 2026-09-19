@@ -8,8 +8,8 @@ namespace GUI.Linux.GL;
 
 /// <summary>
 /// Shared scene core configured for a physics collision mesh: loads default lighting, builds the
-/// physics world and adds the <see cref="PhysSceneNode"/> set. The Linux counterpart of the Windows
-/// model viewer's physics scene loading, sharing <see cref="GLSceneViewerCore"/> for all rendering.
+/// physics world and adds the <see cref="PhysSceneNode"/> set, sharing <see cref="GLSceneViewerCore"/> for
+/// all rendering.
 /// </summary>
 internal sealed class PhysSceneCore : GLSceneViewerCore
 {

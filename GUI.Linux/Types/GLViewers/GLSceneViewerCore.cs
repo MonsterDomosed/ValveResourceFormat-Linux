@@ -3,7 +3,6 @@ using System.Linq;
 using GUI.Linux.Utils;
 using Microsoft.Extensions.Logging;
 using OpenTK.Graphics.OpenGL;
-using OpenGL = OpenTK.Graphics.OpenGL.GL;
 using ValveResourceFormat.Renderer;
 using ValveResourceFormat.Renderer.Input;
 using ValveResourceFormat.Renderer.Materials;
@@ -11,12 +10,13 @@ using ValveResourceFormat.Renderer.SceneNodes;
 using ValveResourceFormat.Utils;
 using static ValveResourceFormat.Renderer.PickingTexture;
 using ImageFormat = ValveResourceFormat.CompiledShader.ImageFormat;
+using OpenGL = OpenTK.Graphics.OpenGL.GL;
 
 namespace GUI.Linux.Types.GLViewers;
 
 /// <summary>
 /// Platform-neutral scene viewer. Owns the renderer, scene, camera/input state and the whole
-/// load/update/paint/resize flow. A host (WinForms or Avalonia) drives it by forwarding GL context
+/// load/update/paint/resize flow. The Avalonia host drives it by forwarding GL context
 /// ownership, size, input and presentation; viewer-specific behaviour is supplied by subclasses.
 /// </summary>
 public abstract class GLSceneViewerCore : IDisposable
@@ -34,9 +34,6 @@ public abstract class GLSceneViewerCore : IDisposable
     public Scene Scene { get; }
     public Scene? SkyboxScene => Renderer.SkyboxScene;
     public ISceneViewerContext Context { get; }
-
-    /// <summary>Optional sidebar controls; shells that show none can leave this null.</summary>
-    public IGLViewerControls? Controls { get; set; }
 
     /// <summary>The GL host driving this core (input, presentation, frame requests).</summary>
     protected IGLViewerHost Host { get; }
@@ -99,10 +96,10 @@ public abstract class GLSceneViewerCore : IDisposable
     /// <summary>Whether the scene is centered on the first node's bounds after loading.</summary>
     protected virtual bool CenterCameraOnNodes => true;
 
-    /// <summary>Camera offset mode matching the Windows world viewer.</summary>
+    /// <summary>Uses the world viewer's camera offset mode.</summary>
     protected virtual bool IsWorldViewer => false;
 
-    /// <summary>Camera offset mode matching the Windows animation viewer.</summary>
+    /// <summary>Uses the animation viewer's camera offset mode.</summary>
     protected virtual bool IsAnimationViewer => false;
 
     protected GLSceneViewerCore(ISceneViewerContext context, RendererContext rendererContext, IGLViewerHost host)
@@ -227,7 +224,7 @@ public abstract class GLSceneViewerCore : IDisposable
         OnPostLoad();
     }
 
-    /// <summary>Hook for shell-specific post-load work (e.g. the Windows camera setup callback).</summary>
+    /// <summary>Hook for viewer-specific post-load work such as camera setup.</summary>
     protected virtual void OnPostLoad()
     {
     }
@@ -405,16 +402,7 @@ public abstract class GLSceneViewerCore : IDisposable
             return;
         }
 
-        var modifier = Input.OnMouseWheel(delta);
-
-        if (Input.OrbitMode)
-        {
-            Controls?.SetMoveSpeed($"Orbit distance: {modifier:0.0} (scroll to change)");
-        }
-        else
-        {
-            Controls?.SetMoveSpeed($"Move speed: {modifier:0.0}x (scroll to change)");
-        }
+        Input.OnMouseWheel(delta);
     }
 
     /// <summary>Handles a keyboard key press for viewer shortcuts.</summary>

@@ -7,8 +7,7 @@ namespace GUI.Linux.GL;
 
 /// <summary>
 /// Shared scene core configured for world-visibility voxel clusters: adds a
-/// <see cref="VisibilitySceneNode"/>. The Linux counterpart of the Windows voxel visibility viewer's
-/// scene loading, sharing <see cref="GLSceneViewerCore"/> for all rendering.
+/// <see cref="VisibilitySceneNode"/>, sharing <see cref="GLSceneViewerCore"/> for all rendering.
 /// </summary>
 internal sealed class VoxelVisibilitySceneCore : GLSceneViewerCore
 {

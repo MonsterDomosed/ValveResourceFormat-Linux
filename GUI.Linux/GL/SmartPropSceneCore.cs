@@ -10,8 +10,8 @@ namespace GUI.Linux.GL;
 
 /// <summary>
 /// Shared scene core configured for a smart prop: resolves its referenced models through the game file
-/// loader and adds a <see cref="ModelSceneNode"/> for each. The Linux counterpart of the Windows smart
-/// prop viewer's scene loading, sharing <see cref="GLSceneViewerCore"/> for all rendering.
+/// loader and adds a <see cref="ModelSceneNode"/> for each, sharing <see cref="GLSceneViewerCore"/> for
+/// all rendering.
 /// </summary>
 internal sealed class SmartPropSceneCore : GLSceneViewerCore
 {

@@ -97,7 +97,7 @@ internal sealed class LinuxFileDialogs : IFileDialogService
 
         if (!string.IsNullOrWhiteSpace(filter))
         {
-            // WinForms format: "Description|pattern;pattern|Description|pattern".
+            // Filter format: "Description|pattern;pattern|Description|pattern".
             var parts = filter.Split('|');
 
             for (var i = 0; i + 1 < parts.Length; i += 2)

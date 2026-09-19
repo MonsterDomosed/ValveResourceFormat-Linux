@@ -7,8 +7,7 @@ namespace GUI.Linux.GL;
 
 /// <summary>
 /// Shared scene core configured for a single mesh: loads the default lighting and adds a
-/// <see cref="MeshSceneNode"/>. This is the Linux counterpart of the Windows mesh viewer's scene
-/// loading, sharing <see cref="GLSceneViewerCore"/> for all rendering.
+/// <see cref="MeshSceneNode"/>, sharing <see cref="GLSceneViewerCore"/> for all rendering.
 /// </summary>
 internal sealed class MeshSceneCore : GLSceneViewerCore
 {
@@ -25,7 +24,7 @@ internal sealed class MeshSceneCore : GLSceneViewerCore
 
     public override void PreSceneLoad()
     {
-        // Same sequence as the Windows single node viewer: load renderer resources, then default lighting.
+        // Load renderer resources, then default lighting.
         RunPreSceneLoad();
         LoadDefaultLighting();
     }
