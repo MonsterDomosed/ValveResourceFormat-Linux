@@ -6,9 +6,9 @@ as importantly, what you do not: which data is lost, and why.
 
 If a limitation listed here has since been fixed, please [open an issue](./reporting-issues.md) or a pull request.
 
-> **Platform support:** the Windows shell and the native Linux shell share the same parsers
-> and most viewers. Some Windows-only non-GL views and the advanced per-viewer controls are
-> not available on Linux yet; see the [Linux guide](./linux.md) for the current list.
+> **Platform support:** this repository ships the native Linux application. Some views and the
+> advanced per-viewer controls are not implemented yet; see the [Linux guide](./linux.md) for
+> the current list.
 
 ## How to Read This Page
 

@@ -5,23 +5,26 @@ The library component is called **ValveResourceFormat (VRF)**.
 
 ## About this project
 
-This is an independent, Linux-focused continuation/fork of
+This is an independent, Linux-focused fork of
 [ValveResourceFormat](https://github.com/ValveResourceFormat/ValveResourceFormat),
-developed with extensive AI-assisted coding ("vibe coding"). It adds a native Linux
-desktop shell built with Avalonia and OpenGL so Source 2 assets can be browsed,
-rendered and exported on Linux without Wine or Proton.
+developed with extensive AI-assisted coding ("vibe coding"). It is a native Linux
+desktop application built with Avalonia and OpenGL on top of the ValveResourceFormat
+libraries, so Source 2 assets can be browsed, rendered and exported on Linux without
+Wine or Proton.
 
 ⚠️ **It is _not_ an official ValveResourceFormat or Valve project. It is not affiliated
-with, endorsed by, or supported by the upstream project or by Valve.**
+with, endorsed by, or supported by the upstream project or by Valve. This fork does not
+ship a Windows application.**
 
 Powered by [Source 2 Viewer](https://s2v.app) ([ValveResourceFormat](https://github.com/ValveResourceFormat/ValveResourceFormat)).
 
 ## Linux
 
-This fork adds a native Linux shell built with Avalonia and OpenGL, distributed as a
-self-contained `linux-x64` tarball, so neither Wine nor a separate .NET runtime is required.
-See the [Linux guide](docs/guides/linux.md) for installation, system requirements, display
-backends, configuration paths, the release artifacts and the current limitations.
+This repository provides a native Linux application built with Avalonia and OpenGL,
+distributed as a self-contained `linux-x64` tarball, so neither Wine nor a separate .NET
+runtime is required. See the [Linux guide](docs/guides/linux.md) for installation, system
+requirements, display backends, configuration paths, the release artifacts and the current
+limitations.
 
 Build and package it with:
 
@@ -34,8 +37,6 @@ dotnet build GUI.Linux/GUI.Linux.csproj -c Release
 > [**For more information and downloads of _Source 2 Viewer_, visit the website.**](https://s2v.app/)
 >
 > [View Library API documentation here.](https://s2v.app/ValveResourceFormat/api/ValveResourceFormat.html) [View guide on getting started with parsing resources.](https://s2v.app/ValveResourceFormat/guides/read-resource.html)
-
-<img src="./Misc/Icons/readme_screenshot.webp" width="1100" height="700" align="center">
 
 ## Contributing
 
@@ -89,7 +90,3 @@ own, none of it is documented by Valve and all of it came from people reverse en
 the engine over many years.
 
 </details>
-
-## Code signing policy
-
-Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).

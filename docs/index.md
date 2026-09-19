@@ -89,9 +89,9 @@ Source 2 Viewer is the result of years of reverse engineering by many contributo
 
 ### Does Source 2 Viewer work on Mac and Linux?
 
-The Windows application is a .NET WinForms application, so it only runs on Windows natively.
-This fork adds a native Linux shell built with Avalonia and OpenGL, distributed as a
-self-contained tarball; see the [Linux guide](./guides/linux.md).
+This repository is a Linux-focused fork: it ships a native Linux application built with
+Avalonia and OpenGL, distributed as a self-contained tarball; see the
+[Linux guide](./guides/linux.md). It does not include the upstream Windows application.
 The command-line utility is completely cross-platform.
 
 ### How do I open VPK files?
@@ -112,7 +112,8 @@ Yes, Source 2 Viewer is actively maintained and regularly updated to support new
 
 ### Why is Source 2 Viewer not opening?
 
-If you double click the executable and nothing happens, the most likely cause is that your Windows is missing CET (Control-flow Enforcement Technology) support. Please update your Windows.
+On Linux, the most common causes are a missing OpenGL 4.6 driver or no Wayland/X11 display.
+See the [Linux guide](./guides/linux.md) for the system requirements and display backend notes.
 
 ### How do I extract models for use in Blender or other 3D software?
 

@@ -54,10 +54,10 @@ This is a list of these places to make them easier to track.
 
 ### Asset icons for the GUI
 
-[GUI/Icons/AssetTypes](GUI/Icons/AssetTypes/) folder contains png files of assets that have unique icons in the
-package viewer. For example `mp3.png` will be used for files ending with `.mp3`.
+[GUI.Linux/Assets/Icons/AssetTypes](GUI.Linux/Assets/Icons/AssetTypes/) folder contains svg files of assets that have unique icons in the
+package viewer. For example `mp3.svg` will be used for files ending with `.mp3`.
 
-These icons should all have the same size. Use [TinyPNG](https://tinypng.com/) to optimize them.
+These icons should all have the same size.
 
 ### Known entity key names
 
@@ -73,13 +73,6 @@ When scanning `vents_c` files, a `unknown_keys.txt` file will be created.
 This file can be used with [MurmurHashMatcher](Misc/MurmurHashMatcher) utility which bruteforces game files and binaries to find strings.
 
 There is also a [VrfFgdParser](Misc/VrfFgdParser) tool which parses FGD files to extract all possible key names and entity icons.
-
-### Entity icons for the map viewer
-
-[HammerEntities.cs](GUI/Utils/HammerEntities.cs) contains a mapping of entity names and their Hammer icons (sprite or model).
-Unfortunately different games may have different paths for these icons, so they may not always be available.
-
-Use [VrfFgdParser](Misc/VrfFgdParser) to extract them.
 
 ### Collision tags to tool texture mappings
 

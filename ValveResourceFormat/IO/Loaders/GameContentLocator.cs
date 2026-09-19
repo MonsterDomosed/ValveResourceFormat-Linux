@@ -5,8 +5,8 @@ namespace ValveResourceFormat.IO
 {
     /// <summary>
     /// Discovers installed Steam games and their primary content roots, reusing
-    /// <see cref="GameFolderLocator"/> for Steam/library discovery. UI-toolkit agnostic so both the
-    /// WinForms and Avalonia shells can share it.
+    /// <see cref="GameFolderLocator"/> for Steam/library discovery. UI-toolkit agnostic so GUI
+    /// shells can share it.
     /// </summary>
     public static class GameContentLocator
     {

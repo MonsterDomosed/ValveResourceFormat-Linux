@@ -4,11 +4,11 @@ This guide walks you through the basics of using Source 2 Viewer to browse, prev
 
 ## Downloading Source 2 Viewer
 
-Download the latest release from [s2v.app](https://s2v.app).
+Download the latest Linux release from this repository's releases page, or the upstream Windows build from [s2v.app](https://s2v.app).
 
-Source 2 Viewer is portable and requires no installation. Just run the executable directly.
+The Linux build is portable: extract the tarball and run it, with no installation step. See the [Linux guide](./linux.md).
 
-- **Source 2 Viewer** (GUI) runs on Windows and, natively, on Linux. The Linux build is an independent, AI-assisted continuation of this project; see the [Linux guide](./linux.md).
+- **Source 2 Viewer** (GUI) is a native Linux application in this repository. The upstream project ships the Windows application.
 - **Source2Viewer-CLI** (command-line) is cross-platform. Download for your target platform is available in the changelog section.
 
 ## Using the Explorer

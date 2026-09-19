@@ -1,6 +1,6 @@
 # Command-line utility
 
-While Source 2 Viewer is a GUI application for Windows and Linux, there is also a command-line utility available for all of Windows, Linux, and macOS.
+While this repository provides a native Linux GUI application, the command-line utility is available for Windows, Linux, and macOS.
 
 The binary name is `Source2Viewer-CLI`.
 

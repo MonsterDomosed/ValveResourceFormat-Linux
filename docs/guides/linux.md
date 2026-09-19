@@ -93,21 +93,20 @@ what CI runs under Xvfb and `llvmpipe`.
 
 ## Supported resources
 
-The Linux shell reuses the same shared viewers as the Windows application. Resource types
+The application ships portable viewers for the common resource types. Resource types
 with a native OpenGL preview include textures, models, meshes, materials, skyboxes,
 particles and particle snapshots, worlds, maps, world nodes, navmeshes, physics collision
 meshes, voxel visibility, animation clips, skeletons, smart props, panorama vector
 graphics, color correction LUTs, animation graphs (AG1 and AG2), pulse graphs, entity I/O
 graphs, and sound. The VPK browser, console, and portable data viewers are also available.
 
-Known limitations relative to the Windows application:
+Known limitations:
 
 - Advanced per-viewer sidebar controls (render modes, wireframe, debug toggles, model
   animation controls, texture mip/channel/cube controls, world layer and entity controls,
   graph search and filters) are not ported yet.
-- Some Windows-only non-GL views (the interactive compiled-shader tree, the panorama image
-  grid, and the choreography viewer) are not available.
-- AAC and WAV ADPCM audio cannot be decoded, because their decoders are Windows-specific.
+- Some views are not implemented: the interactive compiled-shader tree, the panorama image
+  grid, and the choreography viewer.
+- AAC and WAV ADPCM audio cannot be decoded, because no managed decoder is available.
   MP3 and uncompressed WAV PCM play normally.
-- World sound events play through the portable mixer; the Windows-only audio configuration
-  is not exposed.
+- World sound events play through the portable mixer; the audio configuration UI is not exposed.
