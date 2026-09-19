@@ -12,6 +12,11 @@ desktop application built with Avalonia and OpenGL on top of the ValveResourceFo
 libraries, so Source 2 assets can be browsed, rendered and exported on Linux without
 Wine or Proton.
 
+This is a first attempt at building something with agentic AI, so parts of the
+documentation, guides and inherited upstream docs may be outdated, inconsistent, or
+simply not applicable to this fork. Treat the code and the release notes as the source
+of truth, and expect rough edges.
+
 ⚠️ **It is _not_ an official ValveResourceFormat or Valve project. It is not affiliated
 with, endorsed by, or supported by the upstream project or by Valve. This fork does not
 ship a Windows application.**
