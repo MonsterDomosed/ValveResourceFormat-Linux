@@ -14,8 +14,7 @@ Wine or Proton.
 
 This is a first attempt at building something with agentic AI, so parts of the
 documentation, guides and inherited upstream docs may be outdated, inconsistent, or
-simply not applicable to this fork. Treat the code and the release notes as the source
-of truth, and expect rough edges.
+simply not applicable to this fork. Expect rough edges.
 
 ⚠️ **It is _not_ an official ValveResourceFormat or Valve project. It is not affiliated
 with, endorsed by, or supported by the upstream project or by Valve.**
