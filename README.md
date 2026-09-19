@@ -18,8 +18,7 @@ simply not applicable to this fork. Treat the code and the release notes as the 
 of truth, and expect rough edges.
 
 ⚠️ **It is _not_ an official ValveResourceFormat or Valve project. It is not affiliated
-with, endorsed by, or supported by the upstream project or by Valve. This fork does not
-ship a Windows application.**
+with, endorsed by, or supported by the upstream project or by Valve.**
 
 Powered by [Source 2 Viewer](https://s2v.app) ([ValveResourceFormat](https://github.com/ValveResourceFormat/ValveResourceFormat)).
 
