@@ -112,6 +112,8 @@ namespace GUI.Linux.Utils
             public int OpenExplorerOnStart { get; set; }
             /// <summary>Gets or sets the font size used in the text viewer.</summary>
             public int TextViewerFontSize { get; set; }
+            /// <summary>Gets or sets the width in pixels of the viewer inspector sidebar.</summary>
+            public double ViewerSidebarWidth { get; set; } = 300;
             /// <summary>Internal settings file version used to apply migrations when upgrading from older versions. Do not modify manually.</summary>
             public int _VERSION_DO_NOT_MODIFY { get; set; }
             /// <summary>Gets or sets the application update check state.</summary>

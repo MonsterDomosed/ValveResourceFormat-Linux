@@ -24,6 +24,16 @@ public abstract class GLSceneViewerCore : IDisposable
     public ValveResourceFormat.Renderer.Renderer Renderer { get; }
     public UserInput Input { get; protected set; }
 
+    /// <summary>The scene inspector sidebar bridge for this viewer.</summary>
+    internal SceneSidebarSession Sidebar { get; } = new();
+
+    private string[] sidebarRenderModes = [];
+    private string sidebarRenderMode = string.Empty;
+    private string[] sidebarLayerNames = [];
+    private HashSet<string> sidebarEnabledLayers = [];
+    private bool sidebarLightBackground;
+    private bool sidebarSolidBackground;
+
     public ValveResourceFormat.Renderer.TextRenderer TextRenderer { get; protected set; }
     private readonly CrosshairRenderer crosshairRenderer;
 
@@ -365,6 +375,148 @@ public abstract class GLSceneViewerCore : IDisposable
         Input.ForceUpdate = true;
     }
 
+    /// <summary>Applies the sidebar's pending commands. Called on the render thread.</summary>
+    private void ApplySidebarCommands()
+    {
+        var command = Sidebar.ConsumeCommands();
+
+        if (command.RenderModeChanged && command.RenderMode is { Length: > 0 } mode)
+        {
+            ApplyRenderMode(mode);
+            sidebarRenderMode = mode;
+        }
+
+        if (command.WireframeChanged)
+        {
+            Renderer.IsWireframe = command.Wireframe;
+        }
+
+        if (command.BaseGridChanged)
+        {
+            ShowBaseGrid = command.BaseGrid;
+        }
+
+        if (command.LightBackgroundChanged)
+        {
+            sidebarLightBackground = command.LightBackground;
+            Renderer.BaseBackground?.SetLightBackground(command.LightBackground);
+        }
+
+        if (command.SolidBackgroundChanged)
+        {
+            sidebarSolidBackground = command.SolidBackground;
+            Renderer.BaseBackground?.SetSolidBackground(command.SolidBackground);
+        }
+
+        if (command.StaticOctreeChanged)
+        {
+            ShowStaticOctree = command.StaticOctree;
+        }
+
+        if (command.DynamicOctreeChanged)
+        {
+            ShowDynamicOctree = command.DynamicOctree;
+        }
+
+        if (command.VisDebugChanged)
+        {
+            ShowVisDebug = command.VisDebug;
+        }
+
+        if (command.PhysicsTracesChanged)
+        {
+            ShowPhysicsTraces = command.PhysicsTraces;
+        }
+
+        if (command.ShowSpeedChanged)
+        {
+            ShowSpeed = command.ShowSpeed;
+        }
+
+        if (command.PerfModeChanged)
+        {
+            PerfDisplayMode = command.PerfMode;
+        }
+
+        if (command.LayersChanged && command.Layers is { } layers)
+        {
+            sidebarEnabledLayers = [.. layers];
+            SetEnabledLayers(sidebarEnabledLayers);
+        }
+
+        if (command.ResetCameraRequested)
+        {
+            ResetCamera();
+        }
+
+        if (command.SaveCameraRequested && command.CameraName is { Length: > 0 } saveName)
+        {
+            var camera = Input.Camera;
+            Settings.Config.SavedCameras[saveName] = [camera.Location.X, camera.Location.Y, camera.Location.Z, camera.Pitch, camera.Yaw];
+            Settings.Save();
+        }
+
+        if (command.ApplyCameraRequested
+            && command.ApplyCameraName is { Length: > 0 } applyName
+            && Settings.Config.SavedCameras.TryGetValue(applyName, out var pose)
+            && pose.Length >= 5)
+        {
+            Input.Camera.SetLocationPitchYaw(new Vector3(pose[0], pose[1], pose[2]), pose[3], pose[4]);
+            Input.OrbitTarget = null;
+            Input.ForceUpdate = true;
+        }
+
+        if (command.DeleteCameraRequested && command.DeleteCameraName is { Length: > 0 } deleteName)
+        {
+            Settings.Config.SavedCameras.Remove(deleteName);
+            Settings.Save();
+        }
+    }
+
+    /// <summary>Publishes the scene state for the sidebar. Called on the render thread.</summary>
+    private void PublishSidebarState()
+    {
+        if (sidebarRenderModes.Length == 0)
+        {
+            sidebarRenderModes = [.. GetAvailableRenderModes().Where(static m => !m.IsHeader).Select(static m => m.Name)];
+
+            if (sidebarRenderMode.Length == 0 && sidebarRenderModes.Length > 0)
+            {
+                sidebarRenderMode = sidebarRenderModes[0];
+            }
+        }
+
+        if (sidebarLayerNames.Length == 0)
+        {
+            sidebarLayerNames = [.. GetLayerNames()];
+
+            if (sidebarEnabledLayers.Count == 0)
+            {
+                sidebarEnabledLayers = [.. sidebarLayerNames];
+            }
+        }
+
+        var cameras = Settings.Config.SavedCameras.Keys.OrderBy(static name => name, StringComparer.OrdinalIgnoreCase).ToArray();
+
+        Sidebar.Publish(
+            true,
+            sidebarRenderModes,
+            sidebarRenderMode,
+            Renderer.IsWireframe,
+            ShowBaseGrid,
+            sidebarLightBackground,
+            sidebarSolidBackground,
+            ShowStaticOctree,
+            ShowDynamicOctree,
+            ShowVisDebug,
+            ShowPhysicsTraces,
+            ShowSpeed,
+            PerfDisplayMode,
+            sidebarLayerNames,
+            [.. sidebarEnabledLayers],
+            cameras);
+    }
+
     protected abstract void LoadScene();
 
     protected virtual void OnPicked(object? sender, PickingResponse pixelInfo)
@@ -529,6 +681,8 @@ public abstract class GLSceneViewerCore : IDisposable
 
         OnPrePaint(frameTime);
 
+        ApplySidebarCommands();
+
         Renderer.PerfStats.Capture = perfDisplay == PerfDisplay.Stats;
         Renderer.PerfStats.Timings.Capture = perfDisplay == PerfDisplay.Timings;
         Renderer.PerfStats.Allocations.Capture = perfDisplay == PerfDisplay.Allocations;
@@ -559,6 +713,8 @@ public abstract class GLSceneViewerCore : IDisposable
 
             SelectedNodeRenderer.Update(renderContext, updateContext);
         }
+
+        PublishSidebarState();
 
         UpdateAudioInFrame();
 

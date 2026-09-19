@@ -713,6 +713,8 @@ internal sealed class App : Application
 
                 await Program.StdOut.WriteLineAsync($"[self-check] world scene sound: {worldRenderer.HasSoundPlayer}").ConfigureAwait(true);
 
+                await RunWorldSidebarCheckAsync(worldViewport, worldRenderer).ConfigureAwait(true);
+
                 window.CloseTabContaining(worldViewport);
                 for (var i = 0; i < 60 && !worldRenderer.Disposed; i++)
                 {
@@ -732,6 +734,68 @@ internal sealed class App : Application
         {
             await Program.StdOut.WriteLineAsync($"[self-check] world view failed: {e.GetType().Name}: {e.Message}").ConfigureAwait(true);
         }
+    }
+
+    private static async Task RunWorldSidebarCheckAsync(AvaloniaGlViewport viewport, WorldGlRenderer renderer)
+    {
+        var host = viewport.GetVisualAncestors().OfType<GUI.Linux.UI.ViewportWithSidebar>().FirstOrDefault();
+        var sidebar = host?.GetVisualDescendants().OfType<ViewerSidebar>().FirstOrDefault();
+
+        if (sidebar is null)
+        {
+            await Program.StdOut.WriteLineAsync("[self-check] world sidebar: control not found").ConfigureAwait(true);
+            return;
+        }
+
+        for (var i = 0; i < 100 && !sidebar.Attached; i++)
+        {
+            await Task.Delay(50).ConfigureAwait(true);
+        }
+
+        if (!sidebar.Attached || renderer.SceneCore is not { } core)
+        {
+            await Program.StdOut.WriteLineAsync("[self-check] world sidebar: not attached to the scene core").ConfigureAwait(true);
+            return;
+        }
+
+        var snapshot = core.Sidebar.GetSnapshot();
+
+        sidebar.WireframeCheckBox.IsChecked = true;
+        var wireframeOk = await WaitForAsync(() => core.Renderer.IsWireframe, 40).ConfigureAwait(true);
+
+        sidebar.BaseGridCheckBox.IsChecked = true;
+        var gridOk = await WaitForAsync(() => core.ShowBaseGrid, 40).ConfigureAwait(true);
+
+        sidebar.PerfModeSelector.SelectedIndex = 1;
+        var perfOk = await WaitForAsync(() => core.PerfDisplayMode == 1, 40).ConfigureAwait(true);
+        sidebar.PerfModeSelector.SelectedIndex = 0;
+        await WaitForAsync(() => core.PerfDisplayMode == 0, 40).ConfigureAwait(true);
+
+        var renderModeOk = true;
+        var pick = snapshot.RenderModes.FirstOrDefault(static mode => mode.Length > 0);
+
+        if (pick is not null && !string.Equals(pick, snapshot.CurrentRenderMode, StringComparison.Ordinal))
+        {
+            sidebar.RenderModeSelector.SelectedItem = pick;
+            renderModeOk = await WaitForAsync(() => string.Equals(core.Sidebar.GetSnapshot().CurrentRenderMode, pick, StringComparison.Ordinal), 40).ConfigureAwait(true);
+        }
+
+        const string cameraName = "__selfcheck_camera";
+        sidebar.CameraNameBox.Text = cameraName;
+        sidebar.SaveCameraButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var saveOk = await WaitForAsync(() => core.Sidebar.GetSnapshot().SavedCameras.Contains(cameraName, StringComparer.Ordinal), 40).ConfigureAwait(true);
+
+        sidebar.SavedCamerasSelector.SelectedItem = cameraName;
+        sidebar.DeleteCameraButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var deleteOk = await WaitForAsync(() => !core.Sidebar.GetSnapshot().SavedCameras.Contains(cameraName, StringComparer.Ordinal), 40).ConfigureAwait(true);
+
+        await Program.StdOut.WriteLineAsync(
+            $"[self-check] world sidebar: modes={snapshot.RenderModes.Length}, wireframe={wireframeOk}, grid={gridOk}, "
+            + $"perf={perfOk}, renderMode={renderModeOk}, saveCamera={saveOk}, deleteCamera={deleteOk}").ConfigureAwait(true);
+
+        await Program.StdOut.WriteLineAsync(snapshot.RenderModes.Length > 0 && wireframeOk && gridOk && perfOk && renderModeOk && saveOk && deleteOk
+            ? "[self-check] world sidebar: real controls drive the renderer"
+            : "[self-check] world sidebar: incomplete").ConfigureAwait(true);
     }
 
     private static async Task<bool> RunGlInfrastructureCheckAsync()

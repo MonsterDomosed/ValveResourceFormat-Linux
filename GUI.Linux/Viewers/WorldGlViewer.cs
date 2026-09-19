@@ -3,21 +3,25 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using GUI.Linux.GL;
+using GUI.Linux.Shell;
 using GUI.Linux.Types.GLViewers;
 using GUI.Linux.Types.Viewers;
+using GUI.Linux.UI;
 
 namespace GUI.Linux.Viewers;
 
 /// <summary>
-/// Linux world/map/world-node viewer: a real GL viewport tab plus the portable resource data tabs.
-/// The GL tab renders through the shared <see cref="GLSceneViewerCore"/> and the existing world
-/// loaders; the renderer factory lets the shell pick the world, map or world-node core.
+/// Linux world/map/world-node viewer: a GL viewport with the scene inspector sidebar, plus the
+/// portable resource data tabs. The renderer factory lets the shell pick the world, map or
+/// world-node core.
 /// </summary>
 internal sealed class WorldGlViewer : IViewer
 {
     private readonly ResourceDataViewer dataViewer;
     private readonly Func<IGLViewportRenderer> createRenderer;
     private readonly string tabName;
+
+    private ViewportWithSidebar? control;
 
     public WorldGlViewer(IViewerContext context, string fileName, ResourceDataViewer dataViewer, Func<IGLViewportRenderer>? createRenderer = null, string tabName = "MAP")
     {
@@ -32,7 +36,7 @@ internal sealed class WorldGlViewer : IViewer
     {
         List<ViewerTab> tabs =
         [
-            new ViewerTab(tabName, new ViewerContent.GlViewport(createRenderer), Select: true),
+            new ViewerTab(tabName, new ViewerContent.CustomControl(() => control = new ViewportWithSidebar(createRenderer, new ViewerSidebar())), Select: true),
         ];
 
         if (dataViewer.GetContent() is ViewerContent.Tabs data)
@@ -48,6 +52,8 @@ internal sealed class WorldGlViewer : IViewer
 
     public void Dispose()
     {
+        control?.Dispose();
+        control = null;
         dataViewer.Dispose();
         GC.SuppressFinalize(this);
     }
