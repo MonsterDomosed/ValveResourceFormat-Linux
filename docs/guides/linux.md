@@ -105,11 +105,16 @@ wheel zoom, reset view) and a native animation sidebar (animation selection, pla
 timeline scrubbing, playback speed, looping and restart), with models that have animations
 autoplaying their first sequence.
 
+Scene viewers (world/map/world-node, material, mesh, navmesh, physics, particle, skybox,
+smart prop, voxel visibility and animation) share a collapsible inspector sidebar with view,
+background, render mode, wireframe, world layer, saved camera and debug controls, wired to
+the renderer.
+
 Known limitations:
 
-- Advanced per-viewer sidebar controls (render modes, wireframe, debug toggles, texture
-  mip/channel/cube controls, world layer and entity controls, graph search and filters) are
-  not ported yet.
+- Viewer-specific sidebar controls that still need a viewer-side session are not ported yet:
+  texture mip/channel/cube/sampling controls, particle playback/detail controls, graph search
+  and filters, and the material parameter editor.
 - Some views are not implemented: the interactive compiled-shader tree, the panorama image
   grid, and the choreography viewer.
 - AAC and WAV ADPCM audio cannot be decoded, because no managed decoder is available.
