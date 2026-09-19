@@ -927,6 +927,7 @@ internal sealed class MainWindow : Window
         if (tabContents.Remove(tab, out var existing))
         {
             contentHost.Children.Remove(existing);
+            (existing as IDisposable)?.Dispose();
         }
 
         tabContents[tab] = content;
@@ -939,6 +940,9 @@ internal sealed class MainWindow : Window
         if (tabContents.Remove(tab, out var content))
         {
             contentHost.Children.Remove(content);
+
+            // Viewer controls own timers and sessions; dispose them with the tab.
+            (content as IDisposable)?.Dispose();
         }
     }
 

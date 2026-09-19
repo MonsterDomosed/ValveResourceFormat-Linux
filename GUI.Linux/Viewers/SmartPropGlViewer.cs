@@ -2,7 +2,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using GUI.Linux.GL;
+using GUI.Linux.Shell;
 using GUI.Linux.Types.Viewers;
+using GUI.Linux.UI;
 
 namespace GUI.Linux.Viewers;
 
@@ -27,7 +29,7 @@ internal sealed class SmartPropGlViewer : IViewer
     {
         List<ViewerTab> tabs =
         [
-            new ViewerTab("SMART PROP", new ViewerContent.GlViewport(() => new SmartPropGlRenderer(fileName)), Select: true),
+            new ViewerTab("SMART PROP", new ViewerContent.CustomControl(() => new ViewportWithSidebar(() => new SmartPropGlRenderer(fileName), new ViewerSidebar())), Select: true),
         ];
 
         if (dataViewer.GetContent() is ViewerContent.Tabs data)

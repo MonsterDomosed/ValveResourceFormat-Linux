@@ -2,7 +2,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using GUI.Linux.GL;
+using GUI.Linux.Shell;
 using GUI.Linux.Types.Viewers;
+using GUI.Linux.UI;
 
 namespace GUI.Linux.Viewers;
 
@@ -27,7 +29,7 @@ internal sealed class PhysGlViewer : IViewer
     {
         List<ViewerTab> tabs =
         [
-            new ViewerTab("PHYSICS", new ViewerContent.GlViewport(() => new PhysGlRenderer(fileName)), Select: true),
+            new ViewerTab("PHYSICS", new ViewerContent.CustomControl(() => new ViewportWithSidebar(() => new PhysGlRenderer(fileName), new ViewerSidebar())), Select: true),
         ];
 
         if (dataViewer.GetContent() is ViewerContent.Tabs data)

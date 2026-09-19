@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using GUI.Linux.GL;
+using GUI.Linux.Shell;
 using GUI.Linux.Types.GLViewers;
 using GUI.Linux.Types.Viewers;
+using GUI.Linux.UI;
 
 namespace GUI.Linux.Viewers;
 
@@ -32,7 +34,7 @@ internal sealed class ParticleGlViewer : IViewer
     {
         List<ViewerTab> tabs =
         [
-            new ViewerTab(tabName, new ViewerContent.GlViewport(createRenderer), Select: true),
+            new ViewerTab(tabName, new ViewerContent.CustomControl(() => new ViewportWithSidebar(createRenderer, new ViewerSidebar())), Select: true),
         ];
 
         if (dataViewer.GetContent() is ViewerContent.Tabs data)
