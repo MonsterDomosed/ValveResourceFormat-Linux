@@ -45,6 +45,9 @@ internal sealed class MainWindow : Window
     /// <summary>Number of open tabs, used by the self-check.</summary>
     internal int TabCount => mainTabs.Items.Count;
 
+    /// <summary>The open tabs, for the self-check.</summary>
+    internal IReadOnlyList<TabItem> Tabs => [.. mainTabs.Items.OfType<TabItem>()];
+
     /// <summary>Title of the selected tab, used by the self-check.</summary>
     internal string SelectedTabTitle => GetTabTitle(mainTabs.SelectedItem as TabItem);
 
@@ -93,7 +96,14 @@ internal sealed class MainWindow : Window
         // stock TabControl does not do: it detaches the previous tab's content.
         mainTabs.Template = new FuncControlTemplate<TabControl>((_, scope) =>
         {
-            var presenter = new ItemsPresenter();
+            var presenter = new ItemsPresenter
+            {
+                // Lay the tabs out left to right; a bare ItemsPresenter stacks them vertically.
+                ItemsPanel = new FuncTemplate<Panel?>(static () => new WrapPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                }),
+            };
             scope.Register("PART_ItemsPresenter", presenter);
             return presenter;
         });

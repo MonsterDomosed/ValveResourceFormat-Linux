@@ -171,11 +171,12 @@ internal sealed class App : Application
         }
 
         var themeOk = RunThemeResourcesCheck(output);
+        var tabsOk = await RunTabStripCheckAsync(window).ConfigureAwait(true);
 
         if (Program.SelfCheck == Program.SelfCheckMode.Smoke)
         {
             var glOk = await RunGlInfrastructureCheckAsync().ConfigureAwait(true);
-            var passed = presentersOk && glOk && themeOk;
+            var passed = presentersOk && glOk && themeOk && tabsOk;
 
             output.WriteLine(passed
                 ? "[self-check] smoke complete, exiting"
@@ -299,6 +300,32 @@ internal sealed class App : Application
             + $"darkSurface={surfaces[ThemeVariant.Dark]}, lightSurface={surfaces[ThemeVariant.Light]}");
 
         return tokensOk && iconsOk && themesDiffer;
+    }
+
+    /// <summary>Verifies tabs lay out left to right rather than stacking vertically.</summary>
+    private static async Task<bool> RunTabStripCheckAsync(MainWindow window)
+    {
+        window.OpenBrowser();
+        window.OpenSettings();
+
+        await Task.Delay(400).ConfigureAwait(true);
+
+        var tabs = window.Tabs;
+
+        if (tabs.Count < 2
+            || tabs[0].TranslatePoint(default, window) is not { } first
+            || tabs[1].TranslatePoint(default, window) is not { } second)
+        {
+            await Program.StdOut.WriteLineAsync($"[self-check] tabs: layout unavailable ({tabs.Count} tabs)").ConfigureAwait(true);
+            return false;
+        }
+
+        var horizontal = Math.Abs(first.Y - second.Y) < 2 && Math.Abs(first.X - second.X) > 2;
+
+        await Program.StdOut.WriteLineAsync(
+            $"[self-check] tabs: count={tabs.Count}, first=({first.X:0},{first.Y:0}), second=({second.X:0},{second.Y:0}), horizontal={horizontal}").ConfigureAwait(true);
+
+        return horizontal;
     }
 
     private static async Task RunGameContentCheckAsync()
