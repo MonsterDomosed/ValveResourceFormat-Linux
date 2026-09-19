@@ -1905,7 +1905,7 @@ internal sealed class App : Application
         (string Path, string Expected)[] samples =
         [
             ("Tests/Files/Textures/279115896_png.png", "image"),
-            ("GUI/Icons/About.svg", "svg"),
+            ("GUI.Linux/Assets/Icons/About.svg", "svg"),
             ("Tests/Files/lobby_mapveto.nav", "navmesh"),
             ("Tests/Files/KeyValues/KeyValues3_LF.kv3", "kv3 text"),
             ("Tests/Files/Shaders/vcs62_apply_fog_pc_40_ps.vcs", "compiled shader"),

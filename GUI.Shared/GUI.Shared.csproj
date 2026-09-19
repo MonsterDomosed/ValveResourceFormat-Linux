@@ -13,10 +13,9 @@
     <ProjectReference Include="..\ValveResourceFormat\ValveResourceFormat.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <!-- The shared graph renderer draws these icons; link them so the Windows shell and this
-         assembly render identical assets without duplicating the SVGs. -->
-    <EmbeddedResource Include="..\GUI\Icons\About.svg" LogicalName="GUI.Icons.About.svg" />
-    <EmbeddedResource Include="..\GUI\Icons\AssetTypes\anmgrph.svg" LogicalName="GUI.Icons.AssetTypes.anmgrph.svg" />
-    <EmbeddedResource Include="..\GUI\Icons\AssetTypes\anim.svg" LogicalName="GUI.Icons.AssetTypes.anim.svg" />
+    <!-- The shared graph renderer draws these icons; link them so the renderer resolves them by
+         logical name from this assembly while the graph code lives here. -->
+    <EmbeddedResource Include="..\GUI.Linux\Assets\Icons\About.svg" LogicalName="GUI.Linux.Icons.About.svg" />
+    <EmbeddedResource Include="..\GUI.Linux\Assets\Icons\AssetTypes\*.svg" LogicalName="GUI.Linux.Icons.AssetTypes.%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

@@ -9,7 +9,7 @@ internal partial class GraphView
     // Below this zoom only header, body and wires are drawn.
     private const float DetailZoomCutoff = 0.2f;
 
-    private const string MessageIconResource = "GUI.Icons.About.svg";
+    private const string MessageIconResource = "GUI.Linux.Icons.About.svg";
 
     static GraphView()
     {
@@ -707,7 +707,7 @@ internal partial class GraphView
     private void DrawResourceRow(SKCanvas canvas, ResourceRow row, float x, float rowCenterY)
     {
         var textX = x + GraphMetrics.MarginX;
-        DrawIcon(canvas, GetIcon($"GUI.Icons.AssetTypes.{row.Icon}.svg"), textX, rowCenterY);
+        DrawIcon(canvas, GetIcon($"GUI.Linux.Icons.AssetTypes.{row.Icon}.svg"), textX, rowCenterY);
         textX += 19f;
 
         var metrics = GraphMetrics.RowFont.Metrics;

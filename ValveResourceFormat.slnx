@@ -1,6 +1,5 @@
 <Solution>
   <Project Path="CLI/CLI.csproj" />
-  <Project Path="GUI/GUI.csproj" />
   <Project Path="GUI.Linux/GUI.Linux.csproj" />
   <Project Path="GUI.Shared/GUI.Shared.csproj" />
   <Project Path="Renderer/Renderer.csproj" />

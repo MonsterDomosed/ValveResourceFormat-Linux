@@ -37,4 +37,9 @@
          the window manager and the app all show the same Source 2 Viewer icon. -->
     <AvaloniaResource Include="..\Misc\Icons\source2viewer.png" Link="Assets\source2viewer.png" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Graph presenter icons, resolved by logical name from the assembly that defines GraphView. -->
+    <EmbeddedResource Include="Assets\Icons\About.svg" LogicalName="GUI.Linux.Icons.About.svg" />
+    <EmbeddedResource Include="Assets\Icons\AssetTypes\*.svg" LogicalName="GUI.Linux.Icons.AssetTypes.%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>
