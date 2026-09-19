@@ -1382,7 +1382,7 @@ internal sealed class App : Application
                 return hasAnimations;
             }
 
-            await ExerciseModelCameraAsync(viewport, renderer, control, label).ConfigureAwait(true);
+            await ExerciseModelCameraAsync(window, viewport, renderer, control, label).ConfigureAwait(true);
 
             if (hasAnimations)
             {
@@ -1414,14 +1414,31 @@ internal sealed class App : Application
         }
     }
 
-    private static async Task ExerciseModelCameraAsync(AvaloniaGlViewport viewport, ModelGlRenderer renderer, ModelViewerControl control, string label)
+    /// <summary>
+    /// Whether the real pointer hit test at the viewport's center resolves to the viewport, proving
+    /// the OpenGL surface actually receives pointer input rather than falling through to its parent.
+    /// </summary>
+    private static bool IsViewportHitTestTarget(Window window, AvaloniaGlViewport viewport)
+    {
+        var center = new Point(viewport.Bounds.Width / 2, viewport.Bounds.Height / 2);
+        var windowPoint = viewport.TranslatePoint(center, window);
+        var hit = windowPoint is { } point ? window.InputHitTest(point) : null;
+
+        return hit is Visual visual
+            && (ReferenceEquals(visual, viewport) || visual.GetVisualAncestors().Contains(viewport));
+    }
+
+    private static async Task ExerciseModelCameraAsync(Window window, AvaloniaGlViewport viewport, ModelGlRenderer renderer, ModelViewerControl control, string label)
     {
         if (renderer.SceneCore is not { } core)
         {
             return;
         }
 
-        // Verify the viewport derives the pointer-over state from real Avalonia pointer events.
+        // Verify the viewport is the real hit-test target and derives the pointer-over state from
+        // real Avalonia pointer events.
+        var hitOk = IsViewportHitTestTarget(window, viewport);
+
         RaisePointerEntered(viewport);
         await Task.Delay(80).ConfigureAwait(true);
         var pointerEntered = viewport.Input.MouseOverViewport;
@@ -1469,12 +1486,12 @@ internal sealed class App : Application
         }
 
         var resetOk = centerOk && afterReset > 0.01f;
-        var pointerOk = pointerEntered && pointerExited;
+        var pointerOk = hitOk && pointerEntered && pointerExited;
 
         await Program.StdOut.WriteLineAsync(
             $"[self-check] {label} camera: orbit={orbitDistance:0.00}, pan={panDistance:0.00}, "
             + $"zoom {beforeZoom:0.00}->{afterZoom:0.00}, reset {beforeReset:0.00}->{afterReset:0.00}, "
-            + $"startDistance={startDistance:0.00}, pointerEnter/exit={pointerOk}").ConfigureAwait(true);
+            + $"startDistance={startDistance:0.00}, hitTest/pointerEnter/exit={pointerOk}").ConfigureAwait(true);
 
         await Program.StdOut.WriteLineAsync(orbitOk && panOk && zoomOk && resetOk && pointerOk
             ? $"[self-check] {label} camera: orbit, pan, zoom and reset view all responded"

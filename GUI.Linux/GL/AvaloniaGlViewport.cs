@@ -5,6 +5,7 @@ using System.Numerics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.OpenGL;
 using Avalonia.OpenGL.Controls;
 using GUI.Linux.Types.GLViewers;
@@ -44,6 +45,15 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
     {
         Focusable = true;
         ClipToBounds = true;
+    }
+
+    /// <inheritdoc/>
+    public override void Render(DrawingContext context)
+    {
+        // Avalonia routes pointer input through rendered geometry, and the OpenGL surface alone is not
+        // hit-testable, so the viewport would never receive pointer events. A transparent fill gives it
+        // a hit target without drawing anything visible.
+        context.FillRectangle(Brushes.Transparent, new Rect(Bounds.Size));
     }
 
     /// <inheritdoc/>
