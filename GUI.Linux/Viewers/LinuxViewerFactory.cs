@@ -2,8 +2,8 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using GUI.Linux.GL;
-using GUI.Types.Viewers;
-using GUI.Utils;
+using GUI.Linux.Types.Viewers;
+using GUI.Linux.Utils;
 using ValveKeyValue;
 using ValveResourceFormat;
 using ValveResourceFormat.Blocks;
@@ -13,9 +13,8 @@ using ValveResourceFormat.ResourceTypes;
 namespace GUI.Linux.Viewers;
 
 /// <summary>
-/// Picks and loads a viewer for a file. The portable viewers (including the resource/image/nav/shader
-/// viewers) are reused unchanged from GUI.Shared; GL-backed views are marked with an explicit
-/// boundary tab until the viewport is ported.
+/// Picks and loads a viewer for a file. The portable viewers live in this project; GL-backed views
+/// that are not ported yet fall back to an explicit boundary tab.
 /// </summary>
 internal static class LinuxViewerFactory
 {

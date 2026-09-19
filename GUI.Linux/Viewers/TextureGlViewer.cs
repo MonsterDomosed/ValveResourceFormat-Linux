@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using GUI.Linux.GL;
-using GUI.Types.Viewers;
+using GUI.Linux.Types.Viewers;
 
 namespace GUI.Linux.Viewers;
 

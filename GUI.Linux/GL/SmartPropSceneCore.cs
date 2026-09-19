@@ -1,4 +1,4 @@
-using GUI.Types.GLViewers;
+using GUI.Linux.Types.GLViewers;
 using Microsoft.Extensions.Logging;
 using ValveKeyValue;
 using ValveResourceFormat.Renderer;

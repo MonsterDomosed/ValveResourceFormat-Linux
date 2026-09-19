@@ -18,7 +18,7 @@ internal sealed class WorldGlRenderer : SceneCoreGlRenderer
     /// <summary>Whether scene sound events loaded, for diagnostics.</summary>
     internal bool HasSoundPlayer => (SceneCore as WorldSceneCore)?.HasSoundPlayer ?? false;
 
-    private static WorldSceneCore CreateCore(LinuxSceneViewerContext context, ValveResourceFormat.Renderer.RendererContext rendererContext, GUI.Types.GLViewers.IGLViewerHost host, string fileName)
+    private static WorldSceneCore CreateCore(LinuxSceneViewerContext context, ValveResourceFormat.Renderer.RendererContext rendererContext, GUI.Linux.Types.GLViewers.IGLViewerHost host, string fileName)
     {
         var resource = new ValveResourceFormat.Resource
         {

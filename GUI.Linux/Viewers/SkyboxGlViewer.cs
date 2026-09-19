@@ -2,14 +2,14 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using GUI.Linux.GL;
-using GUI.Types.Viewers;
+using GUI.Linux.Types.Viewers;
 
 namespace GUI.Linux.Viewers;
 
 /// <summary>
 /// Linux skybox viewer: a real GL viewport tab for a standalone <c>sky.vfx</c> material plus the
 /// portable resource data tabs. The GL tab renders through the shared
-/// <see cref="GUI.Types.GLViewers.GLSceneViewerCore"/>.
+/// <see cref="GUI.Linux.Types.GLViewers.GLSceneViewerCore"/>.
 /// </summary>
 internal sealed class SkyboxGlViewer : IViewer
 {

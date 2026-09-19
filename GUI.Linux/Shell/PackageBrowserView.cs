@@ -9,8 +9,8 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
-using GUI.Types.Browser;
-using GUI.Utils;
+using GUI.Linux.Types.Browser;
+using GUI.Linux.Utils;
 using ValvePak;
 using ValveResourceFormat.IO;
 

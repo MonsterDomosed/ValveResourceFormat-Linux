@@ -2,13 +2,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using GUI.Linux.GL;
-using GUI.Types.Viewers;
+using GUI.Linux.Types.Viewers;
 
 namespace GUI.Linux.Viewers;
 
 /// <summary>
 /// Linux world-visibility viewer: a real GL viewport tab plus the portable resource data tabs. The GL
-/// tab renders through the shared <see cref="GUI.Types.GLViewers.GLSceneViewerCore"/>.
+/// tab renders through the shared <see cref="GUI.Linux.Types.GLViewers.GLSceneViewerCore"/>.
 /// </summary>
 internal sealed class VoxelVisibilityGlViewer : IViewer
 {

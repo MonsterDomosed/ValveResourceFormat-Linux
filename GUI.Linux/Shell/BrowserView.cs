@@ -7,8 +7,8 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
-using GUI.Types.Browser;
-using GUI.Utils;
+using GUI.Linux.Types.Browser;
+using GUI.Linux.Utils;
 
 namespace GUI.Linux.Shell;
 

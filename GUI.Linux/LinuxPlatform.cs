@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using GUI.Linux.Platform;
-using GUI.Platform;
 
 namespace GUI.Linux;
 

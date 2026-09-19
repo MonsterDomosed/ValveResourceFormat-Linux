@@ -1,5 +1,5 @@
 using System.IO;
-using GUI.Utils;
+using GUI.Linux.Utils;
 using ValveResourceFormat.IO;
 
 namespace GUI.Linux;

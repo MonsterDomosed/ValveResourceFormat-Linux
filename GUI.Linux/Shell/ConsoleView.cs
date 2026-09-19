@@ -6,7 +6,7 @@ using System.Threading;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
-using GUI.Utils;
+using GUI.Linux.Utils;
 
 namespace GUI.Linux.Shell;
 

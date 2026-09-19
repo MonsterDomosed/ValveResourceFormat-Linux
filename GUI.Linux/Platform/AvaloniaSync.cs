@@ -6,7 +6,7 @@ namespace GUI.Linux.Platform;
 
 /// <summary>
 /// Bridges Avalonia's asynchronous, UI-thread-affine APIs to the synchronous
-/// <see cref="GUI.Platform.IPlatformServices"/> contract. Dialogs and clipboard operations are
+/// <see cref="GUI.Linux.Platform.IPlatformServices"/> contract. Dialogs and clipboard operations are
 /// modal by nature, so pumping a nested dispatcher frame is safe here.
 /// </summary>
 internal static class AvaloniaSync

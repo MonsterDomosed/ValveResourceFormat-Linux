@@ -7,8 +7,8 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using GUI.Linux.Audio;
-using GUI.Types.Audio;
-using GUI.Utils;
+using GUI.Linux.Types.Audio;
+using GUI.Linux.Utils;
 
 namespace GUI.Linux.Shell;
 

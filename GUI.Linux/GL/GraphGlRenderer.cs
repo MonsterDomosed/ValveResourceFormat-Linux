@@ -1,7 +1,7 @@
 using System;
 using System.Numerics;
-using GUI.Types.GLViewers;
-using GUI.Types.Graphs.Core;
+using GUI.Linux.Types.GLViewers;
+using GUI.Linux.Types.Graphs.Core;
 using SkiaSharp;
 using ValveResourceFormat.CompiledShader;
 using ValveResourceFormat.Renderer;

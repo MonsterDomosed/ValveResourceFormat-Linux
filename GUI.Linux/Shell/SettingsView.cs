@@ -7,8 +7,8 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
-using GUI.Platform;
-using GUI.Utils;
+using GUI.Linux.Platform;
+using GUI.Linux.Utils;
 using ValveResourceFormat.IO;
 
 namespace GUI.Linux.Shell;

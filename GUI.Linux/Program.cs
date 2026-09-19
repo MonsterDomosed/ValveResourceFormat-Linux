@@ -5,7 +5,7 @@ using System.Linq;
 using System.Reflection;
 using Avalonia;
 using Avalonia.Logging;
-using GUI.Utils;
+using GUI.Linux.Utils;
 
 namespace GUI.Linux;
 

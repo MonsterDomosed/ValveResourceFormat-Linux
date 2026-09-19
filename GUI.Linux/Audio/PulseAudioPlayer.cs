@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Threading;
-using GUI.Types.Audio;
+using GUI.Linux.Types.Audio;
 
 namespace GUI.Linux.Audio;
 

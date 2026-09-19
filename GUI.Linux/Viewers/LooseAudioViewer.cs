@@ -3,8 +3,8 @@ using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
 using GUI.Linux.Shell;
-using GUI.Types.Audio;
-using GUI.Types.Viewers;
+using GUI.Linux.Types.Audio;
+using GUI.Linux.Types.Viewers;
 
 namespace GUI.Linux.Viewers;
 

@@ -8,7 +8,7 @@
     <PackageReference Include="TUnit" Version="1.66.16" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\GUI.Shared\GUI.Shared.csproj" />
+    <ProjectReference Include="..\GUI.Linux\GUI.Linux.csproj" />
     <ProjectReference Include="..\ValveResourceFormat\ValveResourceFormat.csproj" />
     <ProjectReference Include="..\Renderer\Renderer.csproj" />
   </ItemGroup>

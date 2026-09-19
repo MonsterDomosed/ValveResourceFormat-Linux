@@ -14,7 +14,7 @@ internal sealed class SmartPropGlRenderer : SceneCoreGlRenderer
     {
     }
 
-    private static SmartPropSceneCore CreateCore(LinuxSceneViewerContext context, ValveResourceFormat.Renderer.RendererContext rendererContext, GUI.Types.GLViewers.IGLViewerHost host, string fileName)
+    private static SmartPropSceneCore CreateCore(LinuxSceneViewerContext context, ValveResourceFormat.Renderer.RendererContext rendererContext, GUI.Linux.Types.GLViewers.IGLViewerHost host, string fileName)
     {
         var resource = new ValveResourceFormat.Resource
         {

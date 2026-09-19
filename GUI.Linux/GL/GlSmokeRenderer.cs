@@ -1,5 +1,5 @@
 using System;
-using GUI.Types.GLViewers;
+using GUI.Linux.Types.GLViewers;
 using Microsoft.Extensions.Logging.Abstractions;
 using ValveResourceFormat.Renderer;
 
@@ -15,7 +15,7 @@ internal sealed class GlSmokeRenderer : IGLViewportRenderer
 
     public bool ContinuousRendering => true;
 
-    public void Initialize(GraphicsDevice device, GraphicsContext context, GUI.Types.GLViewers.IGLViewerHost host)
+    public void Initialize(GraphicsDevice device, GraphicsContext context, GUI.Linux.Types.GLViewers.IGLViewerHost host)
     {
         context.Begin();
 
@@ -35,7 +35,7 @@ internal sealed class GlSmokeRenderer : IGLViewportRenderer
         }
     }
 
-    public void Render(GraphicsContext context, int width, int height, GUI.Types.GLViewers.ViewerInputState input, double frameTime)
+    public void Render(GraphicsContext context, int width, int height, GUI.Linux.Types.GLViewers.ViewerInputState input, double frameTime)
     {
         context.Begin();
 

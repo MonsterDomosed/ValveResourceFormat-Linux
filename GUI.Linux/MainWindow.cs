@@ -16,9 +16,9 @@ using Avalonia.VisualTree;
 using GUI.Linux.GL;
 using GUI.Linux.Shell;
 using GUI.Linux.Viewers;
-using GUI.Platform;
-using GUI.Types.Viewers;
-using GUI.Utils;
+using GUI.Linux.Platform;
+using GUI.Linux.Types.Viewers;
+using GUI.Linux.Utils;
 using ValvePak;
 using ValveResourceFormat.IO;
 

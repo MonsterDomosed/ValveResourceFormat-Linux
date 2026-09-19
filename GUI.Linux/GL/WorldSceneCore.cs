@@ -1,6 +1,6 @@
 using GUI.Linux.Audio;
-using GUI.Types.GLViewers;
-using GUI.Utils;
+using GUI.Linux.Types.GLViewers;
+using GUI.Linux.Utils;
 using ValveResourceFormat.Blocks;
 using ValveResourceFormat.Renderer;
 using ValveResourceFormat.Renderer.Audio;

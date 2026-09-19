@@ -4,8 +4,8 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
-using GUI.Platform;
-using GUI.Utils;
+using GUI.Linux.Platform;
+using GUI.Linux.Utils;
 
 namespace GUI.Linux.Platform;
 

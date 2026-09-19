@@ -11,10 +11,10 @@ using Avalonia.Threading;
 using GUI.Linux.GL;
 using GUI.Linux.Shell;
 using GUI.Linux.Viewers;
-using GUI.Platform;
-using GUI.Types.Browser;
-using GUI.Types.Viewers;
-using GUI.Utils;
+using GUI.Linux.Platform;
+using GUI.Linux.Types.Browser;
+using GUI.Linux.Types.Viewers;
+using GUI.Linux.Utils;
 using ValvePak;
 using ValveResourceFormat;
 using ValveResourceFormat.IO;
@@ -767,9 +767,9 @@ internal sealed class App : Application
             // Camera movement via the viewport input.
             var before = renderer.CameraLocation;
             viewport.Input.MouseOverViewport = true;
-            viewport.Input.Keys |= GUI.Types.GLViewers.ViewerKey.W;
+            viewport.Input.Keys |= GUI.Linux.Types.GLViewers.ViewerKey.W;
             await Task.Delay(700).ConfigureAwait(true);
-            viewport.Input.Keys = GUI.Types.GLViewers.ViewerKey.None;
+            viewport.Input.Keys = GUI.Linux.Types.GLViewers.ViewerKey.None;
             await Task.Delay(100).ConfigureAwait(true);
             var moved = System.Numerics.Vector3.Distance(before, renderer.CameraLocation);
             await Program.StdOut.WriteLineAsync($"[self-check] navmesh tab camera input moved {moved:0.00} units").ConfigureAwait(true);
@@ -865,9 +865,9 @@ internal sealed class App : Application
             var bCameraBefore = rendererB.CameraLocation;
 
             viewportA.Input.MouseOverViewport = true;
-            viewportA.Input.Keys |= GUI.Types.GLViewers.ViewerKey.W;
+            viewportA.Input.Keys |= GUI.Linux.Types.GLViewers.ViewerKey.W;
             await Task.Delay(700).ConfigureAwait(true);
-            viewportA.Input.Keys = GUI.Types.GLViewers.ViewerKey.None;
+            viewportA.Input.Keys = GUI.Linux.Types.GLViewers.ViewerKey.None;
             await Task.Delay(100).ConfigureAwait(true);
 
             var aMoved = System.Numerics.Vector3.Distance(aBefore, rendererA.CameraLocation);
@@ -944,9 +944,9 @@ internal sealed class App : Application
 
             var before = renderer.CameraLocation;
             viewport.Input.MouseOverViewport = true;
-            viewport.Input.Keys |= GUI.Types.GLViewers.ViewerKey.W;
+            viewport.Input.Keys |= GUI.Linux.Types.GLViewers.ViewerKey.W;
             await Task.Delay(600).ConfigureAwait(true);
-            viewport.Input.Keys = GUI.Types.GLViewers.ViewerKey.None;
+            viewport.Input.Keys = GUI.Linux.Types.GLViewers.ViewerKey.None;
             await Task.Delay(100).ConfigureAwait(true);
             await Program.StdOut.WriteLineAsync($"[self-check] mesh tab camera input moved {System.Numerics.Vector3.Distance(before, renderer.CameraLocation):0.00} units").ConfigureAwait(true);
 
@@ -1214,9 +1214,9 @@ internal sealed class App : Application
 
             var before = renderer.CameraLocation;
             viewport.Input.MouseOverViewport = true;
-            viewport.Input.Keys |= GUI.Types.GLViewers.ViewerKey.W;
+            viewport.Input.Keys |= GUI.Linux.Types.GLViewers.ViewerKey.W;
             await Task.Delay(600).ConfigureAwait(true);
-            viewport.Input.Keys = GUI.Types.GLViewers.ViewerKey.None;
+            viewport.Input.Keys = GUI.Linux.Types.GLViewers.ViewerKey.None;
             await Task.Delay(100).ConfigureAwait(true);
             await Program.StdOut.WriteLineAsync($"[self-check] model tab camera input moved {System.Numerics.Vector3.Distance(before, renderer.CameraLocation):0.00} units").ConfigureAwait(true);
 

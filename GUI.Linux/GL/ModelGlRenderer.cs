@@ -14,7 +14,7 @@ internal sealed class ModelGlRenderer : SceneCoreGlRenderer
     {
     }
 
-    private static ModelSceneCore CreateCore(LinuxSceneViewerContext context, ValveResourceFormat.Renderer.RendererContext rendererContext, GUI.Types.GLViewers.IGLViewerHost host, string fileName)
+    private static ModelSceneCore CreateCore(LinuxSceneViewerContext context, ValveResourceFormat.Renderer.RendererContext rendererContext, GUI.Linux.Types.GLViewers.IGLViewerHost host, string fileName)
     {
         var resource = new ValveResourceFormat.Resource
         {

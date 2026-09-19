@@ -1,5 +1,5 @@
 using System;
-using GUI.Types.GLViewers;
+using GUI.Linux.Types.GLViewers;
 using ValveResourceFormat;
 using ValveResourceFormat.Blocks;
 using ValveResourceFormat.Particles;

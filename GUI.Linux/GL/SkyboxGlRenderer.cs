@@ -15,7 +15,7 @@ internal sealed class SkyboxGlRenderer : SceneCoreGlRenderer
     {
     }
 
-    private static SkyboxSceneCore CreateCore(LinuxSceneViewerContext context, ValveResourceFormat.Renderer.RendererContext rendererContext, GUI.Types.GLViewers.IGLViewerHost host, string fileName)
+    private static SkyboxSceneCore CreateCore(LinuxSceneViewerContext context, ValveResourceFormat.Renderer.RendererContext rendererContext, GUI.Linux.Types.GLViewers.IGLViewerHost host, string fileName)
     {
         var resource = new ValveResourceFormat.Resource
         {

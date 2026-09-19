@@ -2,7 +2,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Platform.Storage;
-using GUI.Platform;
+using GUI.Linux.Platform;
 
 namespace GUI.Linux.Platform;
 

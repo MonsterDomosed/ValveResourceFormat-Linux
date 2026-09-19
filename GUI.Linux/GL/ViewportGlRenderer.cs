@@ -1,6 +1,6 @@
 using System;
-using GUI.Types.GLViewers;
-using GUI.Utils;
+using GUI.Linux.Types.GLViewers;
+using GUI.Linux.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 using ValveResourceFormat.IO;
 using ValveResourceFormat.Renderer;

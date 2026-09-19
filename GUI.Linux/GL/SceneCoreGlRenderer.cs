@@ -1,6 +1,6 @@
 using System;
 using System.Linq;
-using GUI.Types.GLViewers;
+using GUI.Linux.Types.GLViewers;
 using Microsoft.Extensions.Logging.Abstractions;
 using ValveResourceFormat.Renderer;
 using ImageFormat = ValveResourceFormat.CompiledShader.ImageFormat;

@@ -1,7 +1,7 @@
 using System.IO;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
-using GUI.Platform;
+using GUI.Linux.Platform;
 using SkiaSharp;
 
 namespace GUI.Linux.Platform;

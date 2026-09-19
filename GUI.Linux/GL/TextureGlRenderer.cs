@@ -1,6 +1,6 @@
 using System;
 using System.IO;
-using GUI.Types.GLViewers;
+using GUI.Linux.Types.GLViewers;
 using SkiaSharp;
 using Svg.Skia;
 using ValveResourceFormat;

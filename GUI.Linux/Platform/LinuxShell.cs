@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using System.IO;
-using GUI.Platform;
+using GUI.Linux.Platform;
 
 namespace GUI.Linux.Platform;
 

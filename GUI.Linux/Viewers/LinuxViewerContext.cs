@@ -1,4 +1,4 @@
-using GUI.Types.Viewers;
+using GUI.Linux.Types.Viewers;
 
 namespace GUI.Linux.Viewers;
 

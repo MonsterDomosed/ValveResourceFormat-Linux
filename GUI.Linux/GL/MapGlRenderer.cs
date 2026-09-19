@@ -1,5 +1,5 @@
 using System;
-using GUI.Types.GLViewers;
+using GUI.Linux.Types.GLViewers;
 using ValveResourceFormat.Renderer.World;
 using ValveResourceFormat.ResourceTypes;
 

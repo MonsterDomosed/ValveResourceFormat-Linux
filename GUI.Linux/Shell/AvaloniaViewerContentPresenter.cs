@@ -6,8 +6,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
-using GUI.Types.Viewers;
-using GUI.Utils;
+using GUI.Linux.Types.Viewers;
+using GUI.Linux.Utils;
 
 namespace GUI.Linux.Shell;
 

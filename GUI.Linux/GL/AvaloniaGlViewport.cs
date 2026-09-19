@@ -7,8 +7,8 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.OpenGL;
 using Avalonia.OpenGL.Controls;
-using GUI.Types.GLViewers;
-using GUI.Utils;
+using GUI.Linux.Types.GLViewers;
+using GUI.Linux.Utils;
 using ValveResourceFormat.Renderer;
 using OpenGL = OpenTK.Graphics.OpenGL.GL;
 

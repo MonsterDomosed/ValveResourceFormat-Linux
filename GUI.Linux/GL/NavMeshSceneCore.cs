@@ -1,4 +1,4 @@
-using GUI.Types.GLViewers;
+using GUI.Linux.Types.GLViewers;
 using ValveResourceFormat.NavMesh;
 using ValveResourceFormat.Renderer;
 using ValveResourceFormat.Renderer.SceneNodes;
