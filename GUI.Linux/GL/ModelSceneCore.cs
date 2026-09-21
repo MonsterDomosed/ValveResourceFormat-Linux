@@ -42,6 +42,9 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
     /// <summary>The model viewer rotates a little faster than the shared default.</summary>
     protected override float CameraSensitivityScale => 1.75f;
 
+    /// <summary>Frames the model with a little extra margin so pose and attachments are not clipped.</summary>
+    protected override float FramePadding => 1.25f;
+
     public override void PreSceneLoad()
     {
         RunPreSceneLoad();
@@ -55,13 +58,10 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
 
         animations = [.. modelSceneNode.Animations.Keys.OrderBy(static name => name, StringComparer.OrdinalIgnoreCase)];
 
-        // Autoplay the first animation, matching the desktop model viewer's preview behavior.
-        if (animations.Length > 0)
-        {
-            modelSceneNode.SetAnimationByName(animations[0]);
-            modelSceneNode.AnimationController.IsPaused = false;
-            modelSceneNode.AnimationController.Looping = true;
-        }
+        // Open on the bind pose; playback starts only when the user picks an animation.
+        modelSceneNode.AnimationController.IsPaused = true;
+        modelSceneNode.AnimationController.Looping = true;
+        modelSceneNode.AnimationController.FrametimeMultiplier = 1f;
     }
 
     public override void PostSceneLoad()

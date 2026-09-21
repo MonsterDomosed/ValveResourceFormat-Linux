@@ -35,6 +35,7 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
     {
         Minimum = ModelAnimationSession.MinSpeed,
         Maximum = ModelAnimationSession.MaxSpeed,
+        Value = 1,
         TickFrequency = 0.1,
         IsSnapToTickEnabled = false,
     };

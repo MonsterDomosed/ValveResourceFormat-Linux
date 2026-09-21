@@ -112,6 +112,12 @@ public abstract class GLSceneViewerCore : IDisposable
     /// <summary>Multiplier applied to the configured mouse sensitivity for this viewer.</summary>
     protected virtual float CameraSensitivityScale => 1f;
 
+    /// <summary>Padding multiplier applied to the scene bounds when framing the camera.</summary>
+    protected virtual float FramePadding => 1f;
+
+    /// <summary>Minimum framed extent, so a near-degenerate bounding box is not framed too tightly.</summary>
+    private const float MinFrameExtent = 0.5f;
+
     /// <summary>Uses the world viewer's camera offset mode.</summary>
     protected virtual bool IsWorldViewer => false;
 
@@ -367,7 +373,15 @@ public abstract class GLSceneViewerCore : IDisposable
             return;
         }
 
-        var size = bounds.Size;
+        // Leave a margin around the bounds so the model does not touch the viewport edges, and keep a
+        // degenerate box from being framed so tightly that the camera ends up inside the model.
+        var size = bounds.Size * FramePadding;
+        var extent = size.Length();
+
+        if (extent < MinFrameExtent)
+        {
+            size *= MinFrameExtent / MathF.Max(extent, 1e-6f);
+        }
 
         // View the model from a raised front-right angle so all three dimensions are visible.
         Input.Camera.FrameObjectFromAngle(bounds.Center, size.X, size.Y, size.Z, yaw: 0.72f, pitch: 0.32f);
