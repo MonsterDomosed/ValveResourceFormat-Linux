@@ -65,6 +65,12 @@
         <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusS}" />
     </Style>
 
+    <Style Selector="ToggleButton.tool">
+        <Setter Property="Padding" Value="8,4" />
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="CornerRadius" Value="{DynamicResource CornerRadiusS}" />
+    </Style>
+
     <Style Selector="Button.icon">
         <Setter Property="Padding" Value="4" />
         <Setter Property="MinWidth" Value="0" />

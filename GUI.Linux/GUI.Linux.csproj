@@ -32,6 +32,7 @@
          so the managed and native Skia versions cannot drift apart. -->
     <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.151.2" />
     <PackageReference Include="NLayer" Version="3.0.0" />
+    <PackageReference Include="OpenTK" Version="4.9.4" />
     <PackageReference Include="Svg.Skia" Version="5.2.3" />
     <PackageReference Include="ValveKeyValue" Version="0.70.0.499" />
   </ItemGroup>
