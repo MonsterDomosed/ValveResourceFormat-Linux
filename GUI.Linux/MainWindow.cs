@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Layout;
@@ -98,14 +99,36 @@ internal sealed class MainWindow : Window
         {
             var presenter = new ItemsPresenter
             {
-                // Lay the tabs out left to right; a bare ItemsPresenter stacks them vertically.
-                ItemsPanel = new FuncTemplate<Panel?>(static () => new WrapPanel
+                // Keep every tab on one row; a bare ItemsPresenter stacks them vertically and a
+                // wrapping panel would push overflow onto new rows.
+                ItemsPanel = new FuncTemplate<Panel?>(static () => new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
                 }),
             };
             scope.Register("PART_ItemsPresenter", presenter);
-            return presenter;
+
+            var scroll = new ScrollViewer
+            {
+                Content = presenter,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            };
+
+            // Wheel over the strip scrolls through the tabs horizontally, like a browser.
+            scroll.PointerWheelChanged += (_, e) =>
+            {
+                if (e.Delta.Y == 0)
+                {
+                    return;
+                }
+
+                var offset = scroll.Offset;
+                scroll.Offset = new Avalonia.Vector(Math.Max(0, offset.X - (e.Delta.Y * 60)), offset.Y);
+                e.Handled = true;
+            };
+
+            return scroll;
         });
 
         consoleTab = CreateTab("Console", consoleView, close: null, select: false, iconName: "Log");
@@ -918,6 +941,21 @@ internal sealed class MainWindow : Window
         foreach (var (tab, content) in tabContents)
         {
             if (ContentContains(content, viewport))
+            {
+                SelectTab(tab);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Selects the tab hosting the given content. Used by the self-check.</summary>
+    internal bool SelectTabContaining(Control content)
+    {
+        foreach (var (tab, candidate) in tabContents)
+        {
+            if (ReferenceEquals(candidate, content))
             {
                 SelectTab(tab);
                 return true;
