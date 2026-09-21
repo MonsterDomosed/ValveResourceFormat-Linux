@@ -199,8 +199,15 @@ internal sealed class App : Application
             return;
         }
 
-        await RunViewerFactoryChecksAsync().ConfigureAwait(true);
-        await RunGameContentCheckAsync().ConfigureAwait(true);
+        if (Program.SelfCheck == Program.SelfCheckMode.Browser)
+        {
+            await RunBrowserCheckAsync(window).ConfigureAwait(true);
+            output.WriteLine("[self-check] browser complete, exiting");
+            DispatcherTimer.RunOnce(window.Close, TimeSpan.FromSeconds(1));
+            return;
+        }
+
+        await RunViewerFactoryChecksAsync().ConfigureAwait(true); await RunGameContentCheckAsync().ConfigureAwait(true);
         await RunGameContentViewerCheckAsync(window).ConfigureAwait(true);
         await RunWorldRenderCheckAsync(window).ConfigureAwait(true);
         await RunGlInfrastructureCheckAsync().ConfigureAwait(true);
@@ -2213,6 +2220,9 @@ internal sealed class App : Application
                 $"[self-check] browser pak01: entries={pakView.EntryCount}, folders={pakView.FolderCount}, "
                 + $"search 'world.vwrld'={search.Count}").ConfigureAwait(true);
 
+            await Program.StdOut.WriteLineAsync(
+                $"[self-check] browser list root: folders={pakView.ListFolderCount}, files={pakView.ListFileCount}").ConfigureAwait(true);
+
             // 1. A normal (non-GL) resource: a script vdata.
             var dataEntry = pakView.Package.Entries?.GetValueOrDefault("vdata_c")
                 ?.FirstOrDefault(static entry => entry.GetFullPath().Contains("heroes", StringComparison.OrdinalIgnoreCase))
@@ -2233,6 +2243,46 @@ internal sealed class App : Application
                 ?.Where(static entry => entry.Length is > 50000 and < 8_000_000)
                 .OrderByDescending(static entry => entry.Length)
                 .FirstOrDefault();
+
+            // 3. The list shows folders next to files and decodes file thumbnails.
+            window.SelectTabContaining(pakView);
+
+            if (textureEntry is not null && pakView.NavigateToFolderOf(textureEntry))
+            {
+                var decoded = await pakView.WaitForThumbnailsAsync(1, 30000).ConfigureAwait(true);
+                await Program.StdOut.WriteLineAsync(
+                    $"[self-check] browser thumbnails: {decoded} decoded in '{textureEntry.DirectoryName}', "
+                    + $"folders={pakView.ListFolderCount}, files={pakView.ListFileCount}").ConfigureAwait(true);
+            }
+            else
+            {
+                await Program.StdOut.WriteLineAsync("[self-check] browser thumbnails: no sample texture folder").ConfigureAwait(true);
+            }
+
+            // 4. Model thumbnails render the bind pose through an offscreen GL context.
+            var modelEntry = pakView.Package.Entries?.GetValueOrDefault("vmdl_c")
+                ?.Where(static entry => entry.Length is > 1000 and < 20_000_000)
+                .FirstOrDefault();
+
+            window.SelectTabContaining(pakView);
+
+            if (modelEntry is not null && pakView.NavigateToFolderOf(modelEntry))
+            {
+                var decoded = await pakView.WaitForThumbnailsAsync(1, 120000, ".vmdl_c").ConfigureAwait(true);
+                await Program.StdOut.WriteLineAsync(
+                    $"[self-check] browser model thumbnails: {decoded} decoded in '{modelEntry.DirectoryName}', "
+                    + $"distinctColors={ModelThumbnailRenderer.Instance.LastDistinctColors}, "
+                    + $"nonBackgroundPixels={ModelThumbnailRenderer.Instance.LastNonBackgroundPixels}").ConfigureAwait(true);
+
+                if (decoded == 0 && ModelThumbnailRenderer.Instance.LastError is { } error)
+                {
+                    await Program.StdOut.WriteLineAsync($"[self-check] model thumbnail error: {error}").ConfigureAwait(true);
+                }
+            }
+            else
+            {
+                await Program.StdOut.WriteLineAsync("[self-check] browser model thumbnails: no sample model folder").ConfigureAwait(true);
+            }
 
             if (textureEntry is not null)
             {
@@ -2262,7 +2312,7 @@ internal sealed class App : Application
 
             window.CloseTabByTitle(Path.GetFileName(pakPath));
 
-            // 3. A map/world resource, opened from a map VPK through the browser.
+            // 5. A map/world resource, opened from a map VPK through the browser.
             var mapsDir = Path.Combine(install.ContentRoot, "maps");
             string? mapVpkPath = null;
             string? worldEntryPath = null;

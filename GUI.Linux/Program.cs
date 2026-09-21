@@ -22,6 +22,9 @@ internal static class Program
 
         /// <summary>Run the full content and viewer validation suite.</summary>
         Full,
+
+        /// <summary>Run only the package browser validation.</summary>
+        Browser,
     }
 
     /// <summary>How much of the non-interactive startup and platform-service check to run.</summary>
@@ -74,6 +77,11 @@ internal static class Program
             if (arg.Equals("--self-check", StringComparison.Ordinal))
             {
                 return SelfCheckMode.Full;
+            }
+
+            if (arg.Equals("--self-check=browser", StringComparison.Ordinal))
+            {
+                return SelfCheckMode.Browser;
             }
         }
 
