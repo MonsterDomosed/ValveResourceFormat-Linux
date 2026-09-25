@@ -1,6 +1,7 @@
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using GUI.Linux.GL;
 using GUI.Linux.Types.Audio;
 using GUI.Linux.Types.Browser;
 using GUI.Linux.Types.Graphs.Core;
@@ -197,6 +198,19 @@ namespace Tests
                 await Assert.That(installs).IsNotNull();
                 await Assert.That(GameContentLocator.FindInstalledGame("ThisGameDoesNotExist")).IsNull();
             }
+        }
+
+        [Test]
+        public async Task LinuxSceneContextLoadsDefaultCubemap()
+        {
+            var context = new LinuxSceneViewerContext(NullLogger.Instance);
+            using var stream = context.OpenDefaultCubemapStream();
+
+            await Assert.That(stream).IsNotNull();
+
+            using var resource = new Resource();
+            resource.Read(stream!);
+            await Assert.That(resource.DataBlock).IsTypeOf<Texture>();
         }
 
         [Test]

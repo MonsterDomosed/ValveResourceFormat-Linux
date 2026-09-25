@@ -51,5 +51,6 @@
     <EmbeddedResource Include="Assets\Icons\AssetTypes\*.svg" LogicalName="GUI.Linux.Icons.AssetTypes.%(Filename)%(Extension)" />
     <!-- UI chrome icons, rasterized at runtime by IconFactory. -->
     <EmbeddedResource Include="Assets\Icons\ui\*.svg" LogicalName="GUI.Linux.Icons.Ui.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Resources\industrial_sunset_puresky.vtex_c" LogicalName="GUI.Linux.Resources.industrial_sunset_puresky.vtex_c" />
   </ItemGroup>
 </Project>

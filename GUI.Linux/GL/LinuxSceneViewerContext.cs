@@ -9,6 +9,8 @@ namespace GUI.Linux.GL;
 /// </summary>
 internal sealed class LinuxSceneViewerContext(ILogger logger) : GUI.Linux.Types.GLViewers.ISceneViewerContext
 {
+    private const string DefaultCubemapResourceName = "GUI.Linux.Resources.industrial_sunset_puresky.vtex_c";
+
     public ILogger SceneLogger { get; } = logger;
 
     public IProgress<string>? LoadingProgress { get; set; }
@@ -17,5 +19,8 @@ internal sealed class LinuxSceneViewerContext(ILogger logger) : GUI.Linux.Types.
     {
     }
 
-    public Stream? OpenDefaultCubemapStream() => null;
+    public Stream? OpenDefaultCubemapStream()
+    {
+        return typeof(LinuxSceneViewerContext).Assembly.GetManifestResourceStream(DefaultCubemapResourceName);
+    }
 }
