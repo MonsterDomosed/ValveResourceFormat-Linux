@@ -337,12 +337,30 @@ namespace ValveResourceFormat.Renderer.World
 
                 var parentName = node.EntityData?.GetStringProperty("parentname");
 
-                if (parentName is null || !modelsByTargetName.TryGetValue(parentName, out var parentNode))
+                if (parentName is null)
                 {
                     continue;
                 }
 
                 var attachmentName = node.EntityData!.GetStringProperty("parentattachmentname");
+
+                // "name,attachment" addresses an attachment point as part of the parent
+                var comma = parentName.IndexOf(',', StringComparison.Ordinal);
+
+                if (comma >= 0)
+                {
+                    if (string.IsNullOrEmpty(attachmentName))
+                    {
+                        attachmentName = parentName[(comma + 1)..];
+                    }
+
+                    parentName = parentName[..comma];
+                }
+
+                if (!modelsByTargetName.TryGetValue(parentName, out var parentNode))
+                {
+                    continue;
+                }
 
                 if (attachmentName is null)
                 {
