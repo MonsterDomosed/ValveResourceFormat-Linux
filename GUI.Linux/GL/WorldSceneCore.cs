@@ -39,6 +39,8 @@ internal sealed class WorldSceneCore : GLSceneViewerCore
         this.externalReferences = externalReferences;
     }
 
+    protected override bool CenterCameraOnNodes => false;
+
     protected override void LoadScene()
     {
         ReportLoadingStatus("Loading world geometry…");
