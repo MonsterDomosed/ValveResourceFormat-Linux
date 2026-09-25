@@ -1,6 +1,7 @@
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using GUI.Linux.Utils;
 using ValvePak;
 using ValveResourceFormat.IO;
 
@@ -79,6 +80,53 @@ public class GameFileLoaderTest
         }
         finally
         {
+            root.Delete(true);
+        }
+    }
+
+    [Test]
+    [NotInParallel(nameof(GameFileLoaderTest))]
+    public async Task ConfiguredGameInfoLoadsBasePackages()
+    {
+        var root = Directory.CreateTempSubdirectory("vrf-game-content-");
+        var oldSearchPaths = Settings.Config.GameSearchPaths;
+
+        try
+        {
+            var source = Path.Combine(TestContext.TestDirectory!, "Files", "point_template_test.vpk");
+            using var sourcePackage = ReadPackage(source);
+            var target = sourcePackage.Entries!
+                .SelectMany(static group => group.Value)
+                .Select(static entry => entry.GetFullPath())
+                .First();
+
+            var gameRoot = Path.Combine(root.FullName, "game");
+            var gameInfoPath = Path.Combine(gameRoot, "gameinfo.gi");
+            Directory.CreateDirectory(gameRoot);
+            File.Copy(source, Path.Combine(gameRoot, "pak01_dir.vpk"));
+            File.WriteAllText(gameInfoPath, """
+                "gameinfo"
+                {
+                    "game" "TestGame"
+                    "FileSystem"
+                    {
+                        "SearchPaths"
+                        {
+                            "Game" "game"
+                        }
+                    }
+                }
+                """);
+
+            Settings.Config.GameSearchPaths = [gameInfoPath];
+            using var context = GameContentContext.Discover();
+            var found = context.FileLoader.FindFile(target);
+
+            await Assert.That(found.Package).IsNotNull();
+        }
+        finally
+        {
+            Settings.Config.GameSearchPaths = oldSearchPaths;
             root.Delete(true);
         }
     }
