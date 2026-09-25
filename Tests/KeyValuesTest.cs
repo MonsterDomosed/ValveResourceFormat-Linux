@@ -15,6 +15,26 @@ namespace Tests
     public class KeyValuesTest
     {
         [Test]
+        public async Task ScalarGettersTreatWhitespaceStringsAsMissing()
+        {
+            var root = KVObject.Collection();
+            root["empty"] = string.Empty;
+            root["whitespace"] = " \t";
+
+            using (Assert.Multiple())
+            {
+                await Assert.That(root.GetInt32Property("empty", 42)).IsEqualTo(42);
+                await Assert.That(root.GetUInt32Property("whitespace", 42U)).IsEqualTo(42U);
+                await Assert.That(root.GetIntegerProperty("empty", 42L)).IsEqualTo(42L);
+                await Assert.That(root.GetUnsignedIntegerProperty("whitespace", 42UL)).IsEqualTo(42UL);
+                await Assert.That(root.GetDoubleProperty("empty", 42D)).IsEqualTo(42D);
+                await Assert.That(root.GetFloatProperty("whitespace", 42F)).IsEqualTo(42F);
+                await Assert.That(root.GetByteProperty("empty")).IsEqualTo((byte)0);
+                await Assert.That(root.GetBooleanProperty("whitespace", true)).IsTrue();
+            }
+        }
+
+        [Test]
         public async Task TestKeyValues3_LF()
         {
             var file = KVDocumentExtensions.ParseKV3(Path.Combine(TestContext.TestDirectory!, "Files", "KeyValues", "KeyValues3_LF.kv3"));
