@@ -63,6 +63,14 @@ internal abstract class ViewportGlRenderer : IGLViewportRenderer
     {
     }
 
+    public virtual void OnPointerDown(float x, float y, ViewerKey buttons, int clickCount)
+    {
+    }
+
+    public virtual void OnPointerUp(float x, float y, ViewerKey buttons)
+    {
+    }
+
     private Action<SkiaSharp.SKBitmap>? screenshotCallback;
 
     /// <summary>

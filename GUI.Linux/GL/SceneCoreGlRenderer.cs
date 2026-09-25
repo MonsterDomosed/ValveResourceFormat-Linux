@@ -66,5 +66,11 @@ internal class SceneCoreGlRenderer : ViewportGlRenderer
 
     public override void OnKeyDown(ViewerKey key) => core?.OnKeyDown(key);
 
+    public override void OnPointerDown(float x, float y, ViewerKey buttons, int clickCount)
+        => core?.OnPointerDown(x, y, buttons, clickCount);
+
+    public override void OnPointerUp(float x, float y, ViewerKey buttons)
+        => core?.OnPointerUp(x, y, buttons);
+
     protected override void OnDispose() => core?.Dispose();
 }

@@ -203,6 +203,12 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         Input.Captured = true;
         UpdateButtons(e.GetCurrentPoint(this).Properties);
 
+        if (renderer is ViewportGlRenderer viewportRenderer)
+        {
+            var pointer = GetRenderPointerPosition(e);
+            viewportRenderer.OnPointerDown(pointer.X, pointer.Y, Input.Keys, e.ClickCount);
+        }
+
         // Hide the pointer while dragging the camera so it does not run into the window edges or
         // distract from the model being inspected.
         if (Input.Left || Input.Right)
@@ -254,6 +260,13 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         e.Pointer.Capture(null);
         Input.Captured = false;
         UpdateButtons(e.GetCurrentPoint(this).Properties);
+
+        if (renderer is ViewportGlRenderer viewportRenderer)
+        {
+            var pointer = GetRenderPointerPosition(e);
+            viewportRenderer.OnPointerUp(pointer.X, pointer.Y, Input.Keys);
+        }
+
         RestoreCursor();
         RequestNextFrameRendering();
     }
@@ -274,6 +287,13 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         Input.Captured = false;
         UpdateButtons(default);
         RestoreCursor();
+    }
+
+    private Vector2 GetRenderPointerPosition(PointerEventArgs e)
+    {
+        var position = e.GetPosition(this);
+        var scaling = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1.0;
+        return new Vector2((float)(position.X * scaling), (float)(position.Y * scaling));
     }
 
     private void HideCursor()
