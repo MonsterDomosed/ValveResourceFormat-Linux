@@ -236,6 +236,18 @@ namespace Tests
         }
 
         [Test]
+        public async Task SceneCoreDisposesRendererContext()
+        {
+            using var fileLoader = new GameFileLoader(null, null);
+            using var rendererContext = new RendererContext(fileLoader, NullLogger.Instance);
+            var core = new SettingsSceneCore(new SettingsSceneContext(), rendererContext, new SettingsSceneHost());
+
+            core.Dispose();
+
+            await Assert.That(rendererContext.CancellationToken.IsCancellationRequested).IsTrue();
+        }
+
+        [Test]
         public async Task GraphPresenterExposesBuiltGraph()
         {
             using var resource = new Resource();

@@ -169,7 +169,8 @@ public abstract class GLSceneViewerCore : IDisposable
         QuadOverdrawRenderer?.Dispose();
         QuadOverdrawRenderer = null;
 
-        Renderer?.Dispose();
+        Renderer.Dispose();
+        Renderer.RendererContext.Dispose();
     }
 
     /// <summary>Deletes viewer-specific GL resources before the renderer is disposed.</summary>
