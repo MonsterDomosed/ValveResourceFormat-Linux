@@ -2416,6 +2416,11 @@ public sealed partial class MapExtract
                     TimesToFire = connection.TimesToFire,
                 };
 
+                if (connection.ParamMap != null)
+                {
+                    dmeConnection.Add("paramMap", ToDmeKeyValues3(connection.ParamMap, "paramMap"));
+                }
+
                 mapEntity.ConnectionsData.Add(dmeConnection);
             }
         }
@@ -2488,6 +2493,160 @@ public sealed partial class MapExtract
 
     static string StringBool(bool value)
         => value ? "1" : "0";
+
+    private static object? ToDmeKeyValues3(KVObject value, string name)
+    {
+        switch (value.ValueType)
+        {
+            case KVValueType.Collection:
+                var element = new Datamodel.Element { Name = name, ClassName = "DmElement" };
+
+                foreach (var (key, child) in value.Children)
+                {
+                    var converted = ToDmeKeyValues3(child, key);
+
+                    if (converted != null)
+                    {
+                        element.Add(key == "name" ? "__dmekv3_attribute_will_be_name__" : key, converted);
+                    }
+                }
+
+                return element;
+
+            case KVValueType.Array:
+                var items = (IReadOnlyList<KVObject>)value.Values;
+
+                if (ToDmeTypedArray(items) is { } typedArray)
+                {
+                    return typedArray;
+                }
+
+                var elements = new Datamodel.ElementArray(items.Count);
+
+                for (var i = 0; i < items.Count; i++)
+                {
+                    var wrapper = new Datamodel.Element { Name = $"array_{i}", ClassName = "DmElement" };
+                    var converted = ToDmeKeyValues3(items[i], "value");
+
+                    if (converted != null)
+                    {
+                        wrapper.Add("value", converted);
+                    }
+
+                    elements.Add(wrapper);
+                }
+
+                return elements;
+
+            case KVValueType.Boolean:
+                return (bool)value;
+
+            case KVValueType.String:
+                var text = RemoveTargetnamePrefix((string)value);
+                var specificType = value.Flag switch
+                {
+                    KVFlag.Resource => "resource",
+                    KVFlag.ResourceName => "resource_name",
+                    KVFlag.Panorama => "panorama",
+                    KVFlag.SoundEvent => "soundevent",
+                    KVFlag.SubClass => "subclass",
+                    KVFlag.EntityName => "entity_name",
+                    _ => null,
+                };
+
+                if (specificType == null)
+                {
+                    return text;
+                }
+
+                var typed = new Datamodel.Element { Name = "value_with_specific_type", ClassName = "DmElement" };
+                typed.Add("specific_type", specificType);
+                typed.Add("value", text);
+                return typed;
+
+            case var type when IsKeyValues3Unsigned(type):
+                return Convert.ToUInt64(value, CultureInfo.InvariantCulture);
+
+            case var type when IsKeyValues3Float(type):
+                return Convert.ToSingle(value, CultureInfo.InvariantCulture);
+
+            case var type when IsKeyValues3Signed(type):
+                var integer = Convert.ToInt64(value, CultureInfo.InvariantCulture);
+                return integer is >= int.MinValue and <= int.MaxValue ? (int)integer : 0;
+
+            default:
+                return null;
+        }
+    }
+
+    private static object? ToDmeTypedArray(IReadOnlyList<KVObject> items)
+    {
+        if (items.Count == 0)
+        {
+            return null;
+        }
+
+        var first = items[0];
+
+        if (first.ValueType == KVValueType.Array)
+        {
+            return ToDmeVectorArray(items);
+        }
+
+        if (first.Flag != KVFlag.None || items.Any(item => item.ValueType != first.ValueType || item.Flag != KVFlag.None))
+        {
+            return null;
+        }
+
+        return first.ValueType switch
+        {
+            KVValueType.Boolean => new Datamodel.BoolArray(items.Select(static item => (bool)item)),
+            KVValueType.String => new Datamodel.StringArray(items.Select(static item => RemoveTargetnamePrefix((string)item))),
+            var type when IsKeyValues3Unsigned(type) => new Datamodel.UInt64Array(items.Select(static item => Convert.ToUInt64(item, CultureInfo.InvariantCulture))),
+            var type when IsKeyValues3Float(type) => new Datamodel.FloatArray(items.Select(static item => Convert.ToSingle(item, CultureInfo.InvariantCulture))),
+            var type when IsKeyValues3Signed(type) => new Datamodel.IntArray(items.Select(static item => unchecked((int)Convert.ToInt64(item, CultureInfo.InvariantCulture)))),
+            _ => null,
+        };
+    }
+
+    private static object? ToDmeVectorArray(IReadOnlyList<KVObject> items)
+    {
+        var vectors = new List<float[]>(items.Count);
+
+        foreach (var item in items)
+        {
+            if (item.ValueType != KVValueType.Array)
+            {
+                return null;
+            }
+
+            var components = (IReadOnlyList<KVObject>)item.Values;
+
+            if ((vectors.Count > 0 && components.Count != vectors[0].Length) || !components.All(static component => IsKeyValues3Float(component.ValueType)))
+            {
+                return null;
+            }
+
+            vectors.Add([.. components.Select(static component => Convert.ToSingle(component, CultureInfo.InvariantCulture))]);
+        }
+
+        return vectors[0].Length switch
+        {
+            2 => new Datamodel.Vector2Array(vectors.Select(static v => new Vector2(v[0], v[1]))),
+            3 => new Datamodel.Vector3Array(vectors.Select(static v => new Vector3(v[0], v[1], v[2]))),
+            4 => new Datamodel.Vector4Array(vectors.Select(static v => new Vector4(v[0], v[1], v[2], v[3]))),
+            _ => null,
+        };
+    }
+
+    private static bool IsKeyValues3Float(KVValueType type)
+        => type is KVValueType.FloatingPoint or KVValueType.FloatingPoint64;
+
+    private static bool IsKeyValues3Signed(KVValueType type)
+        => type is KVValueType.Int16 or KVValueType.Int32 or KVValueType.Int64;
+
+    private static bool IsKeyValues3Unsigned(KVValueType type)
+        => type is KVValueType.UInt16 or KVValueType.UInt32 or KVValueType.UInt64;
 
     private static string? ToEditString(object? data)
     {

@@ -64,6 +64,42 @@ namespace Tests.IO
         }
 
         [Test]
+        public async Task WritesParamMapsToVmap()
+        {
+            using var package = new Package();
+            package.Read(VpkPath);
+            using var loader = new GameFileLoader(package, VpkPath);
+            using var vmapResource = loader.LoadFile("maps/wtf.vmap_c");
+
+            var vmapData = new MapExtract(vmapResource!, loader).ToValveMap();
+            using var vmap = Datamodel.Datamodel.Load(new MemoryStream(vmapData), Datamodel.Codecs.DeferredMode.Disabled);
+
+            var connections = vmap.AllElements
+                .Where(static element => element.ClassName == "DmeConnectionData")
+                .ToList();
+
+            Datamodel.Element ParamMapOf(string outputName, string inputName)
+                => (Datamodel.Element)connections.Single(connection => (string)connection["outputName"]! == outputName && (string)connection["inputName"]! == inputName)["paramMap"]!;
+
+            var maintainOffset = ParamMapOf("OnTrigger", "SetParentMaintainOffset");
+            var parent = (Datamodel.Element)((Datamodel.Element)maintainOffset["pNewParent"]!)["value"]!;
+            var routed = ParamMapOf("OnDestructibleHitGroupDamageLevelChanged", "SetTextString");
+            var empty = ParamMapOf("OnTrigger", "string_string_string");
+
+            using (Assert.Multiple())
+            {
+                await Assert.That(maintainOffset.ClassName).IsEqualTo("DmElement");
+                await Assert.That(maintainOffset.Name).IsEqualTo("paramMap");
+                await Assert.That((string)parent["specific_type"]!).IsEqualTo("entity_name");
+                await Assert.That((string)parent["value"]!).IsEqualTo("io_breaker");
+                await Assert.That((string)((Datamodel.Element)routed["pText"]!)["src"]!).IsEqualTo("nDamageLevel");
+                await Assert.That((bool)((Datamodel.Element)routed["bLocalize"]!)["value"]!).IsFalse();
+                await Assert.That(empty.Count).IsEqualTo(0);
+                await Assert.That(connections.Single(static connection => (string)connection["targetName"]! == "!activator").ContainsKey("paramMap")).IsFalse();
+            }
+        }
+
+        [Test]
         public async Task LabelsMappedEntityIOConnections()
         {
             var entities = LoadEntityLump().GetEntities();
