@@ -1127,6 +1127,12 @@ public abstract class GLSceneViewerCore : IDisposable
         SkyboxScene?.SetEnabledLayers(layers);
     }
 
+    protected void SetDefaultEnabledLayers(IEnumerable<string> layers)
+    {
+        sidebarEnabledLayers = [.. layers];
+        SetEnabledLayers(sidebarEnabledLayers);
+    }
+
     /// <summary>The distinct layer names present in the loaded scene.</summary>
     public List<string> GetLayerNames()
         => Scene.AllNodes.Select(static x => x.LayerName).OfType<string>().Distinct().ToList();

@@ -60,6 +60,7 @@ internal sealed class WorldSceneCore : GLSceneViewerCore
 
         NavMeshSceneNode.AddNavNodesToScene(loadedWorld.NavMesh, Scene);
         CS2BombDamageSceneNode.AddBakedBombDamageToScene(loadedWorld.BombDamage, Scene);
+        SetDefaultEnabledLayers(loadedWorld.DefaultEnabledLayers);
 
         if (loadedWorld.SpawnCameraMatrix is { } spawnCamera)
         {

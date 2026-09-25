@@ -250,6 +250,20 @@ namespace Tests
         }
 
         [Test]
+        public async Task DefaultLayerSelectionDisablesUnlistedNodes()
+        {
+            using var fileLoader = new GameFileLoader(null, null);
+            using var rendererContext = new RendererContext(fileLoader, NullLogger.Instance);
+            using var core = new SettingsSceneCore(new SettingsSceneContext(), rendererContext, new SettingsSceneHost());
+            var node = new TestSceneNode(core.Scene) { LayerName = "hidden" };
+            core.Scene.Add(node, dynamic: true);
+
+            core.ApplyDefaultLayers(["visible"]);
+
+            await Assert.That(node.LayerEnabled).IsFalse();
+        }
+
+        [Test]
         public async Task SceneCoreDisposesRendererContext()
         {
             using var fileLoader = new GameFileLoader(null, null);
@@ -282,10 +296,14 @@ namespace Tests
         private sealed class SettingsSceneCore(ISceneViewerContext context, RendererContext rendererContext, IGLViewerHost host)
             : GLSceneViewerCore(context, rendererContext, host)
         {
+            public void ApplyDefaultLayers(IEnumerable<string> layers) => SetDefaultEnabledLayers(layers);
+
             protected override void LoadScene()
             {
             }
         }
+
+        private sealed class TestSceneNode(Scene scene) : SceneNode(scene);
 
         private sealed class SettingsSceneContext : ISceneViewerContext
         {
