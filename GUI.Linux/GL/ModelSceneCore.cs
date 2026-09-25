@@ -32,6 +32,13 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
     private string? activeHitboxSet;
     private string[] attachmentNames = [];
 
+    private Matrix4x4 rootMotionBase = Matrix4x4.Identity;
+    private Matrix4x4 rootMotionTotal = Matrix4x4.Identity;
+    private Vector3 rootMotionCameraOffset;
+    private bool rootMotionLatched;
+    private bool walkWithRootMotion;
+    private bool rootMotionResetPending = true;
+
     public ModelSceneCore(ISceneViewerContext context, RendererContext rendererContext, IGLViewerHost host, ValveResourceFormat.Resource resource, Model model, ModelAnimationSession session, Action<string>? openResource = null)
         : base(context, rendererContext, host, Frustum.CreateEmpty())
     {
@@ -100,8 +107,102 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
         base.OnPrePaint(frameTime);
 
         ApplyCommands();
+        UpdateRootMotion();
         FollowModelTransform();
         PublishState();
+    }
+
+    /// <summary>
+    /// Walks the model and the camera along the root motion the player advanced through since the last
+    /// frame. The player unrolls looping, and reports no motion when playback did not advance.
+    /// </summary>
+    private void UpdateRootMotion()
+    {
+        if (rootMotionResetPending)
+        {
+            rootMotionResetPending = false;
+            ResetRootMotion();
+        }
+
+        if (!walkWithRootMotion || modelSceneNode is null)
+        {
+            return;
+        }
+
+        var delta = modelSceneNode.AnimationController.ConsumeRootMotionDelta();
+
+        if (delta.IsIdentity)
+        {
+            return;
+        }
+
+        if (!rootMotionLatched)
+        {
+            rootMotionBase = modelSceneNode.Transform;
+            rootMotionTotal = Matrix4x4.Identity;
+            rootMotionCameraOffset = Vector3.Zero;
+            rootMotionLatched = true;
+        }
+
+        var previousTranslation = (rootMotionTotal * rootMotionBase).Translation;
+
+        rootMotionTotal *= delta;
+
+        var transform = rootMotionTotal * rootMotionBase;
+
+        MoveRootMotionCamera(transform.Translation - previousTranslation);
+        SetRootMotionTransform(transform);
+    }
+
+    /// <summary>
+    /// Returns the model and the camera to where root motion picked them up.
+    /// </summary>
+    private void ResetRootMotion()
+    {
+        if (rootMotionLatched)
+        {
+            SetRootMotionTransform(rootMotionBase);
+            MoveRootMotionCamera(-rootMotionCameraOffset);
+        }
+
+        // Discard motion banked up while nothing was consuming it.
+        modelSceneNode?.AnimationController.ConsumeRootMotionDelta();
+
+        rootMotionTotal = Matrix4x4.Identity;
+        rootMotionCameraOffset = Vector3.Zero;
+        rootMotionLatched = false;
+    }
+
+    private void MoveRootMotionCamera(Vector3 delta)
+    {
+        Input.Camera.Location += delta;
+
+        if (Input.OrbitTarget is Vector3 orbitTarget)
+        {
+            Input.OrbitTarget = orbitTarget + delta;
+        }
+
+        // The input tick is skipped while the cursor is over the side panel, and it is what commits the camera.
+        Input.ForceUpdate = true;
+
+        rootMotionCameraOffset += delta;
+    }
+
+    private void SetRootMotionTransform(Matrix4x4 transform)
+    {
+        static void Move(SceneNode? node, Matrix4x4 transform)
+        {
+            if (node == null)
+            {
+                return;
+            }
+
+            node.Transform = transform;
+            node.Scene.DynamicOctree.Update(node);
+        }
+
+        Move(modelSceneNode, transform);
+        Move(skeletonSceneNode, transform);
     }
 
     /// <summary>
@@ -143,6 +244,9 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
 
         if (command.AnimationChanged)
         {
+            // A new animation's motion must not continue the previous walk.
+            rootMotionResetPending = true;
+
             if (command.AnimationName is null)
             {
                 modelSceneNode.SetAnimation(null);
@@ -190,6 +294,12 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
             controller.Time = 0f;
         }
 
+        if (command.RootMotionChanged)
+        {
+            walkWithRootMotion = command.WalkWithRootMotion;
+            rootMotionResetPending = true;
+        }
+
         if (command.HitboxSetChanged && hitboxSetSceneNode is not null)
         {
             activeHitboxSet = command.HitboxSetName;
@@ -220,7 +330,7 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
     {
         if (modelSceneNode is null)
         {
-            session.Publish(false, animations, null, false, true, 1f, 0, 0, 0f, 0f, 0f, hitboxSets, activeHitboxSet, attachmentNames, model.Skeleton.Bones.Length > 0);
+            session.Publish(false, animations, null, false, true, 1f, 0, 0, 0f, 0f, 0f, hitboxSets, activeHitboxSet, attachmentNames, model.Skeleton.Bones.Length > 0, false);
             return;
         }
 
@@ -250,7 +360,8 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
             hitboxSets,
             activeHitboxSet,
             attachmentNames,
-            model.Skeleton.Bones.Length > 0);
+            model.Skeleton.Bones.Length > 0,
+            modelSceneNode?.AnimationController.ActiveAnimation?.HasMovementData() ?? false);
     }
 
     protected override void OnPicked(object? sender, PickingResponse pickingResponse)

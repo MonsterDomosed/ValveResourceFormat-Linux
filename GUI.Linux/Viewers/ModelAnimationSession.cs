@@ -23,7 +23,9 @@ internal readonly record struct ModelAnimationCommand(
     bool ShowBones,
     bool AttachmentsChanged,
     bool ShowAttachments,
-    string[]? SelectedAttachments);
+    string[]? SelectedAttachments,
+    bool RootMotionChanged,
+    bool WalkWithRootMotion);
 
 /// <summary>
 /// A consistent copy of the model viewer's animation state, safe to read from the UI thread.
@@ -43,7 +45,8 @@ internal readonly record struct ModelAnimationSnapshot(
     string[] HitboxSets,
     string? ActiveHitboxSet,
     string[] Attachments,
-    bool HasBones)
+    bool HasBones,
+    bool HasRootMotion)
 {
     /// <summary>Whether the model exposes at least one playable animation.</summary>
     public bool HasAnimations => Animations.Length > 0;
@@ -105,6 +108,9 @@ internal sealed class ModelAnimationSession
     private string[]? pendingAttachments;
     private string[] attachments = [];
     private bool hasBones;
+    private bool rootMotionChanged;
+    private bool pendingWalkWithRootMotion;
+    private bool hasRootMotion;
 
     /// <summary>Selects an animation by name, or the bind pose when <paramref name="name"/> is null.</summary>
     public void SelectAnimation(string? name)
@@ -214,6 +220,16 @@ internal sealed class ModelAnimationSession
         }
     }
 
+    /// <summary>Requests that the model and camera walk along the animation's root motion.</summary>
+    public void SetWalkWithRootMotion(bool value)
+    {
+        lock (sync)
+        {
+            rootMotionChanged = true;
+            pendingWalkWithRootMotion = value;
+        }
+    }
+
     /// <summary>Takes the pending commands and clears them. Called on the render thread each frame.</summary>
     public ModelAnimationCommand ConsumeCommands()
     {
@@ -228,7 +244,8 @@ internal sealed class ModelAnimationSession
                 restartRequested, resetViewRequested,
                 hitboxSetChanged, pendingHitboxSet,
                 skeletonChanged, pendingShowBones,
-                attachmentsChanged, pendingShowAttachments, pendingAttachments);
+                attachmentsChanged, pendingShowAttachments, pendingAttachments,
+                rootMotionChanged, pendingWalkWithRootMotion);
 
             animationChanged = false;
             pendingAnimation = null;
@@ -243,6 +260,7 @@ internal sealed class ModelAnimationSession
             skeletonChanged = false;
             attachmentsChanged = false;
             pendingAttachments = null;
+            rootMotionChanged = false;
 
             return command;
         }
@@ -264,7 +282,8 @@ internal sealed class ModelAnimationSession
         string[] hitboxSetNames,
         string? activeSet,
         string[] attachmentNames,
-        bool modelHasBones)
+        bool modelHasBones,
+        bool activeAnimationHasRootMotion)
     {
         lock (sync)
         {
@@ -283,6 +302,7 @@ internal sealed class ModelAnimationSession
             activeHitboxSet = activeSet;
             attachments = attachmentNames;
             hasBones = modelHasBones;
+            hasRootMotion = activeAnimationHasRootMotion;
         }
     }
 
@@ -291,7 +311,7 @@ internal sealed class ModelAnimationSession
     {
         lock (sync)
         {
-            return new(ready, animations, activeAnimation, playing, looping, speed, frame, frameCount, time, duration, fps, hitboxSets, activeHitboxSet, attachments, hasBones);
+            return new(ready, animations, activeAnimation, playing, looping, speed, frame, frameCount, time, duration, fps, hitboxSets, activeHitboxSet, attachments, hasBones, hasRootMotion);
         }
     }
 }

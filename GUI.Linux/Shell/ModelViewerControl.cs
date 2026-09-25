@@ -33,6 +33,7 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
     private readonly ComboBox hitboxSelector = new();
     private readonly CheckBox showBonesCheckBox = new() { Content = "Show bones" };
     private readonly CheckBox showAttachmentsCheckBox = new() { Content = "Show attachments" };
+    private readonly CheckBox rootMotionCheckBox = new() { Content = "Walk with root motion", IsEnabled = false };
     private readonly ListBox attachmentList = new() { SelectionMode = SelectionMode.Multiple, IsVisible = false, MaxHeight = 160 };
     private readonly Button playPauseButton = new() { Content = "Pause", Width = 84 };
     private readonly Button restartButton = new() { Content = "Restart", Width = 84 };
@@ -157,6 +158,10 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
         loopCheckBox.IsCheckedChanged += (_, _) => SetLooping(loopCheckBox.IsChecked == true);
         animationGroup.Children.Add(loopCheckBox);
 
+        // Root motion only exists while an animation that carries it is playing.
+        rootMotionCheckBox.IsCheckedChanged += (_, _) => SetWalkWithRootMotion(rootMotionCheckBox.IsChecked == true);
+        animationGroup.Children.Add(rootMotionCheckBox);
+
         panel.Children.Add(animationGroup);
 
         hitboxGroup.Children.Add(new TextBlock { Text = "Hitboxes", FontWeight = FontWeight.SemiBold });
@@ -198,6 +203,14 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
         if (!updatingFromSnapshot)
         {
             session.SetShowBones(value);
+        }
+    }
+
+    private void SetWalkWithRootMotion(bool value)
+    {
+        if (!updatingFromSnapshot)
+        {
+            session.SetWalkWithRootMotion(value);
         }
     }
 
@@ -318,6 +331,16 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
             {
                 lastHitboxSet = snapshot.ActiveHitboxSet;
                 hitboxSelector.SelectedItem = snapshot.ActiveHitboxSet ?? NoHitboxSetItem;
+            }
+
+            if (rootMotionCheckBox.IsEnabled != snapshot.HasRootMotion)
+            {
+                rootMotionCheckBox.IsEnabled = snapshot.HasRootMotion;
+
+                if (!snapshot.HasRootMotion)
+                {
+                    rootMotionCheckBox.IsChecked = false;
+                }
             }
 
             if (snapshot.Playing != lastPlaying)
@@ -476,6 +499,9 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
 
     /// <summary>The attachment name list, for the self-check to inspect the real control.</summary>
     internal ListBox AttachmentList => attachmentList;
+
+    /// <summary>The root motion checkbox, for the self-check to drive the real control.</summary>
+    internal CheckBox RootMotionCheckBox => rootMotionCheckBox;
 
     /// <summary>Whether the skeleton overlay controls are shown for the current model.</summary>
     internal bool SkeletonControlsVisible => skeletonGroup.IsVisible;

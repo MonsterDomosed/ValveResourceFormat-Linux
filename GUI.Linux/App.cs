@@ -1740,6 +1740,17 @@ internal sealed class App : Application
         control.SpeedBar.Value = 1.0;
         await WaitForAsync(() => Math.Abs(session.GetSnapshot().Speed - 1f) < 0.01f, 60).ConfigureAwait(true);
 
+        // Root motion is only offered while the animation carries it.
+        var rootMotionAvailable = control.RootMotionCheckBox.IsEnabled;
+
+        if (rootMotionAvailable)
+        {
+            control.RootMotionCheckBox.IsChecked = true;
+            await Task.Delay(250).ConfigureAwait(true);
+        }
+
+        control.RootMotionCheckBox.IsChecked = false;
+
         // Loop through the real checkbox.
         control.LoopCheckBox.IsChecked = false;
         var loopOff = await WaitForAsync(() => !session.GetSnapshot().Looping, 60).ConfigureAwait(true);
@@ -1753,7 +1764,7 @@ internal sealed class App : Application
         await Program.StdOut.WriteLineAsync(
             $"[self-check] {label} animation: select={target}, advanced={advanced}, pauseStable={pauseOk}, "
             + $"scrub={scrubbed.Frame}/{cycleFrames} (expected {expectedFrame}), stayedPaused={stayedPaused}, "
-            + $"speed={speedOk}, loop={loopOff && loopOn}, restart={restartOk}").ConfigureAwait(true);
+            + $"speed={speedOk}, loop={loopOff && loopOn}, restart={restartOk}, rootMotion={rootMotionAvailable}").ConfigureAwait(true);
 
         var ok = selected && advanced && pauseOk && scrubOk && stayedPaused && speedOk && loopOff && loopOn && restartOk;
 
