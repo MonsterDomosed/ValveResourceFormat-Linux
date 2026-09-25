@@ -125,6 +125,16 @@ internal sealed class WorldSceneCore : GLSceneViewerCore
         }
     }
 
+    public override void OnDetachedFromRenderLoop()
+    {
+        base.OnDetachedFromRenderLoop();
+
+        if (soundPlayer is not null)
+        {
+            soundPlayer.Suspended = true;
+        }
+    }
+
     protected override void DisposeAudio()
     {
         soundPlayer?.Dispose();

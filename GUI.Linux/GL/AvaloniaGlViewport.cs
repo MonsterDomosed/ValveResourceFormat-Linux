@@ -68,9 +68,15 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
     internal IGLViewportRenderer? ViewportRenderer => renderer;
 
     /// <summary>Asks for another frame.</summary>
-    public void RequestFrame() => RequestNextFrameRendering();
+    public void RequestFrame()
+    {
+        if (IsVisible)
+        {
+            RequestNextFrameRendering();
+        }
+    }
 
-    void IGLViewerHost.RequestFrame() => RequestNextFrameRendering();
+    void IGLViewerHost.RequestFrame() => RequestFrame();
 
     void IGLViewerHost.RequestFullscreen() => ToggleFullscreen();
 
@@ -107,6 +113,8 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
 
     void IGLViewerHost.SetClipboardImage(SkiaSharp.SKBitmap bitmap) => AppClipboard.SetImage(bitmap);
 
+    internal static double ClampFrameTime(double elapsed) => Math.Clamp(elapsed, 0.0, 1.0);
+
     protected override void OnOpenGlInit(GlInterface gl)
     {
         OpenGL.LoadBindings(new GlBindingsContext(gl));
@@ -121,12 +129,13 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
 #pragma warning restore CA2000
 
         renderer.Initialize(device, context, this);
+        (renderer as ViewportGlRenderer)?.OnVisibilityChanged(IsVisible);
         lastTicks = Stopwatch.GetTimestamp();
     }
 
     protected override void OnOpenGlRender(GlInterface gl, int fb)
     {
-        if (renderer is null || context is null)
+        if (renderer is null || context is null || !IsVisible)
         {
             return;
         }
@@ -134,7 +143,7 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         ApplyVerticalSync();
 
         var now = Stopwatch.GetTimestamp();
-        var frameTime = (now - lastTicks) / (double)Stopwatch.Frequency;
+        var frameTime = ClampFrameTime((now - lastTicks) / (double)Stopwatch.Frequency);
         lastTicks = now;
 
         var scaling = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1.0;
@@ -150,7 +159,7 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
 
         FrameRendered?.Invoke();
 
-        if (renderer.ContinuousRendering)
+        if (renderer.ContinuousRendering && IsVisible)
         {
             RequestNextFrameRendering();
         }
@@ -183,6 +192,17 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
+
+        if (change.Property == IsVisibleProperty && renderer is ViewportGlRenderer viewportRenderer)
+        {
+            viewportRenderer.OnVisibilityChanged(IsVisible);
+
+            if (IsVisible)
+            {
+                lastTicks = Stopwatch.GetTimestamp();
+                RequestNextFrameRendering();
+            }
+        }
 
         if (change.Property == BoundsProperty && renderer is not null)
         {

@@ -201,6 +201,14 @@ namespace Tests
         }
 
         [Test]
+        public async Task ClampsViewerFrameTime()
+        {
+            await Assert.That(AvaloniaGlViewport.ClampFrameTime(-1.0)).IsEqualTo(0.0);
+            await Assert.That(AvaloniaGlViewport.ClampFrameTime(0.25)).IsEqualTo(0.25);
+            await Assert.That(AvaloniaGlViewport.ClampFrameTime(2.0)).IsEqualTo(1.0);
+        }
+
+        [Test]
         public async Task LinuxSceneContextLoadsDefaultCubemap()
         {
             var context = new LinuxSceneViewerContext(NullLogger.Instance);

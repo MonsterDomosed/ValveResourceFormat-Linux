@@ -71,6 +71,10 @@ internal abstract class ViewportGlRenderer : IGLViewportRenderer
     {
     }
 
+    public virtual void OnVisibilityChanged(bool isVisible)
+    {
+    }
+
     private Action<SkiaSharp.SKBitmap>? screenshotCallback;
 
     /// <summary>

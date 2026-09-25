@@ -72,5 +72,13 @@ internal class SceneCoreGlRenderer : ViewportGlRenderer
     public override void OnPointerUp(float x, float y, ViewerKey buttons)
         => core?.OnPointerUp(x, y, buttons);
 
+    public override void OnVisibilityChanged(bool isVisible)
+    {
+        if (!isVisible)
+        {
+            core?.OnDetachedFromRenderLoop();
+        }
+    }
+
     protected override void OnDispose() => core?.Dispose();
 }
