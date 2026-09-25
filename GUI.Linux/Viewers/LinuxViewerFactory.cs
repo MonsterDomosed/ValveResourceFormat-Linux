@@ -18,7 +18,7 @@ namespace GUI.Linux.Viewers;
 /// </summary>
 internal static class LinuxViewerFactory
 {
-    public static async Task<IViewer> CreateAndLoadAsync(string fileName)
+    public static async Task<IViewer> CreateAndLoadAsync(string fileName, Action<string>? openResource = null)
     {
         await Task.Yield();
 
@@ -106,7 +106,7 @@ internal static class LinuxViewerFactory
 
             if (resourceViewer.ResourceType == ResourceType.Model)
             {
-                return new ModelGlViewer(context, fileName, resourceViewer);
+                return new ModelGlViewer(context, fileName, resourceViewer, openResource);
             }
 
             if (resourceViewer.ResourceType == ResourceType.SmartProp)

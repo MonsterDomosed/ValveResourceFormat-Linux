@@ -2,10 +2,12 @@ using System;
 using System.Linq;
 using GUI.Linux.Types.GLViewers;
 using GUI.Linux.Viewers;
+using ValveResourceFormat.IO;
 using ValveResourceFormat.Renderer;
 using ValveResourceFormat.Renderer.SceneNodes;
 using ValveResourceFormat.ResourceTypes;
 using ValveResourceFormat.ResourceTypes.ModelAnimation;
+using static ValveResourceFormat.Renderer.PickingTexture;
 
 namespace GUI.Linux.GL;
 
@@ -20,16 +22,18 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
     private readonly ValveResourceFormat.Resource resource;
     private readonly Model model;
     private readonly ModelAnimationSession session;
+    private readonly Action<string>? openResource;
 
     private ModelSceneNode? modelSceneNode;
     private string[] animations = [];
 
-    public ModelSceneCore(ISceneViewerContext context, RendererContext rendererContext, IGLViewerHost host, ValveResourceFormat.Resource resource, Model model, ModelAnimationSession session)
+    public ModelSceneCore(ISceneViewerContext context, RendererContext rendererContext, IGLViewerHost host, ValveResourceFormat.Resource resource, Model model, ModelAnimationSession session, Action<string>? openResource = null)
         : base(context, rendererContext, host, Frustum.CreateEmpty())
     {
         this.resource = resource;
         this.model = model;
         this.session = session;
+        this.openResource = openResource;
         SaveImageWithTransparentBackground = true;
     }
 
@@ -176,6 +180,37 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
             localTime,
             animation?.Duration ?? 0f,
             animation?.Fps ?? 0f);
+    }
+
+    protected override void OnPicked(object? sender, PickingResponse pickingResponse)
+    {
+        if (modelSceneNode is null)
+        {
+            return;
+        }
+
+        if (pickingResponse.PixelInfo.ObjectId == 0)
+        {
+            SelectedNodeRenderer?.SelectNode(null);
+            return;
+        }
+
+        if (pickingResponse.Intent == PickingIntent.Select)
+        {
+            SelectedNodeRenderer?.SelectNode(Scene.Find(pickingResponse.PixelInfo.ObjectId));
+            return;
+        }
+
+        if (pickingResponse.Intent == PickingIntent.Open)
+        {
+            var reference = modelSceneNode.GetReferenceMeshes()
+                .FirstOrDefault(mesh => mesh.MeshIndex == pickingResponse.PixelInfo.MeshId);
+
+            if (reference.MeshName is { Length: > 0 } meshName)
+            {
+                openResource?.Invoke(meshName + GameFileLoader.CompiledFileSuffix);
+            }
+        }
     }
 
     protected override void Dispose(bool disposing)

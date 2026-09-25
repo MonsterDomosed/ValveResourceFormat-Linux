@@ -13,6 +13,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using GUI.Linux.GL;
 using GUI.Linux.Platform;
@@ -332,6 +333,30 @@ internal sealed class MainWindow : Window
         }
     }
 
+    private void OpenReferencedResource(string path)
+    {
+        Dispatcher.UIThread.Post(() => _ = OpenReferencedResourceAsync(path));
+    }
+
+    private async Task OpenReferencedResourceAsync(string path)
+    {
+        var found = LinuxGameContent.FileLoader.FindFile(path, logNotFound: false);
+
+        if (found.PathOnDisk is { } pathOnDisk)
+        {
+            await OpenFileAsync(pathOnDisk, trackRecent: false).ConfigureAwait(true);
+            return;
+        }
+
+        if (found.Package is not { } package || found.PackageEntry is not { } entry || package.FileName is not { Length: > 0 } vpkPath)
+        {
+            Log.Warn(nameof(MainWindow), $"Referenced resource '{path}' was not found.");
+            return;
+        }
+
+        await OpenPackageEntryAsync(package, vpkPath, entry).ConfigureAwait(true);
+    }
+
     /// <summary>Opens a file in a new tab, loading it off the UI thread.</summary>
     /// <param name="path">Path to open.</param>
     /// <param name="trackRecent">Whether to record the path in the recent files list.</param>
@@ -376,7 +401,7 @@ internal sealed class MainWindow : Window
 
         try
         {
-            var viewer = await Task.Run(() => LinuxViewerFactory.CreateAndLoadAsync(path)).ConfigureAwait(true);
+            var viewer = await Task.Run(() => LinuxViewerFactory.CreateAndLoadAsync(path, OpenReferencedResource)).ConfigureAwait(true);
 
             if (!mainTabs.Items.Contains(tab))
             {

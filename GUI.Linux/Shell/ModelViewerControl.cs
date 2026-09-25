@@ -56,13 +56,13 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
     private int lastFrameCount = -1;
     private float lastSpeed = float.NaN;
 
-    public ModelViewerControl(string fileName, ModelAnimationSession session)
+    public ModelViewerControl(string fileName, ModelAnimationSession session, Action<string>? openResource = null)
     {
         this.session = session;
 
         viewport = new AvaloniaGlViewport
         {
-            RendererFactory = () => new ModelGlRenderer(fileName, session),
+            RendererFactory = () => new ModelGlRenderer(fileName, session, openResource),
         };
 
         var grid = new Grid();
