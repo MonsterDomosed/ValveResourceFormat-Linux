@@ -43,6 +43,12 @@ layout(binding = 3, std430) readonly buffer ActiveLodBitsBuffer
 };
 
 
+layout(binding = 15, std430) readonly buffer PvsHiddenBuffer
+{
+    uint pvsHiddenBits[];
+};
+
+
 layout(binding = 7, std430) buffer OccludedBoundsDebugBuffer
 {
     uint occludedCount;
@@ -55,6 +61,7 @@ layout(binding = 7, std430) buffer OccludedBoundsDebugBuffer
 };
 
 uniform bool g_bOcclusionDebugEnabled;
+uniform bool g_bPvsCullEnabled;
 
 // Depth pyramid (hierarchical depth buffer)
 uniform sampler2D g_tDepthPyramid; // bound above the reserved slots by Scene.SetOcclusionUniforms
@@ -268,6 +275,12 @@ void main()
     uvec2 lod = objectLod[objectId];
 
     if (lod.x != 0u && (lod.x & activeLodBits[lod.y]) == 0u)
+    {
+        drawCommands[drawId].instanceCount = 0u;
+        return;
+    }
+
+    if (g_bPvsCullEnabled && (pvsHiddenBits[objectId >> 5u] & (1u << (objectId & 31u))) != 0u)
     {
         drawCommands[drawId].instanceCount = 0u;
         return;

@@ -60,6 +60,8 @@ public enum ReservedBufferSlots
     QuadOverdraw = 13,
     /// <summary>Meshlet index of each aggregate indirect draw command SSBO slot.</summary>
     AggregateCommandMeshlets = 14,
+    /// <summary>Per-object PVS culling bits SSBO slot.</summary>
+    PvsHidden = 15,
 
     /// <summary>Guaranteed minimum binding point count in OpenGL 4.6.</summary>
     Max = 8,

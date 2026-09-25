@@ -457,18 +457,23 @@ namespace ValveResourceFormat.Renderer.World
                 return;
             }
 
-            if (visResource.GetBlockByType(BlockType.VXVS) is not VoxelVisibility { BaseClusterCount: > 0 } voxelVisibility)
+            var visibility = VoxelVisibility.GetWorldVisibility(visResource);
+            if (visibility is null)
             {
                 return;
             }
 
-            scene.VoxelVisibility = voxelVisibility;
-
-            var visNode = new VisibilitySceneNode(scene, voxelVisibility)
+            scene.WorldVisibility = visibility;
+            if (visibility is VoxelVisibility voxelVisibility)
             {
-                LayerName = "Visibility clusters",
-            };
-            scene.Add(visNode, false);
+                scene.VoxelVisibility = voxelVisibility;
+
+                var visNode = new VisibilitySceneNode(scene, voxelVisibility)
+                {
+                    LayerName = "Visibility clusters",
+                };
+                scene.Add(visNode, false);
+            }
         }
 
         private readonly Dictionary<string, string> LightmapNameToUniformName = new()

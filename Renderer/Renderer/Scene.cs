@@ -103,14 +103,24 @@ namespace ValveResourceFormat.Renderer
         /// <summary>The entity world this scene takes part in.</summary>
         public EntitySystem EntitySystem { get; set; }
 
-        /// <summary>Gets or sets the voxel visibility data.</summary>
+        /// <summary>Gets or sets the voxel visibility data used for debug rendering.</summary>
         public VoxelVisibility? VoxelVisibility { get; set; }
 
+        /// <summary>Gets or sets the world visibility data used for culling.</summary>
+        public IWorldVisibility? WorldVisibility { get; set; }
+
         /// <summary>Gets or sets whether PVS culling is enabled for this scene.</summary>
-        public bool EnablePvsCulling { get; set; }
+        public bool EnablePvsCulling { get; set; } = true;
 
         /// <summary>Gets or sets the PVS bitfield for the cluster at the current camera position.</summary>
         public byte[]? CurrentFramePvs { get; set; }
+
+        /// <summary>Gets whether GPU PVS culling is active for the current frame.</summary>
+        public bool PvsCullActive { get; private set; }
+
+        private uint[] pvsHiddenBits = [];
+        private int objectEntryCount;
+        private StorageBuffer? pvsHiddenGpu;
 
         private UniformBuffer<LightingConstants>? lightingBuffer;
         private UniformBuffer<EnvMapArray>? envMapBuffer;
@@ -603,6 +613,7 @@ namespace ValveResourceFormat.Renderer
             }
 
             var nodes = AllNodes.ToList();
+            objectEntryCount = nodes.Count == 0 ? 0 : (int)nodes.Max(n => n.Id) + 1;
 
             if (nodes.Count == 0)
             {
@@ -956,6 +967,75 @@ namespace ValveResourceFormat.Renderer
             return CullResults;
         }
 
+        /// <summary>
+        /// Updates the visibility row for the camera and returns whether PVS culling is active.
+        /// </summary>
+        private bool UpdatePvs(Camera camera)
+        {
+            if (!EnablePvsCulling || WorldVisibility is null)
+            {
+                CurrentFramePvs = null;
+                return false;
+            }
+
+            var row = WorldVisibility.GetVisibilityRowForPoint(camera.Location);
+            CurrentFramePvs = row.IsEmpty ? null : row.ToArray();
+            return CurrentFramePvs is { Length: > 0 };
+        }
+
+        private void ResetPvsHiddenBits()
+        {
+            PvsCullActive = EnablePvsCulling && WorldVisibility != null && CurrentFramePvs is { Length: > 0 } && objectEntryCount > 0;
+            if (!PvsCullActive)
+            {
+                return;
+            }
+
+            var wordCount = (objectEntryCount + 31) / 32;
+            if (pvsHiddenBits.Length < wordCount)
+            {
+                pvsHiddenBits = new uint[wordCount];
+            }
+
+            Array.Clear(pvsHiddenBits, 0, wordCount);
+        }
+
+        private void MarkNodeHiddenGpu(SceneNode node)
+        {
+            if (PvsCullActive && node is SceneAggregate.Fragment && node.Id < objectEntryCount)
+            {
+                var index = (int)node.Id;
+                pvsHiddenBits[index / 32] |= 1u << (index % 32);
+            }
+        }
+
+        /// <summary>
+        /// Tests a node against the current frame's PVS row.
+        /// </summary>
+        public bool IsNodeInPvs(SceneNode node) => IsNodeInPvs(node, CurrentFramePvs);
+
+        /// <summary>
+        /// Tests a node against a visibility row.
+        /// </summary>
+        public bool IsNodeInPvs(SceneNode node, ReadOnlySpan<byte> visibilityRow)
+        {
+            if (visibilityRow.IsEmpty || WorldVisibility is null || (node.Flags & ObjectTypeFlags.DisableVisCulling) != 0)
+            {
+                return true;
+            }
+
+            var clusters = node.GetVisClusters(WorldVisibility);
+            foreach (var cluster in clusters)
+            {
+                if (cluster < visibilityRow.Length * 8 && (visibilityRow[cluster >> 3] & (1 << (cluster & 7))) != 0)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         /// <summary>Gets or sets whether any translucent material in the collected draw calls samples the scene color texture.</summary>
         public bool WantsSceneColor { get; set; }
 
@@ -1122,6 +1202,8 @@ namespace ValveResourceFormat.Renderer
 
             WantsSceneColor = false;
             WantsSceneDepth = false;
+            UpdatePvs(camera);
+            ResetPvsHiddenBits();
 
             var frustum = cullFrustum ??= camera.ViewFrustum;
             var cullResults = GetFrustumCullResults(frustum);
@@ -1141,6 +1223,14 @@ namespace ValveResourceFormat.Renderer
             {
                 if (!node.Visible)
                 {
+                    continue;
+                }
+
+                if (node is MeshCollectionNode or SceneAggregate or SceneAggregate.Fragment or ParticleSceneNode
+                    && !IsNodeInPvs(node))
+                {
+                    PerfStats.Active.Count(Counter.SceneObjectCulledByPvs, 1);
+                    MarkNodeHiddenGpu(node);
                     continue;
                 }
 
@@ -1302,6 +1392,9 @@ namespace ValveResourceFormat.Renderer
             }
 
             LightingInfo.UpdateSunLightFrustum(camera, shadowMapSize);
+            var sunVisibility = EnablePvsCulling && WorldVisibility != null
+                ? WorldVisibility.SunVisibility
+                : default;
 
             for (var cascade = 0; cascade < WorldLightingInfo.SunCascadeCount; cascade++)
             {
@@ -1324,7 +1417,7 @@ namespace ValveResourceFormat.Renderer
                     includeStatic: !LightingInfo.HasBakedShadowsFromLightmap,
                     includeDynamic: true, skipFlags: ObjectTypeFlags.NoShadows,
                     CulledShadowDrawCallsCascades[cascade],
-                    LightingInfo.SunCastDirection, out var casterDepthMin, out var casterDepthMax);
+                    LightingInfo.SunCastDirection, out var casterDepthMin, out var casterDepthMax, sunVisibility);
 
                 LightingInfo.FitSunLightDepthRange(cascade, casterDepthMin, casterDepthMax);
             }
@@ -1347,10 +1440,10 @@ namespace ValveResourceFormat.Renderer
         }
 
         private void CollectShadowDrawCalls(Frustum frustum, bool includeStatic, bool includeDynamic, ObjectTypeFlags skipFlags, Dictionary<DepthOnlyBucket, List<MeshBatchRenderer.Request>> drawBuckets)
-            => CollectShadowDrawCalls(frustum, includeStatic, includeDynamic, skipFlags, drawBuckets, Vector3.Zero, out _, out _);
+            => CollectShadowDrawCalls(frustum, includeStatic, includeDynamic, skipFlags, drawBuckets, Vector3.Zero, out _, out _, default);
 
         private void CollectShadowDrawCalls(Frustum frustum, bool includeStatic, bool includeDynamic, ObjectTypeFlags skipFlags, Dictionary<DepthOnlyBucket, List<MeshBatchRenderer.Request>> drawBuckets,
-            Vector3 depthFitAxis, out float casterDepthMin, out float casterDepthMax)
+            Vector3 depthFitAxis, out float casterDepthMin, out float casterDepthMax, ReadOnlyMemory<byte> casterVisibility)
         {
             // Extent of the accepted casters along the fit axis, for tightening the light's depth range
             var depthMin = float.MaxValue;
@@ -1390,6 +1483,12 @@ namespace ValveResourceFormat.Renderer
             {
                 if (!node.Visible)
                 {
+                    continue;
+                }
+
+                if (!IsNodeInPvs(node, casterVisibility.Span))
+                {
+                    PerfStats.Active.Count(Counter.ShadowCasterCulledByPvs, 1);
                     continue;
                 }
 
@@ -1603,6 +1702,17 @@ namespace ValveResourceFormat.Renderer
             // Scratch slots, rebound by the compaction and light cull dispatches that follow
             ObjectLodGpu.BindBufferBase();
             ActiveLodBitsGpu.BindBufferBase();
+
+            var pvsWords = Math.Max(PvsCullActive ? (objectEntryCount + 31) / 32 : 1, 1);
+            if (pvsHiddenGpu == null || pvsHiddenGpu.Size < pvsWords * sizeof(uint))
+            {
+                pvsHiddenGpu?.Delete();
+                pvsHiddenGpu = StorageBuffer.Allocate<uint>(ReservedBufferSlots.PvsHidden, "PvsHidden", pvsWords, BufferUsage.Dynamic);
+            }
+
+            pvsHiddenGpu.Update(pvsHiddenBits.AsSpan(0, Math.Min(pvsHiddenBits.Length, pvsWords)), 0);
+            pvsHiddenGpu.BindBufferBase();
+            FrustumCullShader.SetUniform("g_bPvsCullEnabled", PvsCullActive);
 
             var occlusionDebugEnabled = OcclusionDebugEnabled && OcclusionDebug != null;
 
@@ -2516,6 +2626,7 @@ namespace ValveResourceFormat.Renderer
             if (disposing)
             {
                 frustumBuffer?.Dispose();
+                pvsHiddenGpu?.Delete();
                 LightBinner.Dispose();
                 lightingBuffer?.Dispose();
                 lpvBuffer?.Dispose();

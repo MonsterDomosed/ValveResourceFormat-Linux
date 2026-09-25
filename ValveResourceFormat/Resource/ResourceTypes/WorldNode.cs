@@ -42,6 +42,64 @@ namespace ValveResourceFormat.ResourceTypes
                 : [];
 
         /// <summary>
+        /// Gets the visibility cluster ids that precomputed scene-object and aggregate membership indexes into.
+        /// </summary>
+        public IReadOnlyList<long> VisClusterMembership
+            => visClusterMembership ??= Data.ContainsKey("m_visClusterMembership")
+                ? Data.GetIntegerArray("m_visClusterMembership")
+                : [];
+
+        private long[]? visClusterMembership;
+
+        /// <summary>
+        /// Gets precomputed visibility clusters for a scene object, or <see langword="null"/> when it uses bounds.
+        /// </summary>
+        public ushort[]? GetSceneObjectVisClusters(KVObject sceneObject)
+        {
+            ArgumentNullException.ThrowIfNull(sceneObject);
+            var flags = sceneObject.ContainsKey("m_nObjectTypeFlags")
+                ? sceneObject.GetEnumValue<ObjectTypeFlags>("m_nObjectTypeFlags", normalize: true)
+                : default;
+            if ((flags & ObjectTypeFlags.PrecomputedVismembers) == 0 || !sceneObject.ContainsKey("m_VisClusterMemberBits"))
+            {
+                return null;
+            }
+
+            var packed = BitOperations.RotateRight((uint)sceneObject.GetIntegerProperty("m_VisClusterMemberBits"), 8);
+            return SliceVisClusterMembership((int)(packed & 0xFFFFFF), (int)(packed >> 24));
+        }
+
+        /// <summary>
+        /// Gets precomputed visibility clusters for an aggregate fragment, or <see langword="null"/> when it uses bounds.
+        /// </summary>
+        public ushort[]? GetAggregateMeshVisClusters(KVObject aggregateMesh)
+        {
+            ArgumentNullException.ThrowIfNull(aggregateMesh);
+            var flags = aggregateMesh.ContainsKey("m_objectFlags")
+                ? aggregateMesh.GetEnumValue<ObjectTypeFlags>("m_objectFlags", normalize: true)
+                : default;
+            var count = aggregateMesh.GetInt32Property("m_nVisClusterMemberCount");
+            if ((flags & ObjectTypeFlags.PrecomputedVismembers) == 0 || count == 0)
+            {
+                return null;
+            }
+
+            return SliceVisClusterMembership(aggregateMesh.GetInt32Property("m_nVisClusterMemberOffset"), count);
+        }
+
+        private ushort[] SliceVisClusterMembership(int offset, int count)
+        {
+            var membership = VisClusterMembership;
+            var clusters = new ushort[offset < 0 ? 0 : Math.Clamp(membership.Count - offset, 0, count)];
+            for (var i = 0; i < clusters.Length; i++)
+            {
+                clusters[i] = (ushort)membership[offset + i];
+            }
+
+            return clusters;
+        }
+
+        /// <summary>
         /// Gets the layer names.
         /// </summary>
         public IReadOnlyList<string> LayerNames
