@@ -32,7 +32,7 @@ public sealed class ResourceDataViewer(IViewerContext viewerContext, IFileLoader
 
         if (stream != null)
         {
-            resource.Read(stream, verifyFileSize: false);
+            resource.Read(stream);
         }
         else
         {
