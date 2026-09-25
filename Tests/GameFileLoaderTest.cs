@@ -44,7 +44,7 @@ public class GameFileLoaderTest
             File.Copy(currentSource, currentPath);
             File.Copy(baseSource, Path.Combine(gameRoot, "pak01_dir.vpk"));
             File.Copy(baseSource, dependencyPath);
-            File.WriteAllText(Path.Combine(addonRoot, "addoninfo.txt"), """
+            await File.WriteAllTextAsync(Path.Combine(addonRoot, "addoninfo.txt"), """
                 "addoninfo"
                 {
                     "Dependencies"
@@ -53,7 +53,7 @@ public class GameFileLoaderTest
                     }
                 }
                 """);
-            File.WriteAllText(Path.Combine(gameRoot, "gameinfo.gi"), """
+            await File.WriteAllTextAsync(Path.Combine(gameRoot, "gameinfo.gi"), """
                 "gameinfo"
                 {
                     "game" "TestGame"
@@ -104,7 +104,7 @@ public class GameFileLoaderTest
             var gameInfoPath = Path.Combine(gameRoot, "gameinfo.gi");
             Directory.CreateDirectory(gameRoot);
             File.Copy(source, Path.Combine(gameRoot, "pak01_dir.vpk"));
-            File.WriteAllText(gameInfoPath, """
+            await File.WriteAllTextAsync(gameInfoPath, """
                 "gameinfo"
                 {
                     "game" "TestGame"
