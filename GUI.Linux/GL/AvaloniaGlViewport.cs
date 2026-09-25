@@ -8,6 +8,7 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.OpenGL;
 using Avalonia.OpenGL.Controls;
+using Avalonia.OpenGL.Egl;
 using GUI.Linux.Types.GLViewers;
 using GUI.Linux.Utils;
 using ValveResourceFormat.Renderer;
@@ -25,6 +26,8 @@ namespace GUI.Linux.GL;
 /// </summary>
 internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
 {
+    private static readonly EglInterface EglApi = new();
+
     /// <summary>Raised after every rendered frame. Used by automated checks.</summary>
     public event Action? FrameRendered;
 
@@ -37,6 +40,7 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
     private GraphicsDevice? device;
     private GraphicsContext? context;
     private IGLViewportRenderer? renderer;
+    private int appliedVsync = -1;
     private long lastTicks;
     private Point lastPointer;
     private Framebuffer screenFramebuffer = Framebuffer.GLDefaultFramebuffer;
@@ -106,6 +110,7 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
     protected override void OnOpenGlInit(GlInterface gl)
     {
         OpenGL.LoadBindings(new GlBindingsContext(gl));
+        ApplyVerticalSync();
 
         device = GraphicsDevice.Create();
         context = device.CreateContext(new AvaloniaGraphicsSurface());
@@ -125,6 +130,8 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         {
             return;
         }
+
+        ApplyVerticalSync();
 
         var now = Stopwatch.GetTimestamp();
         var frameTime = (now - lastTicks) / (double)Stopwatch.Frequency;
@@ -149,12 +156,27 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         }
     }
 
+    private void ApplyVerticalSync()
+    {
+        if (appliedVsync == Settings.Config.Vsync)
+        {
+            return;
+        }
+
+        var context = EglApi.GetCurrentContext();
+        if (context != IntPtr.Zero && EglApi.SwapInterval(context, Settings.Config.Vsync))
+        {
+            appliedVsync = Settings.Config.Vsync;
+        }
+    }
+
     protected override void OnOpenGlDeinit(GlInterface gl)
     {
         renderer?.Dispose();
         renderer = null;
         context = null;
         device = null;
+        appliedVsync = -1;
         screenFramebuffer = Framebuffer.GLDefaultFramebuffer;
     }
 
