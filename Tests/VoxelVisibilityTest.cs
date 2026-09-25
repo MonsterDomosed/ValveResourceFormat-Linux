@@ -44,16 +44,45 @@ namespace Tests
 
             var centerPvs = vis.GetPVSForPoint(center);
             var outsidePvs = vis.GetPVSForPoint(outside);
+            var outsideVisibility = vis.GetVisibilityRowForPoint(outside);
 
             using (Assert.Multiple())
             {
                 await Assert.That(centerCluster).IsEqualTo(0);
-                await Assert.That(outsideCluster).IsEqualTo(0);
+                await Assert.That(outsideCluster).IsEqualTo(-1);
 
                 await Assert.That(centerPvs).IsNotNull();
                 await Assert.That(centerPvs!.Length).IsEqualTo(4);
                 await Assert.That(centerPvs.Count(b => b != 0)).IsEqualTo(4);
                 await Assert.That(outsidePvs).IsNull();
+                await Assert.That(outsideVisibility.Length).IsEqualTo(4);
+                await Assert.That(outsideVisibility.ToArray().All(StaticValue => StaticValue == 0xFF)).IsTrue();
+            }
+        }
+
+        [Test]
+        public async Task ResolvesClustersForBoxes()
+        {
+            using var resource = new Resource();
+            var vis = LoadVis(resource);
+
+            var center = (vis.MinBounds + vis.MaxBounds) / 2f;
+            var clusters = new ushort[VoxelVisibility.MaxClusters];
+
+            var inside = vis.GetVisClusterList(center - Vector3.One, center + Vector3.One, clusters);
+            var insideCluster = clusters[0];
+
+            var outside = vis.GetVisClusterList(vis.MaxBounds + new Vector3(10000f), vis.MaxBounds + new Vector3(10100f), clusters);
+            var everything = vis.GetVisClusterList(vis.MinBounds - Vector3.One, vis.MaxBounds + Vector3.One, clusters);
+            var everythingCluster = clusters[0];
+
+            using (Assert.Multiple())
+            {
+                await Assert.That(inside).IsEqualTo(1);
+                await Assert.That((int)insideCluster).IsEqualTo(vis.GetClusterForPosition(center));
+                await Assert.That(outside).IsZero();
+                await Assert.That(everything).IsEqualTo(1);
+                await Assert.That((int)everythingCluster).IsZero();
             }
         }
 
