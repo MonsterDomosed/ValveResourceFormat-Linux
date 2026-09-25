@@ -90,6 +90,27 @@ namespace ValveResourceFormat.Utils
         }
 
         /// <summary>
+        /// Scales <paramref name="value"/> to unit length, returning <paramref name="fallback"/> when its
+        /// squared length does not exceed <paramref name="minimumLengthSquared"/>.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector3 SafeNormalize(Vector3 value, Vector3 fallback, float minimumLengthSquared = 0f)
+        {
+            var lengthSquared = value.LengthSquared();
+
+            return lengthSquared > minimumLengthSquared ? value / MathF.Sqrt(lengthSquared) : fallback;
+        }
+
+        /// <summary>
+        /// The largest of a vector's three components.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static float MaxComponent(this Vector3 v)
+        {
+            return MathF.Max(v.X, MathF.Max(v.Y, v.Z));
+        }
+
+        /// <summary>
         /// Swaps <paramref name="min"/> and <paramref name="max"/> if <paramref name="min"/> > <paramref name="max"/>.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

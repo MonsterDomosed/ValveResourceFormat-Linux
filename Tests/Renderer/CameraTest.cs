@@ -82,6 +82,75 @@ namespace Tests.Renderer
             await Assert.That(camera.Roll).IsEqualTo(0f).Within(Tolerance);
         }
 
+        /// <summary>
+        /// Framing has to clear the whole box, including the part of it that reaches toward the camera.
+        /// Measuring only the screen-plane extents left the camera inside anything long along its view
+        /// direction.
+        /// </summary>
+        [Test]
+        public async Task FramingDistanceStaysOutsideTheBox()
+        {
+            var camera = MakeCamera(new Vector3(0f, 0f, 0f));
+            camera.SetViewportSize(1920, 1080);
+
+            // Long along +X, which is where the camera is looking from.
+            var size = new Vector3(1000f, 4f, 4f);
+            var distance = camera.GetFramingDistance(size, camera.Right, camera.Up);
+
+            await Assert.That(distance).IsGreaterThan(size.X * 0.5f + camera.NearPlane);
+        }
+
+        /// <summary>Every corner of the box lands inside the view at the distance reported.</summary>
+        [Test]
+        public async Task FramingDistanceFitsEveryCornerInTheFrustum()
+        {
+            var camera = MakeCamera(new Vector3(0f, 0f, 0f));
+            camera.SetViewportSize(1920, 1080);
+
+            var size = new Vector3(120f, 40f, 300f);
+            var distance = camera.GetFramingDistance(size, camera.Right, camera.Up);
+
+            var tanVertical = MathF.Tan(camera.GetFOV() * 0.5f);
+            var tanHorizontal = tanVertical * camera.AspectRatio;
+            var half = size * 0.5f;
+            var worst = 0f;
+
+            for (var i = 0; i < 8; i++)
+            {
+                var corner = new Vector3(
+                    (i & 1) != 0 ? half.X : -half.X,
+                    (i & 2) != 0 ? half.Y : -half.Y,
+                    (i & 4) != 0 ? half.Z : -half.Z);
+
+                // The camera sits at -distance along its forward, so a corner is this far down the view
+                var depth = Vector3.Dot(corner, camera.Forward) + distance;
+                var horizontal = MathF.Abs(Vector3.Dot(corner, camera.Right));
+                var vertical = MathF.Abs(Vector3.Dot(corner, camera.Up));
+
+                worst = MathF.Max(worst, MathF.Max(horizontal / (tanHorizontal * depth), vertical / (tanVertical * depth)));
+            }
+
+            // One is exactly touching the frustum edge, none spills past it.
+            await Assert.That(worst).IsEqualTo(1f).Within(Tolerance);
+        }
+
+        /// <summary>
+        /// The direction overload frames from a level camera looking along <c>forward</c>, which is what
+        /// a caller sizes its orbit against when it has not moved the camera yet.
+        /// </summary>
+        [Test]
+        public async Task FramingDistanceFromDirectionMatchesTheCameraBasis()
+        {
+            var camera = MakeCamera(new Vector3(0f, 0f, 0f));
+            camera.SetViewportSize(1920, 1080);
+
+            var size = new Vector3(64f, 96f, 32f);
+            var fromDirection = camera.GetFramingDistance(size, camera.Forward);
+            var fromBasis = camera.GetFramingDistance(size, camera.Right, camera.Up);
+
+            await Assert.That(fromDirection).IsEqualTo(fromBasis).Within(Tolerance);
+        }
+
         /// <summary>Positive pitch looks down, as in a QAngle and unlike most camera conventions.</summary>
         [Test]
         public async Task PositivePitchLooksDown()

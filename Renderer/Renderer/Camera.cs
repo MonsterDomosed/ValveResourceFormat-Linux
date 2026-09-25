@@ -343,39 +343,7 @@ namespace ValveResourceFormat.Renderer
 
             RecalculateDirectionVectors();
 
-            var fov = GetFOV();
-            var halfFovVertical = fov * 0.5f;
-            var halfFovHorizontal = MathF.Atan(MathF.Tan(halfFovVertical) * AspectRatio);
-
-            var halfWidth = width * 0.5f;
-            var halfHeight = height * 0.5f;
-            var halfDepth = depth * 0.5f;
-
-            // this calculates the apparent size in screen space by projecting onto camera axis
-            var maxHorizontalExtent = 0f;
-            var maxVerticalExtent = 0f;
-
-            for (var i = 0; i < 8; i++)
-            {
-                var corner = new Vector3(
-                    (i & 1) != 0 ? halfWidth : -halfWidth,
-                    (i & 2) != 0 ? halfHeight : -halfHeight,
-                    (i & 4) != 0 ? halfDepth : -halfDepth
-                );
-
-                var horizontalDist = MathF.Abs(Vector3.Dot(corner, Right));
-                var verticalDist = MathF.Abs(Vector3.Dot(corner, Up));
-
-                maxHorizontalExtent = MathF.Max(maxHorizontalExtent, horizontalDist);
-                maxVerticalExtent = MathF.Max(maxVerticalExtent, verticalDist);
-            }
-
-            var distanceForVerticalFov = maxVerticalExtent / MathF.Tan(halfFovVertical);
-            var distanceForHorizontalFov = maxHorizontalExtent / MathF.Tan(halfFovHorizontal);
-
-            var distance = MathF.Max(distanceForVerticalFov, distanceForHorizontalFov);
-
-            Location = objectPosition - Forward * distance;
+            Location = objectPosition - Forward * GetFramingDistance(new Vector3(width, height, depth), Right, Up);
 
             LookAt(objectPosition);
         }
@@ -398,6 +366,55 @@ namespace ValveResourceFormat.Renderer
             RecalculateDirectionVectors();
 
             FrameObject(objectPosition, width, height, depth);
+        }
+
+        /// <summary>
+        /// How far from its center a box has to be viewed from for all of it to fit on screen.
+        /// </summary>
+        /// <param name="size">The box's dimensions.</param>
+        /// <param name="right">The camera's right vector at the angle it frames the box from.</param>
+        /// <param name="up">The camera's up vector at that angle.</param>
+        public float GetFramingDistance(Vector3 size, Vector3 right, Vector3 up)
+        {
+            var tanVertical = MathF.Tan(GetFOV() * 0.5f);
+            var tanHorizontal = tanVertical * AspectRatio;
+
+            var forward = Vector3.Cross(up, right);
+            var half = size * 0.5f;
+
+            var distance = 0f;
+            var nearestCorner = 0f;
+
+            for (var i = 0; i < 8; i++)
+            {
+                var corner = new Vector3(
+                    (i & 1) != 0 ? half.X : -half.X,
+                    (i & 2) != 0 ? half.Y : -half.Y,
+                    (i & 4) != 0 ? half.Z : -half.Z
+                );
+
+                // The frustum widens with depth, so a corner in front of the center has less of it to fit into
+                var depth = Vector3.Dot(corner, forward);
+
+                distance = MathF.Max(distance, MathF.Abs(Vector3.Dot(corner, right)) / tanHorizontal - depth);
+                distance = MathF.Max(distance, MathF.Abs(Vector3.Dot(corner, up)) / tanVertical - depth);
+
+                nearestCorner = MathF.Min(nearestCorner, depth);
+            }
+
+            // Standing inside the bounds fits nothing, however little of the view they take up
+            return MathF.Max(distance, NearPlane - nearestCorner);
+        }
+
+        /// <inheritdoc cref="GetFramingDistance(Vector3, Vector3, Vector3)"/>
+        /// <param name="size">The box's dimensions.</param>
+        /// <param name="forward">Unit direction the camera looks along, in place of its own.</param>
+        public float GetFramingDistance(Vector3 size, Vector3 forward)
+        {
+            // A camera that frames something is level, so its right is horizontal
+            var right = MathUtils.SafeNormalize(Vector3.Cross(forward, Vector3.UnitZ), Vector3.UnitX);
+
+            return GetFramingDistance(size, right, Vector3.Cross(right, forward));
         }
 
         /// <summary>
