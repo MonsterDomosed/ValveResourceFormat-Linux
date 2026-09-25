@@ -72,6 +72,7 @@ internal sealed class WorldSceneCore : GLSceneViewerCore
             Input.Camera.LookAt(Vector3.Zero);
         }
 
+        Input.TryLoadViewmodel(Scene);
         Input.EntitySystem = Scene.EntitySystem;
         Scene.EntitySystem.SpawnPlayer(Input.PlayerMovement);
 
