@@ -1,11 +1,11 @@
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using ValvePak;
 using ValveResourceFormat;
 using ValveResourceFormat.Graphs;
 using ValveResourceFormat.IO;
 using ValveResourceFormat.ResourceTypes;
-using ValvePak;
 
 namespace Tests.IO
 {

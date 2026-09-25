@@ -1,10 +1,10 @@
 using System.Linq;
 using System.Threading.Tasks;
 using GUI.Linux.Viewers;
+using ValvePak;
 using ValveResourceFormat;
 using ValveResourceFormat.Graphs;
 using ValveResourceFormat.IO;
-using ValvePak;
 
 namespace Tests
 {
