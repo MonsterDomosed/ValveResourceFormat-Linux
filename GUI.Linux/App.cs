@@ -1592,6 +1592,11 @@ internal sealed class App : Application
                 await Program.StdOut.WriteLineAsync($"[self-check] {label}: model has no hitbox sets, controls hidden").ConfigureAwait(true);
             }
 
+            if (session.GetSnapshot().HasBones || session.GetSnapshot().HasAttachments)
+            {
+                await ExerciseModelSkeletonControlsAsync(control, label).ConfigureAwait(true);
+            }
+
             window.CloseTabContaining(viewport);
             await WaitForRendererDisposalAsync(renderer).ConfigureAwait(true);
 
@@ -1776,6 +1781,26 @@ internal sealed class App : Application
 
         await Program.StdOut.WriteLineAsync(
             $"[self-check] {label} hitboxes: sets={control.HitboxSelector.Items.Count - 1}, select={selected}, clear={cleared}").ConfigureAwait(true);
+    }
+
+    private static async Task ExerciseModelSkeletonControlsAsync(ModelViewerControl control, string label)
+    {
+        // Toggle through the real checkboxes so their IsCheckedChanged handlers queue the commands.
+        control.ShowBonesCheckBox.IsChecked = true;
+        control.ShowAttachmentsCheckBox.IsChecked = true;
+
+        // The render thread applies them on its next frame, so give it a moment before reading back.
+        await Task.Delay(250).ConfigureAwait(true);
+
+        var attachments = control.AttachmentList.Items.Count;
+        var listed = attachments > 0 && control.AttachmentList.IsVisible;
+
+        control.ShowBonesCheckBox.IsChecked = false;
+        control.ShowAttachmentsCheckBox.IsChecked = false;
+        await Task.Delay(150).ConfigureAwait(true);
+
+        await Program.StdOut.WriteLineAsync(
+            $"[self-check] {label} skeleton: bones toggled, attachments listed={attachments} visible={listed}").ConfigureAwait(true);
     }
 
     private static async Task SimulatePointerDragAsync(AvaloniaGlViewport viewport, ViewerKey button, System.Numerics.Vector2 delta, int frames)

@@ -18,7 +18,12 @@ internal readonly record struct ModelAnimationCommand(
     bool RestartRequested,
     bool ResetViewRequested,
     bool HitboxSetChanged,
-    string? HitboxSetName);
+    string? HitboxSetName,
+    bool SkeletonChanged,
+    bool ShowBones,
+    bool AttachmentsChanged,
+    bool ShowAttachments,
+    string[]? SelectedAttachments);
 
 /// <summary>
 /// A consistent copy of the model viewer's animation state, safe to read from the UI thread.
@@ -36,13 +41,18 @@ internal readonly record struct ModelAnimationSnapshot(
     float Duration,
     float Fps,
     string[] HitboxSets,
-    string? ActiveHitboxSet)
+    string? ActiveHitboxSet,
+    string[] Attachments,
+    bool HasBones)
 {
     /// <summary>Whether the model exposes at least one playable animation.</summary>
     public bool HasAnimations => Animations.Length > 0;
 
     /// <summary>Whether the model exposes any hitbox sets to draw.</summary>
     public bool HasHitboxSets => HitboxSets.Length > 0;
+
+    /// <summary>Whether the model exposes any attachment points to draw.</summary>
+    public bool HasAttachments => Attachments.Length > 0;
 }
 
 /// <summary>
@@ -88,6 +98,13 @@ internal sealed class ModelAnimationSession
     private string? pendingHitboxSet;
     private string[] hitboxSets = [];
     private string? activeHitboxSet;
+    private bool skeletonChanged;
+    private bool pendingShowBones;
+    private bool attachmentsChanged;
+    private bool pendingShowAttachments;
+    private string[]? pendingAttachments;
+    private string[] attachments = [];
+    private bool hasBones;
 
     /// <summary>Selects an animation by name, or the bind pose when <paramref name="name"/> is null.</summary>
     public void SelectAnimation(string? name)
@@ -167,6 +184,36 @@ internal sealed class ModelAnimationSession
         }
     }
 
+    /// <summary>Requests that the bone hierarchy be drawn or hidden.</summary>
+    public void SetShowBones(bool value)
+    {
+        lock (sync)
+        {
+            skeletonChanged = true;
+            pendingShowBones = value;
+        }
+    }
+
+    /// <summary>Requests that the attachment markers be drawn or hidden.</summary>
+    public void SetShowAttachments(bool value)
+    {
+        lock (sync)
+        {
+            attachmentsChanged = true;
+            pendingShowAttachments = value;
+        }
+    }
+
+    /// <summary>Requests that only the named attachments are drawn.</summary>
+    public void SelectAttachments(string[] names)
+    {
+        lock (sync)
+        {
+            attachmentsChanged = true;
+            pendingAttachments = names;
+        }
+    }
+
     /// <summary>Takes the pending commands and clears them. Called on the render thread each frame.</summary>
     public ModelAnimationCommand ConsumeCommands()
     {
@@ -179,7 +226,9 @@ internal sealed class ModelAnimationSession
                 speedChanged, pendingSpeed,
                 seekRequested, pendingSeek,
                 restartRequested, resetViewRequested,
-                hitboxSetChanged, pendingHitboxSet);
+                hitboxSetChanged, pendingHitboxSet,
+                skeletonChanged, pendingShowBones,
+                attachmentsChanged, pendingShowAttachments, pendingAttachments);
 
             animationChanged = false;
             pendingAnimation = null;
@@ -191,6 +240,9 @@ internal sealed class ModelAnimationSession
             resetViewRequested = false;
             hitboxSetChanged = false;
             pendingHitboxSet = null;
+            skeletonChanged = false;
+            attachmentsChanged = false;
+            pendingAttachments = null;
 
             return command;
         }
@@ -210,7 +262,9 @@ internal sealed class ModelAnimationSession
         float totalDuration,
         float framesPerSecond,
         string[] hitboxSetNames,
-        string? activeSet)
+        string? activeSet,
+        string[] attachmentNames,
+        bool modelHasBones)
     {
         lock (sync)
         {
@@ -227,6 +281,8 @@ internal sealed class ModelAnimationSession
             fps = framesPerSecond;
             hitboxSets = hitboxSetNames;
             activeHitboxSet = activeSet;
+            attachments = attachmentNames;
+            hasBones = modelHasBones;
         }
     }
 
@@ -235,7 +291,7 @@ internal sealed class ModelAnimationSession
     {
         lock (sync)
         {
-            return new(ready, animations, activeAnimation, playing, looping, speed, frame, frameCount, time, duration, fps, hitboxSets, activeHitboxSet);
+            return new(ready, animations, activeAnimation, playing, looping, speed, frame, frameCount, time, duration, fps, hitboxSets, activeHitboxSet, attachments, hasBones);
         }
     }
 }

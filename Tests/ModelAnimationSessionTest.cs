@@ -118,7 +118,7 @@ namespace Tests
         public async Task HitboxSelectionIsDeliveredOnceAndCanBeCleared()
         {
             var session = new ModelAnimationSession();
-            session.Publish(true, [], null, false, true, 1f, 0, 0, 0f, 0f, 0f, ["head", "body"], null);
+            session.Publish(true, [], null, false, true, 1f, 0, 0, 0f, 0f, 0f, ["head", "body"], null, [], true);
 
             using (Assert.Multiple())
             {
@@ -145,6 +145,41 @@ namespace Tests
         }
 
         [Test]
+        public async Task SkeletonAndAttachmentTogglesAreDeliveredOnce()
+        {
+            var session = new ModelAnimationSession();
+            session.Publish(true, [], null, false, true, 1f, 0, 0, 0f, 0f, 0f, [], null, ["muzzle", "eject"], true);
+
+            using (Assert.Multiple())
+            {
+                // Bones and attachments are the two ways a model offers these overlays.
+                await Assert.That(session.GetSnapshot().HasBones).IsTrue();
+                await Assert.That(session.GetSnapshot().HasAttachments).IsTrue();
+                await Assert.That(session.ConsumeCommands().SkeletonChanged).IsFalse();
+            }
+
+            session.SetShowBones(true);
+            session.SetShowAttachments(true);
+            session.SelectAttachments(["muzzle"]);
+
+            var command = session.ConsumeCommands();
+
+            using (Assert.Multiple())
+            {
+                await Assert.That(command.SkeletonChanged).IsTrue();
+                await Assert.That(command.ShowBones).IsTrue();
+                await Assert.That(command.AttachmentsChanged).IsTrue();
+                await Assert.That(command.ShowAttachments).IsTrue();
+                await Assert.That(command.SelectedAttachments).IsEquivalentTo(["muzzle"]);
+
+                var second = session.ConsumeCommands();
+                await Assert.That(second.SkeletonChanged).IsFalse();
+                await Assert.That(second.AttachmentsChanged).IsFalse();
+                await Assert.That(second.SelectedAttachments).IsNull();
+            }
+        }
+
+        [Test]
         public async Task PublishesTheRenderThreadStateToTheUi()
         {
             var session = new ModelAnimationSession();
@@ -162,7 +197,9 @@ namespace Tests
                 totalDuration: 0.8f,
                 framesPerSecond: 30f,
                 hitboxSetNames: ["head", "body"],
-                activeSet: null);
+                activeSet: null,
+                attachmentNames: ["muzzle"],
+                modelHasBones: true);
 
             var snapshot = session.GetSnapshot();
 
@@ -185,6 +222,9 @@ namespace Tests
                 await Assert.That(snapshot.HasHitboxSets).IsTrue();
                 await Assert.That(snapshot.HitboxSets[0]).IsEqualTo("head");
                 await Assert.That(snapshot.ActiveHitboxSet).IsNull();
+                await Assert.That(snapshot.HasAttachments).IsTrue();
+                await Assert.That(snapshot.Attachments[0]).IsEqualTo("muzzle");
+                await Assert.That(snapshot.HasBones).IsTrue();
             }
         }
 
@@ -193,7 +233,7 @@ namespace Tests
         {
             var session = new ModelAnimationSession();
 
-            session.Publish(true, [], null, false, true, 1f, 0, 0, 0f, 0f, 0f, [], null);
+            session.Publish(true, [], null, false, true, 1f, 0, 0, 0f, 0f, 0f, [], null, [], false);
             var snapshot = session.GetSnapshot();
 
             using (Assert.Multiple())

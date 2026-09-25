@@ -26,9 +26,11 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
 
     private ModelSceneNode? modelSceneNode;
     private HitboxSetSceneNode? hitboxSetSceneNode;
+    private SkeletonSceneNode? skeletonSceneNode;
     private string[] animations = [];
     private string[] hitboxSets = [];
     private string? activeHitboxSet;
+    private string[] attachmentNames = [];
 
     public ModelSceneCore(ISceneViewerContext context, RendererContext rendererContext, IGLViewerHost host, ValveResourceFormat.Resource resource, Model model, ModelAnimationSession session, Action<string>? openResource = null)
         : base(context, rendererContext, host, Frustum.CreateEmpty())
@@ -65,13 +67,17 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
 
         animations = [.. modelSceneNode.Animations.Keys.OrderBy(static name => name, StringComparer.OrdinalIgnoreCase)];
 
+        if (model.Skeleton.Bones.Length > 0 || model.Attachments.Count > 0)
+        {
+            attachmentNames = [.. model.Attachments.Keys.OrderBy(static name => name, StringComparer.OrdinalIgnoreCase)];
+            skeletonSceneNode = new SkeletonSceneNode(Scene, modelSceneNode.AnimationController.Pose, model.Skeleton, model.Attachments);
+            Scene.Add(skeletonSceneNode, true);
+        }
+
         if (model.HitboxSets.Count > 0)
         {
             hitboxSets = [.. model.HitboxSets.Keys.OrderBy(static name => name, StringComparer.OrdinalIgnoreCase)];
-            hitboxSetSceneNode = new HitboxSetSceneNode(Scene, modelSceneNode.AnimationController, model.HitboxSets)
-            {
-                Parent = modelSceneNode,
-            };
+            hitboxSetSceneNode = new HitboxSetSceneNode(Scene, modelSceneNode.AnimationController, model.HitboxSets);
             Scene.Add(hitboxSetSceneNode, true);
         }
 
@@ -94,7 +100,30 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
         base.OnPrePaint(frameTime);
 
         ApplyCommands();
+        FollowModelTransform();
         PublishState();
+    }
+
+    /// <summary>
+    /// Keeps the debug overlays where the model is, so they follow anything that moves it. They stay
+    /// root nodes because the scene only updates root nodes itself.
+    /// </summary>
+    private void FollowModelTransform()
+    {
+        if (modelSceneNode is null)
+        {
+            return;
+        }
+
+        if (skeletonSceneNode is not null)
+        {
+            skeletonSceneNode.Transform = modelSceneNode.Transform;
+        }
+
+        if (hitboxSetSceneNode is not null)
+        {
+            hitboxSetSceneNode.Transform = modelSceneNode.Transform;
+        }
     }
 
     private void ApplyCommands()
@@ -166,13 +195,32 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
             activeHitboxSet = command.HitboxSetName;
             hitboxSetSceneNode.SetHitboxSet(command.HitboxSetName);
         }
+
+        if (skeletonSceneNode is not null)
+        {
+            if (command.SkeletonChanged)
+            {
+                skeletonSceneNode.ShowBones = command.ShowBones;
+            }
+
+            if (command.AttachmentsChanged)
+            {
+                skeletonSceneNode.ShowAttachments = command.ShowAttachments;
+
+                if (command.SelectedAttachments is { } selected)
+                {
+                    skeletonSceneNode.SelectedAttachments.Clear();
+                    skeletonSceneNode.SelectedAttachments.UnionWith(selected);
+                }
+            }
+        }
     }
 
     private void PublishState()
     {
         if (modelSceneNode is null)
         {
-            session.Publish(false, animations, null, false, true, 1f, 0, 0, 0f, 0f, 0f, hitboxSets, activeHitboxSet);
+            session.Publish(false, animations, null, false, true, 1f, 0, 0, 0f, 0f, 0f, hitboxSets, activeHitboxSet, attachmentNames, model.Skeleton.Bones.Length > 0);
             return;
         }
 
@@ -200,7 +248,9 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
             animation?.Duration ?? 0f,
             animation?.Fps ?? 0f,
             hitboxSets,
-            activeHitboxSet);
+            activeHitboxSet,
+            attachmentNames,
+            model.Skeleton.Bones.Length > 0);
     }
 
     protected override void OnPicked(object? sender, PickingResponse pickingResponse)

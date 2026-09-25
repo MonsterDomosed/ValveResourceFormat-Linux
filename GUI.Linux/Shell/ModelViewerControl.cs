@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -27,8 +28,12 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
 
     private readonly StackPanel animationGroup = new() { Spacing = 8, IsVisible = false };
     private readonly StackPanel hitboxGroup = new() { Spacing = 8, IsVisible = false };
+    private readonly StackPanel skeletonGroup = new() { Spacing = 8, IsVisible = false };
     private readonly ComboBox animationSelector = new();
     private readonly ComboBox hitboxSelector = new();
+    private readonly CheckBox showBonesCheckBox = new() { Content = "Show bones" };
+    private readonly CheckBox showAttachmentsCheckBox = new() { Content = "Show attachments" };
+    private readonly ListBox attachmentList = new() { SelectionMode = SelectionMode.Multiple, IsVisible = false, MaxHeight = 160 };
     private readonly Button playPauseButton = new() { Content = "Pause", Width = 84 };
     private readonly Button restartButton = new() { Content = "Restart", Width = 84 };
     private readonly Button resetViewButton = new() { Content = "Reset view", HorizontalAlignment = HorizontalAlignment.Stretch };
@@ -61,6 +66,8 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
     private float lastSpeed = float.NaN;
     private string? lastHitboxSet;
     private bool hitboxSetsPopulated;
+    private string[] populatedAttachments = [];
+    private bool attachmentsPopulated;
 
     public ModelViewerControl(string fileName, ModelAnimationSession session, Action<string>? openResource = null)
     {
@@ -160,6 +167,17 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
 
         panel.Children.Add(hitboxGroup);
 
+        showBonesCheckBox.IsCheckedChanged += (_, _) => SetBonesVisible(showBonesCheckBox.IsChecked == true);
+        skeletonGroup.Children.Add(showBonesCheckBox);
+
+        showAttachmentsCheckBox.IsCheckedChanged += (_, _) => SetAttachmentsVisible(showAttachmentsCheckBox.IsChecked == true);
+        skeletonGroup.Children.Add(showAttachmentsCheckBox);
+
+        attachmentList.SelectionChanged += OnAttachmentsSelected;
+        skeletonGroup.Children.Add(attachmentList);
+
+        panel.Children.Add(skeletonGroup);
+
         return new ScrollViewer
         {
             Content = panel,
@@ -173,6 +191,38 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
         {
             session.SetLooping(value);
         }
+    }
+
+    private void SetBonesVisible(bool value)
+    {
+        if (!updatingFromSnapshot)
+        {
+            session.SetShowBones(value);
+        }
+    }
+
+    private void SetAttachmentsVisible(bool value)
+    {
+        attachmentList.IsVisible = value;
+
+        if (!updatingFromSnapshot)
+        {
+            session.SetShowAttachments(value);
+        }
+    }
+
+    private void OnAttachmentsSelected(object? sender, SelectionChangedEventArgs e)
+    {
+        if (updatingFromSnapshot || !attachmentList.IsVisible)
+        {
+            return;
+        }
+
+        var selected = attachmentList.SelectedItems is { } items
+            ? items.OfType<string>().ToArray()
+            : [];
+
+        session.SelectAttachments(selected);
     }
 
     private void BeginScrub()
@@ -235,6 +285,7 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
 
         animationGroup.IsVisible = snapshot.HasAnimations;
         hitboxGroup.IsVisible = snapshot.HasHitboxSets;
+        skeletonGroup.IsVisible = snapshot.HasBones || snapshot.HasAttachments;
 
         if (snapshot.HasAnimations && !NamesEqual(populatedAnimations, snapshot.Animations))
         {
@@ -244,6 +295,11 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
         if (snapshot.HasHitboxSets && (!hitboxSetsPopulated || !NamesEqual(populatedHitboxSets, snapshot.HitboxSets)))
         {
             PopulateHitboxSets(snapshot.HitboxSets);
+        }
+
+        if (snapshot.HasAttachments && (!attachmentsPopulated || !NamesEqual(populatedAttachments, snapshot.Attachments)))
+        {
+            PopulateAttachments(snapshot.Attachments);
         }
 
         updatingFromSnapshot = true;
@@ -380,6 +436,29 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
         }
     }
 
+    private void PopulateAttachments(string[] attachments)
+    {
+        populatedAttachments = attachments;
+        attachmentsPopulated = true;
+
+        updatingFromSnapshot = true;
+
+        try
+        {
+            attachmentList.Items.Clear();
+            attachmentList.SelectedItems?.Clear();
+
+            foreach (var name in attachments)
+            {
+                attachmentList.Items.Add(name);
+            }
+        }
+        finally
+        {
+            updatingFromSnapshot = false;
+        }
+    }
+
     /// <summary>The animation selector, for the self-check to drive the real control.</summary>
     internal ComboBox AnimationSelector => animationSelector;
 
@@ -388,6 +467,18 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
 
     /// <summary>Whether the hitbox controls are shown for the current model.</summary>
     internal bool HitboxControlsVisible => hitboxGroup.IsVisible;
+
+    /// <summary>The bone overlay checkbox, for the self-check to drive the real control.</summary>
+    internal CheckBox ShowBonesCheckBox => showBonesCheckBox;
+
+    /// <summary>The attachment overlay checkbox, for the self-check to drive the real control.</summary>
+    internal CheckBox ShowAttachmentsCheckBox => showAttachmentsCheckBox;
+
+    /// <summary>The attachment name list, for the self-check to inspect the real control.</summary>
+    internal ListBox AttachmentList => attachmentList;
+
+    /// <summary>Whether the skeleton overlay controls are shown for the current model.</summary>
+    internal bool SkeletonControlsVisible => skeletonGroup.IsVisible;
 
     /// <summary>The play/pause button, for the self-check to click the real control.</summary>
     internal Button PlayPauseButton => playPauseButton;
