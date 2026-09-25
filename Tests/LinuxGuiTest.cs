@@ -258,6 +258,33 @@ namespace Tests
         }
 
         [Test]
+        public async Task NodesAddedAfterLayerSelectionHonourIt()
+        {
+            using var fileLoader = new GameFileLoader(null, null);
+            using var rendererContext = new RendererContext(fileLoader, NullLogger.Instance);
+            using var core = new SettingsSceneCore(new SettingsSceneContext(), rendererContext, new SettingsSceneHost());
+
+            core.ApplyDefaultLayers(["Particles"]);
+
+            // A particle system spawned long after the layer list was set must not start drawing.
+            var late = new TestSceneNode(core.Scene) { LayerName = Scene.ParticlesLayerName };
+            core.Scene.Add(late, dynamic: true);
+
+            var listed = new TestSceneNode(core.Scene) { LayerName = "Effects" };
+            core.Scene.Add(listed, dynamic: true);
+
+            var unlabelled = new TestSceneNode(core.Scene);
+            core.Scene.Add(unlabelled, dynamic: true);
+
+            using (Assert.Multiple())
+            {
+                await Assert.That(late.LayerEnabled).IsTrue();
+                await Assert.That(listed.LayerEnabled).IsFalse();
+                await Assert.That(unlabelled.LayerEnabled).IsFalse();
+            }
+        }
+
+        [Test]
         public async Task DefaultLayerSelectionDisablesUnlistedNodes()
         {
             using var fileLoader = new GameFileLoader(null, null);
