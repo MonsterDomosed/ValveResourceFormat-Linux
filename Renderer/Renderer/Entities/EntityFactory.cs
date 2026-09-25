@@ -30,6 +30,7 @@ public static class EntityFactory
     {
         Register<WorldEntity>("worldspawn", static (system, spawnInfo) => new WorldEntity(system, spawnInfo));
         Register<InfoWorldLayer>("info_world_layer", static (system, spawnInfo) => new InfoWorldLayer(system, spawnInfo));
+        Register<InfoVisibilityBox>("info_visibility_box", static (system, spawnInfo) => new InfoVisibilityBox(system, spawnInfo));
 
         Register<FuncBrush>("func_brush", static (system, spawnInfo) => new FuncBrush(system, spawnInfo));
         Register<FuncButton>("func_button", static (system, spawnInfo) => new FuncButton(system, spawnInfo));

@@ -109,6 +109,9 @@ namespace ValveResourceFormat.Renderer
         /// <summary>Gets or sets the world visibility data used for culling.</summary>
         public IWorldVisibility? WorldVisibility { get; set; }
 
+        /// <summary>Gets the info visibility boxes spawned in this scene.</summary>
+        public VisibilityBoxSet VisibilityBoxes { get; } = new();
+
         /// <summary>Gets or sets whether PVS culling is enabled for this scene.</summary>
         public bool EnablePvsCulling { get; set; } = true;
 
@@ -1204,6 +1207,7 @@ namespace ValveResourceFormat.Renderer
             WantsSceneDepth = false;
             UpdatePvs(camera);
             ResetPvsHiddenBits();
+            VisibilityBoxes.PrepareView(camera.Location);
 
             var frustum = cullFrustum ??= camera.ViewFrustum;
             var cullResults = GetFrustumCullResults(frustum);
@@ -1230,6 +1234,14 @@ namespace ValveResourceFormat.Renderer
                     && !IsNodeInPvs(node))
                 {
                     PerfStats.Active.Count(Counter.SceneObjectCulledByPvs, 1);
+                    MarkNodeHiddenGpu(node);
+                    continue;
+                }
+
+                if (VisibilityBoxes.View.IsActive
+                    && node is MeshCollectionNode or SceneAggregate or SceneAggregate.Fragment or ParticleSceneNode
+                    && VisibilityBoxes.View.IsCulled(node.BoundingBox))
+                {
                     MarkNodeHiddenGpu(node);
                     continue;
                 }

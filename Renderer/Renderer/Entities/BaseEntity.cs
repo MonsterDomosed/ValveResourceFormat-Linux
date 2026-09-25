@@ -39,6 +39,10 @@ public class BaseEntity
     /// <summary>Gets the world transform the entity is drawn at, interpolated between ticks.</summary>
     public Matrix4x4 Transform { get; private set; } = Matrix4x4.Identity;
 
+    /// <summary>Gets the entity's rigid world transform, without its scale.</summary>
+    protected Matrix4x4 RigidTransform
+        => EntityTransformHelper.ToRigidTransformationMatrix(Angles, Origin) * ParentTransform;
+
     /// <summary>Gets the visibility layer this entity's nodes belong to.</summary>
     public string? LayerName { get; }
 
