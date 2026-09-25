@@ -1583,6 +1583,15 @@ internal sealed class App : Application
                     : $"[self-check] {label}: bind pose shown, animation controls hidden").ConfigureAwait(true);
             }
 
+            if (session.GetSnapshot().HasHitboxSets)
+            {
+                await ExerciseModelHitboxControlsAsync(control, session, label).ConfigureAwait(true);
+            }
+            else
+            {
+                await Program.StdOut.WriteLineAsync($"[self-check] {label}: model has no hitbox sets, controls hidden").ConfigureAwait(true);
+            }
+
             window.CloseTabContaining(viewport);
             await WaitForRendererDisposalAsync(renderer).ConfigureAwait(true);
 
@@ -1746,6 +1755,27 @@ internal sealed class App : Application
         await Program.StdOut.WriteLineAsync(ok
             ? $"[self-check] {label} animation: select, play, pause, scrub, speed, loop and restart all verified"
             : $"[self-check] {label} animation: interaction check incomplete").ConfigureAwait(true);
+    }
+
+    private static async Task ExerciseModelHitboxControlsAsync(ModelViewerControl control, ModelAnimationSession session, string label)
+    {
+        // The first item is the empty selection, so the set under test is the second one.
+        var setName = control.HitboxSelector.Items.Count > 1 ? control.HitboxSelector.Items[1] as string : null;
+        var available = setName is not null;
+
+        if (available)
+        {
+            // Select through the real combo box so its SelectionChanged handler queues the command.
+            control.HitboxSelector.SelectedItem = setName;
+        }
+
+        var selected = available && await WaitForAsync(() => string.Equals(session.GetSnapshot().ActiveHitboxSet, setName, StringComparison.Ordinal), 60).ConfigureAwait(true);
+
+        control.HitboxSelector.SelectedItem = control.HitboxSelector.Items.Count > 0 ? control.HitboxSelector.Items[0] : null;
+        var cleared = await WaitForAsync(() => session.GetSnapshot().ActiveHitboxSet == null, 60).ConfigureAwait(true);
+
+        await Program.StdOut.WriteLineAsync(
+            $"[self-check] {label} hitboxes: sets={control.HitboxSelector.Items.Count - 1}, select={selected}, clear={cleared}").ConfigureAwait(true);
     }
 
     private static async Task SimulatePointerDragAsync(AvaloniaGlViewport viewport, ViewerKey button, System.Numerics.Vector2 delta, int frames)

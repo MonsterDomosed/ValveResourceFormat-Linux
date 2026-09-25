@@ -16,7 +16,9 @@ internal readonly record struct ModelAnimationCommand(
     bool SeekRequested,
     float SeekFraction,
     bool RestartRequested,
-    bool ResetViewRequested);
+    bool ResetViewRequested,
+    bool HitboxSetChanged,
+    string? HitboxSetName);
 
 /// <summary>
 /// A consistent copy of the model viewer's animation state, safe to read from the UI thread.
@@ -32,10 +34,15 @@ internal readonly record struct ModelAnimationSnapshot(
     int FrameCount,
     float Time,
     float Duration,
-    float Fps)
+    float Fps,
+    string[] HitboxSets,
+    string? ActiveHitboxSet)
 {
     /// <summary>Whether the model exposes at least one playable animation.</summary>
     public bool HasAnimations => Animations.Length > 0;
+
+    /// <summary>Whether the model exposes any hitbox sets to draw.</summary>
+    public bool HasHitboxSets => HitboxSets.Length > 0;
 }
 
 /// <summary>
@@ -77,6 +84,10 @@ internal sealed class ModelAnimationSession
     private float pendingSeek;
     private bool restartRequested;
     private bool resetViewRequested;
+    private bool hitboxSetChanged;
+    private string? pendingHitboxSet;
+    private string[] hitboxSets = [];
+    private string? activeHitboxSet;
 
     /// <summary>Selects an animation by name, or the bind pose when <paramref name="name"/> is null.</summary>
     public void SelectAnimation(string? name)
@@ -146,6 +157,16 @@ internal sealed class ModelAnimationSession
         }
     }
 
+    /// <summary>Selects a hitbox set to draw, or draws none when <paramref name="name"/> is null.</summary>
+    public void SelectHitboxSet(string? name)
+    {
+        lock (sync)
+        {
+            hitboxSetChanged = true;
+            pendingHitboxSet = name;
+        }
+    }
+
     /// <summary>Takes the pending commands and clears them. Called on the render thread each frame.</summary>
     public ModelAnimationCommand ConsumeCommands()
     {
@@ -157,7 +178,8 @@ internal sealed class ModelAnimationSession
                 loopingChanged, pendingLooping,
                 speedChanged, pendingSpeed,
                 seekRequested, pendingSeek,
-                restartRequested, resetViewRequested);
+                restartRequested, resetViewRequested,
+                hitboxSetChanged, pendingHitboxSet);
 
             animationChanged = false;
             pendingAnimation = null;
@@ -167,6 +189,8 @@ internal sealed class ModelAnimationSession
             seekRequested = false;
             restartRequested = false;
             resetViewRequested = false;
+            hitboxSetChanged = false;
+            pendingHitboxSet = null;
 
             return command;
         }
@@ -184,7 +208,9 @@ internal sealed class ModelAnimationSession
         int totalFrames,
         float currentTime,
         float totalDuration,
-        float framesPerSecond)
+        float framesPerSecond,
+        string[] hitboxSetNames,
+        string? activeSet)
     {
         lock (sync)
         {
@@ -199,6 +225,8 @@ internal sealed class ModelAnimationSession
             time = currentTime;
             duration = totalDuration;
             fps = framesPerSecond;
+            hitboxSets = hitboxSetNames;
+            activeHitboxSet = activeSet;
         }
     }
 
@@ -207,7 +235,7 @@ internal sealed class ModelAnimationSession
     {
         lock (sync)
         {
-            return new(ready, animations, activeAnimation, playing, looping, speed, frame, frameCount, time, duration, fps);
+            return new(ready, animations, activeAnimation, playing, looping, speed, frame, frameCount, time, duration, fps, hitboxSets, activeHitboxSet);
         }
     }
 }

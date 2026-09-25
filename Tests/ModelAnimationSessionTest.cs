@@ -115,6 +115,36 @@ namespace Tests
         }
 
         [Test]
+        public async Task HitboxSelectionIsDeliveredOnceAndCanBeCleared()
+        {
+            var session = new ModelAnimationSession();
+            session.Publish(true, [], null, false, true, 1f, 0, 0, 0f, 0f, 0f, ["head", "body"], null);
+
+            using (Assert.Multiple())
+            {
+                // Nothing is drawn until a set is picked.
+                await Assert.That(session.GetSnapshot().HasHitboxSets).IsTrue();
+                await Assert.That(session.GetSnapshot().ActiveHitboxSet).IsNull();
+                await Assert.That(session.ConsumeCommands().HitboxSetChanged).IsFalse();
+            }
+
+            session.SelectHitboxSet("head");
+            var command = session.ConsumeCommands();
+
+            using (Assert.Multiple())
+            {
+                await Assert.That(command.HitboxSetChanged).IsTrue();
+                await Assert.That(command.HitboxSetName).IsEqualTo("head");
+
+                // Consumed once, so the render thread does not re-apply it on every frame.
+                await Assert.That(session.ConsumeCommands().HitboxSetChanged).IsFalse();
+            }
+
+            session.SelectHitboxSet(null);
+            await Assert.That(session.ConsumeCommands().HitboxSetName).IsNull();
+        }
+
+        [Test]
         public async Task PublishesTheRenderThreadStateToTheUi()
         {
             var session = new ModelAnimationSession();
@@ -130,7 +160,9 @@ namespace Tests
                 totalFrames: 25,
                 currentTime: 0.4f,
                 totalDuration: 0.8f,
-                framesPerSecond: 30f);
+                framesPerSecond: 30f,
+                hitboxSetNames: ["head", "body"],
+                activeSet: null);
 
             var snapshot = session.GetSnapshot();
 
@@ -150,6 +182,9 @@ namespace Tests
                 await Assert.That(snapshot.Time).IsEqualTo(0.4f);
                 await Assert.That(snapshot.Duration).IsEqualTo(0.8f);
                 await Assert.That(snapshot.Fps).IsEqualTo(30f);
+                await Assert.That(snapshot.HasHitboxSets).IsTrue();
+                await Assert.That(snapshot.HitboxSets[0]).IsEqualTo("head");
+                await Assert.That(snapshot.ActiveHitboxSet).IsNull();
             }
         }
 
@@ -158,7 +193,7 @@ namespace Tests
         {
             var session = new ModelAnimationSession();
 
-            session.Publish(true, [], null, false, true, 1f, 0, 0, 0f, 0f, 0f);
+            session.Publish(true, [], null, false, true, 1f, 0, 0, 0f, 0f, 0f, [], null);
             var snapshot = session.GetSnapshot();
 
             using (Assert.Multiple())
@@ -166,6 +201,7 @@ namespace Tests
                 await Assert.That(snapshot.Ready).IsTrue();
                 await Assert.That(snapshot.HasAnimations).IsFalse();
                 await Assert.That(snapshot.Animations).IsEmpty();
+                await Assert.That(snapshot.HasHitboxSets).IsFalse();
             }
         }
     }

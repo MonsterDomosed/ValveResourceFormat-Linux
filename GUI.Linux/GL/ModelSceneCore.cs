@@ -25,7 +25,10 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
     private readonly Action<string>? openResource;
 
     private ModelSceneNode? modelSceneNode;
+    private HitboxSetSceneNode? hitboxSetSceneNode;
     private string[] animations = [];
+    private string[] hitboxSets = [];
+    private string? activeHitboxSet;
 
     public ModelSceneCore(ISceneViewerContext context, RendererContext rendererContext, IGLViewerHost host, ValveResourceFormat.Resource resource, Model model, ModelAnimationSession session, Action<string>? openResource = null)
         : base(context, rendererContext, host, Frustum.CreateEmpty())
@@ -61,6 +64,16 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
         Scene.Add(modelSceneNode, true);
 
         animations = [.. modelSceneNode.Animations.Keys.OrderBy(static name => name, StringComparer.OrdinalIgnoreCase)];
+
+        if (model.HitboxSets.Count > 0)
+        {
+            hitboxSets = [.. model.HitboxSets.Keys.OrderBy(static name => name, StringComparer.OrdinalIgnoreCase)];
+            hitboxSetSceneNode = new HitboxSetSceneNode(Scene, modelSceneNode.AnimationController, model.HitboxSets)
+            {
+                Parent = modelSceneNode,
+            };
+            Scene.Add(hitboxSetSceneNode, true);
+        }
 
         // Open on the bind pose; playback starts only when the user picks an animation.
         modelSceneNode.AnimationController.IsPaused = true;
@@ -147,13 +160,19 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
         {
             controller.Time = 0f;
         }
+
+        if (command.HitboxSetChanged && hitboxSetSceneNode is not null)
+        {
+            activeHitboxSet = command.HitboxSetName;
+            hitboxSetSceneNode.SetHitboxSet(command.HitboxSetName);
+        }
     }
 
     private void PublishState()
     {
         if (modelSceneNode is null)
         {
-            session.Publish(false, animations, null, false, true, 1f, 0, 0, 0f, 0f, 0f);
+            session.Publish(false, animations, null, false, true, 1f, 0, 0, 0f, 0f, 0f, hitboxSets, activeHitboxSet);
             return;
         }
 
@@ -179,7 +198,9 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
             animation?.FrameCount ?? 0,
             localTime,
             animation?.Duration ?? 0f,
-            animation?.Fps ?? 0f);
+            animation?.Fps ?? 0f,
+            hitboxSets,
+            activeHitboxSet);
     }
 
     protected override void OnPicked(object? sender, PickingResponse pickingResponse)

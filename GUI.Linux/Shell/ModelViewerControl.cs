@@ -19,13 +19,16 @@ namespace GUI.Linux.Shell;
 internal sealed class ModelViewerControl : UserControl, IDisposable
 {
     private const string BindPoseItem = "(bind pose)";
+    private const string NoHitboxSetItem = "(none)";
 
     private readonly ModelAnimationSession session;
     private readonly AvaloniaGlViewport viewport;
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(50) };
 
     private readonly StackPanel animationGroup = new() { Spacing = 8, IsVisible = false };
+    private readonly StackPanel hitboxGroup = new() { Spacing = 8, IsVisible = false };
     private readonly ComboBox animationSelector = new();
+    private readonly ComboBox hitboxSelector = new();
     private readonly Button playPauseButton = new() { Content = "Pause", Width = 84 };
     private readonly Button restartButton = new() { Content = "Restart", Width = 84 };
     private readonly Button resetViewButton = new() { Content = "Reset view", HorizontalAlignment = HorizontalAlignment.Stretch };
@@ -43,6 +46,7 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
     private readonly CheckBox loopCheckBox = new() { Content = "Loop" };
 
     private string[] populatedAnimations = [];
+    private string[] populatedHitboxSets = [];
     private bool updatingFromSnapshot;
     private bool scrubbing;
     private bool wasPlayingBeforeScrub;
@@ -55,6 +59,8 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
     private int lastFrame = -1;
     private int lastFrameCount = -1;
     private float lastSpeed = float.NaN;
+    private string? lastHitboxSet;
+    private bool hitboxSetsPopulated;
 
     public ModelViewerControl(string fileName, ModelAnimationSession session, Action<string>? openResource = null)
     {
@@ -146,6 +152,14 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
 
         panel.Children.Add(animationGroup);
 
+        hitboxGroup.Children.Add(new TextBlock { Text = "Hitboxes", FontWeight = FontWeight.SemiBold });
+
+        hitboxSelector.HorizontalAlignment = HorizontalAlignment.Stretch;
+        hitboxSelector.SelectionChanged += OnHitboxSetSelected;
+        hitboxGroup.Children.Add(hitboxSelector);
+
+        panel.Children.Add(hitboxGroup);
+
         return new ScrollViewer
         {
             Content = panel,
@@ -205,21 +219,31 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
         session.SelectAnimation(name == BindPoseItem ? null : name);
     }
 
+    private void OnHitboxSetSelected(object? sender, SelectionChangedEventArgs e)
+    {
+        if (updatingFromSnapshot || hitboxSelector.SelectedItem is not string name)
+        {
+            return;
+        }
+
+        session.SelectHitboxSet(name == NoHitboxSetItem ? null : name);
+    }
+
     private void UpdateFromSnapshot()
     {
         var snapshot = session.GetSnapshot();
 
-        if (!snapshot.HasAnimations)
-        {
-            animationGroup.IsVisible = false;
-            return;
-        }
+        animationGroup.IsVisible = snapshot.HasAnimations;
+        hitboxGroup.IsVisible = snapshot.HasHitboxSets;
 
-        animationGroup.IsVisible = true;
-
-        if (!NamesEqual(populatedAnimations, snapshot.Animations))
+        if (snapshot.HasAnimations && !NamesEqual(populatedAnimations, snapshot.Animations))
         {
             PopulateAnimations(snapshot.Animations);
+        }
+
+        if (snapshot.HasHitboxSets && (!hitboxSetsPopulated || !NamesEqual(populatedHitboxSets, snapshot.HitboxSets)))
+        {
+            PopulateHitboxSets(snapshot.HitboxSets);
         }
 
         updatingFromSnapshot = true;
@@ -232,6 +256,12 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
             {
                 lastAnimation = snapshot.ActiveAnimation;
                 animationSelector.SelectedItem = snapshot.ActiveAnimation ?? BindPoseItem;
+            }
+
+            if (!string.Equals(snapshot.ActiveHitboxSet, lastHitboxSet, StringComparison.Ordinal))
+            {
+                lastHitboxSet = snapshot.ActiveHitboxSet;
+                hitboxSelector.SelectedItem = snapshot.ActiveHitboxSet ?? NoHitboxSetItem;
             }
 
             if (snapshot.Playing != lastPlaying)
@@ -325,8 +355,39 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
         }
     }
 
+    private void PopulateHitboxSets(string[] sets)
+    {
+        populatedHitboxSets = sets;
+        hitboxSetsPopulated = true;
+
+        updatingFromSnapshot = true;
+
+        try
+        {
+            hitboxSelector.Items.Clear();
+            hitboxSelector.Items.Add(NoHitboxSetItem);
+
+            foreach (var name in sets)
+            {
+                hitboxSelector.Items.Add(name);
+            }
+
+            hitboxSelector.SelectedItem = NoHitboxSetItem;
+        }
+        finally
+        {
+            updatingFromSnapshot = false;
+        }
+    }
+
     /// <summary>The animation selector, for the self-check to drive the real control.</summary>
     internal ComboBox AnimationSelector => animationSelector;
+
+    /// <summary>The hitbox set selector, for the self-check to drive the real control.</summary>
+    internal ComboBox HitboxSelector => hitboxSelector;
+
+    /// <summary>Whether the hitbox controls are shown for the current model.</summary>
+    internal bool HitboxControlsVisible => hitboxGroup.IsVisible;
 
     /// <summary>The play/pause button, for the self-check to click the real control.</summary>
     internal Button PlayPauseButton => playPauseButton;
