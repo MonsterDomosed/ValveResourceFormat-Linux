@@ -1,7 +1,11 @@
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using ValveKeyValue;
 using ValveResourceFormat;
+using ValveResourceFormat.CompiledShader;
+using ValveResourceFormat.IO;
+using ValveResourceFormat.Particles;
 using ValveResourceFormat.ResourceTypes;
 using ValveResourceFormat.Serialization.KeyValues;
 
@@ -63,6 +67,35 @@ namespace Tests
                     }
                 }
             }
+        }
+
+        [Test]
+        public async Task SkipsSelfReferencingChildParticles()
+        {
+            var root = KVObject.Collection();
+            root.Add("m_nBehaviorVersion", 7);
+            var children = KVObject.Array();
+            var child = KVObject.Collection();
+            child.Add("m_ChildRef", "self");
+            children.Add(child);
+            root.Add("m_Children", children);
+
+            using var resource = new Resource(ResourceType.Particle) { FileName = "self.vpcf_c" };
+            var particle = ParticleSystem.Create(root);
+            particle.Resource = resource;
+            resource.Blocks.Add(particle);
+
+            var simulation = new ParticleSystemSimulation(particle, new SingleResourceLoader(resource));
+
+            await Assert.That(simulation.Children).IsEmpty();
+        }
+
+        private sealed class SingleResourceLoader(Resource resource) : IFileLoader
+        {
+            public Resource? LoadFile(string file) => resource;
+            public Resource? LoadFileCompiled(string file) => resource;
+            public ShaderCollection? LoadShader(string shaderName) => null;
+            public Stream? GetFileStream(string file) => null;
         }
     }
 }
