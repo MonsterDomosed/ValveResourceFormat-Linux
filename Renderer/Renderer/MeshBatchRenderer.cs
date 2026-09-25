@@ -128,7 +128,6 @@ namespace ValveResourceFormat.Renderer
             public int AnimationData = -1;
             public int EnvmapTexture = -1;
             public int LPVIrradianceTexture = -1;
-            public int Transform = -1;
             public int IsInstancing = -1;
             public int Tint = -1;
             public int MeshId = -1;
@@ -242,7 +241,6 @@ namespace ValveResourceFormat.Renderer
                         uniforms = new Uniforms
                         {
                             AnimationData = shader.GetUniformLocation("uAnimationData"),
-                            Transform = shader.GetUniformLocation("transform"),
                             IsInstancing = shader.GetUniformLocation("bIsInstancing"),
                             Tint = shader.GetUniformLocation("vTint"),
                         };
@@ -274,8 +272,6 @@ namespace ValveResourceFormat.Renderer
                         Debug.Assert(context.Scene.InstanceBufferGpu != null && context.Scene.TransformBufferGpu != null);
                         context.Scene.TransformBufferGpu.BindBufferBase();
                         context.Scene.InstanceBufferGpu.BindBufferBase();
-
-                        context.Scene.TransformBufferGpu.BindBufferBase(ReservedBufferSlots.BoneTransforms);
 
                         if (config.IndirectDraw)
                         {
@@ -319,21 +315,9 @@ namespace ValveResourceFormat.Renderer
 
             if (uniforms.AnimationData != -1)
             {
-                var bAnimated = request.Mesh.BoneMatricesGpu != null;
-                var numBones = 0u;
-                var boneStart = 0u;
-
-                if (bAnimated)
-                {
-                    request.Mesh.BoneMatricesGpu!.BindBufferBase();
-                    numBones = (uint)request.Mesh.MeshBoneCount;
-                    boneStart = (uint)request.Mesh.MeshBoneOffset;
-                }
-                else
-                {
-                    // todo: this is not resetting when there are no aggregates in scene
-                    request.Node.Scene.TransformBufferGpu?.BindBufferBase(ReservedBufferSlots.BoneTransforms);
-                }
+                var bAnimated = request.Mesh.IsSkinningActive;
+                var numBones = bAnimated ? (uint)request.Mesh.MeshBoneCount : 0u;
+                var boneStart = bAnimated ? (uint)request.Mesh.MeshBoneOffset : 0u;
 
                 GL.ProgramUniform3((uint)shader.Program, uniforms.AnimationData, bAnimated ? 1u : 0u, boneStart, numBones);
             }
@@ -388,12 +372,6 @@ namespace ValveResourceFormat.Renderer
                     morphComposite?.CompositeTexture ?? request.Node.Scene.RendererContext.MaterialLoader.GetDefaultColor());
 
                 GL.ProgramUniform1(shader.Program, uniforms.MorphVertexIdOffset, morphComposite != null ? request.Call.VertexIdOffset : -1);
-            }
-
-            if (uniforms.Transform > -1)
-            {
-                var transform = request.Node.Transform.To3x4();
-                GL.ProgramUniformMatrix3x4(shader.Program, uniforms.Transform, false, ref transform);
             }
 
             if (uniforms.Tint > -1)

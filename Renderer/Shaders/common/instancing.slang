@@ -5,7 +5,6 @@
 
 #include "instancing_base.slang"
 
-uniform mat3x4 transform;
 uniform uint vTint;
 uniform bool bIsInstancing = false;
 
@@ -84,13 +83,18 @@ ObjectData_t GetObjectData()
     return object;
 }
 
+uint GetObjectBoneOffset()
+{
+    return objects[gl_BaseInstance].TransformIndex + 2u;
+}
+
 mat3x4 CalculateObjectToWorldMatrix()
 {
     ObjectDataStandard objectData = objects[gl_BaseInstance];
 
     SetObjectInterpolators(objectData);
 
-    return bIsInstancing ? transforms[objectData.TransformIndex + gl_InstanceID] : transform;
+    return transforms[objectData.TransformIndex + gl_InstanceID];
 }
 
 vec4 GetObjectTintSrgb()

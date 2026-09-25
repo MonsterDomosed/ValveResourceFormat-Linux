@@ -60,10 +60,23 @@ namespace ValveResourceFormat.Renderer.SceneNodes
             spriteSize = material.FloatParams.GetValueOrDefault("g_flUniformPointSize", 16);
             spriteSize /= 2f; // correct the scale to actually be 16x16
 
-            LocalBoundingBox = new AABB(-Vector3.One * spriteSize, Vector3.One * spriteSize);
+            LocalBoundingBox = new AABB(-Vector3.One, Vector3.One);
             Transform = Matrix4x4.CreateTranslation(position.X, position.Y, position.Z);
 
             RenderPasses |= CustomRenderPasses.DepthOnly;
+        }
+
+        public override void Update(Scene.UpdateContext context)
+        {
+            // The billboard rotation is the inverse of the camera's, so the sprite always faces it
+            if (!Matrix4x4.Decompose(context.Camera.CameraViewMatrix, out _, out var modelViewRotation, out _))
+            {
+                throw new InvalidOperationException("Matrix decompose failed");
+            }
+
+            Transform = Matrix4x4.CreateScale(spriteSize)
+                * Matrix4x4.CreateFromQuaternion(Quaternion.Inverse(modelViewRotation))
+                * Matrix4x4.CreateTranslation(Transform.Translation);
         }
 
         public override void Render(Scene.RenderContext context)
@@ -80,20 +93,6 @@ namespace ValveResourceFormat.Renderer.SceneNodes
             renderShader.Use();
 
             VertexArray.Bind(vao, renderShader);
-
-            // Create billboarding rotation (always facing camera)
-            if (!Matrix4x4.Decompose(context.Camera.CameraViewMatrix, out _, out var modelViewRotation, out _))
-            {
-                throw new InvalidOperationException("Matrix decompose failed");
-            }
-
-            modelViewRotation = Quaternion.Inverse(modelViewRotation);
-            var billboardMatrix = Matrix4x4.CreateFromQuaternion(modelViewRotation);
-
-            var transform = Matrix4x4.CreateScale(spriteSize)
-                * billboardMatrix
-                * Matrix4x4.CreateTranslation(Transform.Translation);
-            renderShader.SetUniform3x4("transform", transform);
 
             renderShader.SetUniform1("bIsInstancing", 0u);
 
