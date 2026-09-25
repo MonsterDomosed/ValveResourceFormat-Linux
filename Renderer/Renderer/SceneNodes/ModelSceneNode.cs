@@ -72,9 +72,20 @@ namespace ValveResourceFormat.Renderer.SceneNodes
             lod = new ModelLodSelector(model.LodInfo);
             referenceMeshes = model.GetReferenceMeshNamesAndLoD().ToList();
 
-            AnimationController = new(model.Skeleton, model.FlexControllers);
             boneCount = model.Skeleton.Bones.Length;
             remappingTable = model.BoneRemapTable.Table;
+
+            if (skin != null)
+            {
+                SetMaterialGroup(skin);
+            }
+
+            Name = model.Name;
+
+            LoadMeshes(model);
+
+            // Built after the meshes load, since external meshes supply the model's flex controllers.
+            AnimationController = new(model.Skeleton, model.FlexControllers);
 
             foreach (var skeletonName in model.NmSkeletonRefs)
             {
@@ -84,15 +95,6 @@ namespace ValveResourceFormat.Renderer.SceneNodes
                 }
             }
 
-            if (skin != null)
-            {
-                SetMaterialGroup(skin);
-            }
-
-            Name = model.Name;
-            Attachments = model.Attachments;
-
-            LoadMeshes(model);
             UpdateBoundingBox();
             LoadAnimations(model, embeddedAnimationsOnly: isWorldPreview);
 

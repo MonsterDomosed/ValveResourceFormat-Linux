@@ -1,11 +1,14 @@
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
+using ValveKeyValue;
 using ValvePak;
 using ValveResourceFormat;
 using ValveResourceFormat.IO;
 using ValveResourceFormat.ResourceTypes;
 using ValveResourceFormat.ResourceTypes.ModelAnimation;
+using ValveResourceFormat.ResourceTypes.ModelFlex;
 
 namespace Tests
 {
@@ -14,6 +17,12 @@ namespace Tests
         // box_creature_leggy_walk travels ~47.92 source units forward (+X) over its 25-frame cycle,
         // stored in the movement array (root motion), not in the bone frames.
         private const float FullDisplacementX = 47.92f;
+
+        private static KVObject Parse(string text)
+        {
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(text));
+            return KVSerializer.Create(KVSerializationFormat.KeyValues3Text).Deserialize(stream).Root;
+        }
 
         [Test]
         public async Task TestEmbeddedAnimations()
@@ -98,6 +107,92 @@ namespace Tests
                 await Assert.That(lastFrame.Bones[3].Angle.Z).IsEqualTo(0.7130554f).Within(0.0001f);
                 await Assert.That(lastFrame.Bones[3].Angle.W).IsEqualTo(0.7011077f).Within(0.0001f);
                 await Assert.That(lastFrame.Bones[3].Scale).IsEqualTo(1f).Within(0.0001f);
+            }
+        }
+
+        [Test]
+        public async Task BoolSegmentsDecodeIntoFlexValues()
+        {
+            // A bool segment stores one byte per element, and only the full variant repeats it per frame.
+            // Segment header: int16 decoder, int16 cardinality, int16 element count, int16 length, then
+            // the element list, then the payload.
+            const string AnimationData = """
+                <!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} format:generic:version{7412167c-06e9-4698-aff2-e63eb59037e7} -->
+                {
+                    m_decoderArray =
+                    [
+                        { m_szName = "CCompressedFullBool" },
+                        { m_szName = "CCompressedStaticBool" },
+                    ]
+                    m_segmentArray =
+                    [
+                        { m_nLocalChannel = 0 m_container = [ 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 7 ] },
+                        { m_nLocalChannel = 1 m_container = [ 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1 ] },
+                    ]
+                    m_animArray =
+                    [
+                        {
+                            m_name = "flags" fps = 30
+                            m_flags = { m_bLooping = false m_bHidden = false m_bDelta = false m_bAnimGraphAdditive = false m_bLegacyWorldspace = false }
+                            m_pData =
+                            {
+                                m_nFrames = 3
+                                m_frameblockArray = [ { m_nStartFrame = 0 m_nEndFrame = 2 m_segmentIndexArray = [ 0, 1 ] } ]
+                            }
+                            m_movementArray = []
+                            m_eventArray = []
+                            m_activityArray = []
+                            m_hierarchyArray = []
+                            m_sequenceParams = { m_flFadeInTime = 0 m_flFadeOutTime = 0 }
+                        },
+                    ]
+                }
+                """;
+
+            const string DecodeKey = """
+                <!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} format:generic:version{7412167c-06e9-4698-aff2-e63eb59037e7} -->
+                {
+                    m_userArray = []
+                    m_dataChannelArray =
+                    [
+                        {
+                            m_szChannelClass = "MorphChannel" m_szVariableName = "data"
+                            m_szElementNameArray = [ "blink" ] m_nElementIndexArray = [ 0 ]
+                        },
+                        {
+                            m_szChannelClass = "MorphChannel" m_szVariableName = "data"
+                            m_szElementNameArray = [ "latched" ] m_nElementIndexArray = [ 0 ]
+                        },
+                    ]
+                }
+                """;
+
+            var flexControllers = new[] { new FlexController("blink", "default", 0f, 1f), new FlexController("latched", "default", 0f, 1f) };
+            var modelData = KVObject.Collection();
+            modelData.Add("m_name", new KVObject("test"));
+
+            var skeletonData = KVObject.Collection();
+            skeletonData.Add("m_boneName", KVObject.Array());
+            skeletonData.Add("m_nParent", KVObject.Array());
+            skeletonData.Add("m_nFlag", KVObject.Array());
+            skeletonData.Add("m_bonePosParent", KVObject.Array());
+            skeletonData.Add("m_boneRotParent", KVObject.Array());
+            modelData.Add("m_modelSkeleton", skeletonData);
+
+            var skeleton = Skeleton.FromModelData(modelData);
+            var animation = SequenceAnimation.FromData(Parse(AnimationData), Parse(DecodeKey), skeleton, flexControllers).Single();
+
+            // A decoder the builder does not know leaves a null segment, so flex data goes missing entirely.
+            await Assert.That(animation.HasFlexData).IsTrue();
+
+            var frameCache = new AnimationFrameCache(skeleton, flexControllers);
+
+            using (Assert.Multiple())
+            {
+                // The full segment advances one byte per element per frame, and any non-zero byte reads as one.
+                await Assert.That(frameCache.GetFrame(animation, 0).Datas).IsEquivalentTo([0f, 1f]);
+                await Assert.That(frameCache.GetFrame(animation, 1).Datas).IsEquivalentTo([1f, 1f]);
+                await Assert.That(frameCache.GetFrame(animation, 2).Datas).IsEquivalentTo([1f, 1f]);
             }
         }
 
