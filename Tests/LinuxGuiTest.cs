@@ -4,13 +4,18 @@ using System.Threading.Tasks;
 using GUI.Linux.Types.Audio;
 using GUI.Linux.Types.Browser;
 using GUI.Linux.Types.Graphs.Core;
+using GUI.Linux.Types.GLViewers;
 using GUI.Linux.Types.Viewers;
+using GUI.Linux.Utils;
+using Microsoft.Extensions.Logging.Abstractions;
+using SkiaSharp;
 using ValveKeyValue;
 using ValvePak;
 using ValveResourceFormat;
 using ValveResourceFormat.Blocks;
 using ValveResourceFormat.Graphs;
 using ValveResourceFormat.IO;
+using ValveResourceFormat.Renderer;
 using ValveResourceFormat.ResourceTypes;
 
 namespace Tests
@@ -195,6 +200,42 @@ namespace Tests
         }
 
         [Test]
+        [NotInParallel(nameof(LinuxGuiTest))]
+        public async Task SceneCoreAppliesRenderingSettings()
+        {
+            var oldMaxTextureSize = Settings.Config.MaxTextureSize;
+            var oldFieldOfView = Settings.Config.FieldOfView;
+            var oldViewmodelFieldOfView = Settings.Config.ViewmodelFieldOfView;
+
+            try
+            {
+                using var fileLoader = new GameFileLoader(null, null);
+                using var rendererContext = new RendererContext(fileLoader, NullLogger.Instance);
+                using var core = new SettingsSceneCore(new SettingsSceneContext(), rendererContext, new SettingsSceneHost());
+
+                Settings.Config.MaxTextureSize = 2048;
+                Settings.Config.FieldOfView = 100f;
+                Settings.Config.ViewmodelFieldOfView = 70f;
+                core.ApplySettingsToRenderState();
+
+                using (Assert.Multiple())
+                {
+                    await Assert.That(rendererContext.MaxTextureSize).IsEqualTo(2048);
+                    await Assert.That(rendererContext.FieldOfView).IsEqualTo(100f);
+                    await Assert.That(rendererContext.ViewmodelFieldOfView).IsEqualTo(70f);
+                    await Assert.That(core.Renderer.Camera.FieldOfView).IsEqualTo(100f);
+                    await Assert.That(core.Input.Camera.FieldOfView).IsEqualTo(100f);
+                }
+            }
+            finally
+            {
+                Settings.Config.MaxTextureSize = oldMaxTextureSize;
+                Settings.Config.FieldOfView = oldFieldOfView;
+                Settings.Config.ViewmodelFieldOfView = oldViewmodelFieldOfView;
+            }
+        }
+
+        [Test]
         public async Task GraphPresenterExposesBuiltGraph()
         {
             using var resource = new Resource();
@@ -209,6 +250,45 @@ namespace Tests
                 await Assert.That(view.NodeCount).IsEqualTo(14);
                 await Assert.That(view.WireCount).IsEqualTo(12);
                 await Assert.That(view.GetGraphBounds().IsEmpty).IsFalse();
+            }
+        }
+
+        private sealed class SettingsSceneCore(ISceneViewerContext context, RendererContext rendererContext, IGLViewerHost host)
+            : GLSceneViewerCore(context, rendererContext, host)
+        {
+            protected override void LoadScene()
+            {
+            }
+        }
+
+        private sealed class SettingsSceneContext : ISceneViewerContext
+        {
+            public Microsoft.Extensions.Logging.ILogger SceneLogger { get; } = NullLogger.Instance;
+            public IProgress<string>? LoadingProgress => null;
+
+            public void ClearCache()
+            {
+            }
+
+            public Stream? OpenDefaultCubemapStream() => null;
+        }
+
+        private sealed class SettingsSceneHost : IGLViewerHost
+        {
+            public ViewerInputState Input { get; } = new();
+            public bool IsVisible => true;
+            public Framebuffer ScreenFramebuffer => null!;
+
+            public void RequestFrame()
+            {
+            }
+
+            public void RequestFullscreen()
+            {
+            }
+
+            public void SetClipboardImage(SKBitmap bitmap)
+            {
             }
         }
     }

@@ -129,6 +129,10 @@ public abstract class GLSceneViewerCore : IDisposable
         Context = context;
         Host = host;
 
+        rendererContext.MaxTextureSize = Settings.Config.MaxTextureSize;
+        rendererContext.FieldOfView = Settings.Config.FieldOfView;
+        rendererContext.ViewmodelFieldOfView = Settings.Config.ViewmodelFieldOfView;
+
         Renderer = new(rendererContext);
         Input = new UserInput(Renderer);
         TextRenderer = new(rendererContext, Renderer.Camera);
@@ -202,6 +206,7 @@ public abstract class GLSceneViewerCore : IDisposable
     {
         MainFramebuffer = mainFramebuffer;
         NumSamples = sampleCount;
+        ApplySettingsToRenderState();
 
         ReportLoadingStatus("Preparing renderer…");
 
@@ -1103,6 +1108,9 @@ public abstract class GLSceneViewerCore : IDisposable
     {
         Context.SceneLogger.LogDebug("Applying settings to render state");
 
+        Renderer.RendererContext.MaxTextureSize = Settings.Config.MaxTextureSize;
+        Renderer.RendererContext.FieldOfView = Settings.Config.FieldOfView;
+        Renderer.RendererContext.ViewmodelFieldOfView = Settings.Config.ViewmodelFieldOfView;
         Renderer.Camera.FieldOfView = Settings.Config.FieldOfView;
         Renderer.Camera.CreateProjectionMatrix();
 
