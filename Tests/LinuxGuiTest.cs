@@ -53,6 +53,33 @@ namespace Tests
             }
         }
 
+        [Test]
+        public async Task ResourceBlockTextIsDeferred()
+        {
+            using var resource = new Resource();
+            resource.Read(FilePath("lod_test.vmdl_c"));
+            var block = resource.Blocks.OfType<BinaryKV3>().First();
+
+            var content = ResourceBlockContent.GetBlockContent(resource, block);
+
+            await Assert.That(content).IsTypeOf<ViewerContent.LazyContent>();
+        }
+
+        [Test]
+        public async Task OversizedKeyValuesBlockSkipsTextConversion()
+        {
+            using var resource = new Resource();
+            resource.Read(FilePath("lod_test.vmdl_c"));
+            var block = resource.Blocks.OfType<BinaryKV3>().First();
+            block.Size = (uint)(64L * 1024 * 1024 + 1);
+
+            var lazy = (ViewerContent.LazyContent)ResourceBlockContent.GetBlockContent(resource, block);
+            var content = lazy.GetContent();
+
+            await Assert.That(content).IsTypeOf<ViewerContent.Text>();
+            await Assert.That(((ViewerContent.Text)content).Content).Contains("too large to display as text");
+        }
+
         private sealed class LocalViewerContext(string fileName) : IViewerContext
         {
             public string FileName { get; } = fileName;
