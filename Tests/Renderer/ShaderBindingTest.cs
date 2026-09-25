@@ -17,15 +17,19 @@ namespace Tests.Renderer
         private static string Preprocess(string shaderFile)
             => new ShaderParser().PreprocessShader(shaderFile, new ShaderLoader.ParsedShaderData());
 
-        // Matches a std430 buffer block, whatever order the layout qualifiers are written in
-        private static readonly Regex SsboPattern = new(@"layout\((?<qualifiers>[^)]*)\)[^;{]*\bbuffer\s+(?<name>\w+)",
+        // Matches a std430 buffer block with a fixed member list, whatever order the layout qualifiers are
+        // written in. The buffer is looked up by its block name or by the member it declares, since a
+        // shader is free to name the two differently
+        private static readonly Regex SsboPattern = new(
+            @"layout\((?<qualifiers>[^)]*)\)[^;{]*\bbuffer\s+(?<name>\w+)\s*\{(?<body>[^}]*)\}",
             RegexOptions.CultureInvariant);
 
         private static int? SsboBinding(string source, string name)
         {
             foreach (Match match in SsboPattern.Matches(source))
             {
-                if (match.Groups["name"].Value != name)
+                if (match.Groups["name"].Value != name
+                    && !Regex.IsMatch(match.Groups["body"].Value, $@"\b{name}\s*\[", RegexOptions.CultureInvariant))
                 {
                     continue;
                 }
@@ -39,15 +43,16 @@ namespace Tests.Renderer
         }
 
         [Test]
-        public async Task InstancingBuffersUseTheObjectAndTransformSlots()
+        public async Task InstancingBuffersUseTheInstanceTransformAndObjectSlots()
         {
-            // A shader every draw path includes, so the block is present whether or not a feature needs it
+            // A shader every draw path includes, so the blocks are present whether or not a feature needs them
             var source = Preprocess("default.vert.slang");
 
             using (Assert.Multiple())
             {
-                await Assert.That(SsboBinding(source, "g_objectBuffer")).IsEqualTo((int)ReservedBufferSlots.Objects);
+                await Assert.That(SsboBinding(source, "g_instanceBuffer")).IsEqualTo((int)ReservedBufferSlots.Instances);
                 await Assert.That(SsboBinding(source, "g_transformBuffer")).IsEqualTo((int)ReservedBufferSlots.Transforms);
+                await Assert.That(SsboBinding(source, "g_objectBuffer")).IsEqualTo((int)ReservedBufferSlots.Objects);
             }
         }
 
@@ -63,7 +68,7 @@ namespace Tests.Renderer
                 await Assert.That(SsboBinding(source, "g_boneTransformBuffer")).IsNull();
 
                 // A bone index is resolved against the shared transform buffer, offset by the object
-                await Assert.That(source).Contains("return transforms[boneIndex];");
+                await Assert.That(source).Contains("return g_transformBuffer[boneIndex];");
             }
         }
     }

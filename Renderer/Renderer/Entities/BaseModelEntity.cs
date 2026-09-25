@@ -80,7 +80,7 @@ public abstract class BaseModelEntity : BaseEntity
         var modelNode = new ModelSceneNode(Scene, model, Data?.GetStringProperty("skin"))
         {
             Name = modelName,
-            Tint = Data?.GetRenderTint() ?? Vector4.One,
+            TintAlpha = Data?.GetRenderTint() ?? Vector4.One,
         };
 
         // Model-referenced particles spawn regardless of meshes, as the plain loader path does
@@ -163,7 +163,7 @@ public abstract class BaseModelEntity : BaseEntity
             return;
         }
 
-        node.Tint = new Vector4(Vector3.Clamp(color / 255f, Vector3.Zero, Vector3.One), node.Tint.W);
+        node.Tint = Vector3.Clamp(color / 255f, Vector3.Zero, Vector3.One);
     }
 
     /// <summary>Sets the model's alpha from 0-255.</summary>
@@ -183,6 +183,6 @@ public abstract class BaseModelEntity : BaseEntity
             return;
         }
 
-        node.Tint = node.Tint with { W = Math.Clamp(alpha / 255f, 0f, 1f) };
+        node.Alpha = Math.Clamp(alpha / 255f, 0f, 1f);
     }
 }

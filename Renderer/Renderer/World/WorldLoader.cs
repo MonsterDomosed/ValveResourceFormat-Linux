@@ -1137,7 +1137,7 @@ namespace ValveResourceFormat.Renderer.World
                         moverLoopBackIndex,
                         authoredTransform: transformationMatrix)
                     {
-                        Tint = entity.GetRenderTint(),
+                        TintAlpha = entity.GetRenderTint(),
                         LayerName = layerName,
                         Name = model,
                     };
@@ -1381,7 +1381,7 @@ namespace ValveResourceFormat.Renderer.World
                 var modelNode = new ModelSceneNode(scene, newModel, skin)
                 {
                     Transform = transformationMatrix,
-                    Tint = entity.GetRenderTint(),
+                    TintAlpha = entity.GetRenderTint(),
                     LayerName = layerName,
                     Name = model,
                     EntityData = entity,

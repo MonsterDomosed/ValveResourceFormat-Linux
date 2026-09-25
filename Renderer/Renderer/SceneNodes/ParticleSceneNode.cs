@@ -85,6 +85,9 @@ namespace ValveResourceFormat.Renderer.SceneNodes
 
             Simulation = NodeSimulation.Parallel;
 
+            // Stop standard shaders from transforming the vertices again
+            AdditionalFlags |= SceneNodeFlags.PreTransformedVertices;
+
             if (preview)
             {
                 Preview = true;
