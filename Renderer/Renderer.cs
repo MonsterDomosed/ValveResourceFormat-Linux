@@ -333,6 +333,7 @@ public class Renderer
 
     /// <summary>Slots out of <see cref="MaterialLoader.ShaderTextures"/> that have been resolved.</summary>
     private readonly HashSet<ReservedTextureSlots> loadedShaderTextures = [];
+    private RenderTexture? morphAtlasTexture;
 
     /// <summary>
     /// Loads any used texture from the <see cref="MaterialLoader.ShaderTextures"/> list.
@@ -1027,6 +1028,21 @@ public class Renderer
         return OutlineMaskBuffer;
     }
 
+    // Run after every scene update
+    private void UpdateMorphAtlas()
+    {
+        var atlas = RendererContext.MorphAtlas;
+        atlas.Render();
+
+        // Growing the atlas replaces its texture
+        if (atlas.Texture is { } texture && texture != morphAtlasTexture)
+        {
+            morphAtlasTexture = texture;
+            Textures.RemoveAll(static t => t.Slot == ReservedTextureSlots.MorphCompositeTexture);
+            Textures.Add(new(ReservedTextureSlots.MorphCompositeTexture, "g_tCompositeMorphTextureAtlas", texture));
+        }
+    }
+
     /// <summary>Points the reserved <c>g_tWaterEffectsMap</c> slot at the current color attachment.</summary>
     private void SetupWaterEffectsTexture()
     {
@@ -1223,6 +1239,11 @@ public class Renderer
 
         Scene.Update(updateContext);
         SkyboxScene?.Update(updateContext);
+
+        UpdateMorphAtlas();
+
+        Scene.UpdateInstanceTransformBuffers();
+        SkyboxScene?.UpdateInstanceTransformBuffers();
 
         Scene.PostProcessInfo.UpdatePostProcessing(updateContext.Camera, updateContext.Timestep);
 

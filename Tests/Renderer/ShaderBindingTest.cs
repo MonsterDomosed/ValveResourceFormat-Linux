@@ -1,7 +1,9 @@
 using System.Globalization;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using ValveResourceFormat.Renderer.Buffers;
+using ValveResourceFormat.Renderer.Materials;
 using ValveResourceFormat.Renderer.Shaders;
 
 namespace Tests.Renderer
@@ -69,6 +71,23 @@ namespace Tests.Renderer
 
                 // A bone index is resolved against the shared transform buffer, offset by the object
                 await Assert.That(source).Contains("return g_transformBuffer[boneIndex];");
+            }
+        }
+
+        [Test]
+        public async Task MorphCompositeSlotNamesTheAtlasSamplerTheShaderDeclares()
+        {
+            // The atlas texture is published into the reserved unit rather than bound per draw, so the slot
+            // has to carry the exact sampler name a morphing variant declares
+            var names = typeof(ReservedTextureSlots)
+                .GetField(nameof(ReservedTextureSlots.MorphCompositeTexture))!
+                .GetCustomAttribute<SamplerNameAttribute>()!
+                .Names;
+
+            using (Assert.Multiple())
+            {
+                await Assert.That(names).Contains("g_tCompositeMorphTextureAtlas");
+                await Assert.That(Preprocess("depth_only.vert.slang")).Contains("uniform sampler2D g_tCompositeMorphTextureAtlas;");
             }
         }
     }

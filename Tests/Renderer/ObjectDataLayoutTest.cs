@@ -81,6 +81,13 @@ namespace Tests.Renderer
         }
 
         [Test]
+        public async Task InstanceDataEntryIsOneVec4PairWide()
+        {
+            // Same as the node entry, so a node's entry and the draws' entries behind it stay the same width
+            await Assert.That(Unsafe.SizeOf<InstanceDataStandard>()).IsEqualTo(32);
+        }
+
+        [Test]
         public async Task InstanceDataCarriesSkinningAndTheNodeItDraws()
         {
             var members = GlslMembers(Preprocess("default.vert.slang"), "InstanceDataStandard");
@@ -119,6 +126,66 @@ namespace Tests.Renderer
 
                 await Assert.That(source).Contains("#define meshBoneData (g_instanceBuffer[gl_BaseInstance].MeshBoneData)");
                 await Assert.That(source).Contains("#define bAnimated ((meshBoneData & 0x80000000u) != 0u)");
+            }
+        }
+
+        [Test]
+        public async Task InstanceDataCarriesTheMorphRect()
+        {
+            var members = GlslMembers(Preprocess("depth_only.vert.slang"), "InstanceDataStandard");
+
+            using (Assert.Multiple())
+            {
+                await Assert.That(members).Contains("MorphVertexIdOffset");
+                await Assert.That(members).Contains("MorphAtlasOrigin");
+                await Assert.That(members).Contains("MorphAtlasStride");
+            }
+        }
+
+        [Test]
+        public async Task MorphingReadsTheDrawEntryInsteadOfPerDrawUniforms()
+        {
+            var source = Preprocess("depth_only.vert.slang");
+
+            using (Assert.Multiple())
+            {
+                // Every mesh shares one composite atlas, so where a draw reads its morph from has to be the
+                // draw's own entry; a per draw uniform would be a second declaration of the same thing
+                await Assert.That(source).DoesNotContain("uniform int morphVertexIdOffset;");
+                await Assert.That(source).DoesNotContain("uniform sampler2D morphCompositeTexture;");
+
+                await Assert.That(source).Contains("#define bMorphed (g_instanceBuffer[gl_BaseInstance].MorphVertexIdOffset != -1)");
+                await Assert.That(source).Contains("uniform sampler2D g_tCompositeMorphTextureAtlas;");
+            }
+        }
+
+        [Test]
+        public async Task MorphIsFetchedByTexelFromTheSharedAtlas()
+        {
+            // The atlas is addressed texel by texel, since a draw indexes its own rect of it by vertex id
+            var source = Preprocess("depth_only.vert.slang");
+
+            using (Assert.Multiple())
+            {
+                await Assert.That(source).DoesNotContain("getMorphUV");
+
+                await Assert.That(source).Contains("ivec2 getMorphTexel(int field)");
+                await Assert.That(source).Contains("texelFetch(g_tCompositeMorphTextureAtlas, getMorphTexel(MORPH_FIELD_POSITION_SPEED), 0)");
+                await Assert.That(source).Contains("texelFetch(g_tCompositeMorphTextureAtlas, getMorphTexel(MORPH_FIELD_NORMAL_WRINKLE), 0)");
+            }
+        }
+
+        [Test]
+        public async Task MorphOffsetIsAlwaysApplied()
+        {
+            // The morph is a field of the entry rather than a per draw define, so the depth pass needs no
+            // separate switch to apply it and cannot disagree with the material pass about doing so
+            var source = Preprocess("depth_only.vert.slang");
+
+            using (Assert.Multiple())
+            {
+                await Assert.That(source).DoesNotContain("D_MORPHED");
+                await Assert.That(source).Contains("vec3 vertexPosition = vPOSITION + getMorphOffset();");
             }
         }
 
