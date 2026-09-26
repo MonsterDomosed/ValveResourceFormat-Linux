@@ -48,12 +48,7 @@ internal sealed class WorldSceneCore : GLSceneViewerCore
         var loadedWorld = new WorldLoader(world, Scene);
         loadedWorld.Load(externalReferences);
 
-        if (loadedWorld.SkyboxScene is { } skyScene)
-        {
-            // The loader still bakes the sky scale into its nodes, so there is no magnification for a sky
-            // camera to carry yet: the sky is drawn at 1:1, through a camera that follows the main one.
-            Renderer.Skybox3D = new Skybox3D(skyScene, Matrix4x4.Identity, Vector3.Zero, 1f, Scene.FogInfo, []);
-        }
+        Renderer.Skybox3D = loadedWorld.Skybox3D;
 
         if (loadedWorld.Skybox2D != null)
         {
