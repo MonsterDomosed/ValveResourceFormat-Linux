@@ -696,8 +696,14 @@ namespace ValveResourceFormat.Renderer.SceneNodes
         /// <inheritdoc/>
         public override void Render(Scene.RenderContext context)
         {
-            if (!IsPlaying || context.ReplacementShader is not null)
+            if (!IsPlaying)
             {
+                return;
+            }
+
+            if (context.ReplacementShader is { } replacement)
+            {
+                RenderReplacement(context, replacement);
                 return;
             }
 
@@ -707,6 +713,29 @@ namespace ValveResourceFormat.Renderer.SceneNodes
             }
 
             particleRenderer.Render(context.Camera, context.RenderPass, context.Layer == RenderLayer.WaterEffects);
+        }
+
+        /// <summary>Draws with a pass replacement shader, for picking and the selection outline.</summary>
+        private void RenderReplacement(Scene.RenderContext context, Shader replacement)
+        {
+            if (!particleRenderer.CanRenderReplacement
+                || context.Layer == RenderLayer.WaterEffects
+                || context.RenderPass is not (RenderPass.Opaque or RenderPass.Translucent or RenderPass.Outline))
+            {
+                return;
+            }
+
+            replacement.Use();
+
+            // No object transform is set, unlike for a mesh: the geometry is world space, and
+            // PreTransformedVertices points this node's instance transform at the identity the pass reads.
+            // There is no mesh behind the draw either, so it identifies as none.
+            replacement.SetUniform1("meshId", 0u);
+
+            // A tube or a card can turn either face toward the camera.
+            using var _ = GraphicsContext.RenderState.Scope(cullMode: RsCullMode.None);
+
+            particleRenderer.RenderReplacement(replacement, Id, context.RenderPass, context.Camera);
         }
 
         /// <inheritdoc/>

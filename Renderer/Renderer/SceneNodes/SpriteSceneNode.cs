@@ -66,13 +66,8 @@ namespace ValveResourceFormat.Renderer.SceneNodes
         public override void Update(Scene.UpdateContext context)
         {
             // The billboard rotation is the inverse of the camera's, so the sprite always faces it
-            if (!Matrix4x4.Decompose(context.Camera.CameraViewMatrix, out _, out var modelViewRotation, out _))
-            {
-                throw new InvalidOperationException("Matrix decompose failed");
-            }
-
             Transform = Matrix4x4.CreateScale(spriteSize)
-                * Matrix4x4.CreateFromQuaternion(Quaternion.Inverse(modelViewRotation))
+                * context.Camera.BillboardMatrix
                 * Matrix4x4.CreateTranslation(Transform.Translation);
         }
 
