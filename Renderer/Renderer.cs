@@ -1096,7 +1096,7 @@ public class Renderer
         renderContext.Framebuffer = WaterEffectsBuffer;
 
         // Data rather than an image: fog would write its color into the ripple and foam channels.
-        Scene.FogInfo.SetFogUniforms(ViewBuffer.Data, viewerFogEnabled: false);
+        Scene.FogInfo.SetFogUniforms(ViewBuffer.Data, viewerFogEnabled: false, FogSpace.World);
         ViewBuffer.Update();
 
         if (hasDraws)

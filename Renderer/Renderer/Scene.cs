@@ -103,6 +103,15 @@ namespace ValveResourceFormat.Renderer
         /// <summary>The entity world this scene takes part in.</summary>
         public EntitySystem EntitySystem { get; set; }
 
+        /// <summary>
+        /// How large an editor marker is drawn here next to the entity it marks. A 3D sky is magnified by
+        /// the camera it is drawn through, so its markers shrink to come back out at their normal size.
+        /// </summary>
+        public float MarkerScale { get; set; } = 1f;
+
+        /// <summary>Maps this scene's space to where the main camera sees it. Identity, except for a 3D sky.</summary>
+        public Matrix4x4 ToViewerWorld { get; internal set; } = Matrix4x4.Identity;
+
         /// <summary>Gets or sets the voxel visibility data used for debug rendering.</summary>
         public VoxelVisibility? VoxelVisibility { get; set; }
 
@@ -2545,8 +2554,20 @@ namespace ValveResourceFormat.Renderer
         /// <summary>Writes the scene's fog and weather parameters into the provided view constants structure.</summary>
         /// <param name="viewConstants">The view constants to update.</param>
         public void SetFogConstants(ViewConstants viewConstants)
+            => SetFogConstants(viewConstants, FogInfo, FogSpace.World);
+
+        /// <summary>
+        /// Writes the scene's weather parameters and the fog a view of it draws with into the provided
+        /// view constants structure.
+        /// </summary>
+        /// <param name="viewConstants">The view constants to update.</param>
+        /// <param name="fog">The fog the view draws with.</param>
+        /// <param name="fogSpace">Converts authored fog distances and heights into the view's space.</param>
+        internal void SetFogConstants(ViewConstants viewConstants, WorldFogInfo fog, FogSpace fogSpace)
         {
-            FogInfo.SetFogUniforms(viewConstants, FogEnabled);
+            ArgumentNullException.ThrowIfNull(fog);
+
+            fog.SetFogUniforms(viewConstants, FogEnabled, fogSpace);
 
             viewConstants.EnvWetness = EnvironmentWetness;
             viewConstants.EnvWetnessRipple = new Vector4(PuddleWindDirection, 0f, 0f, 0f);
