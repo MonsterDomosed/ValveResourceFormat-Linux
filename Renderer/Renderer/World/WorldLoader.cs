@@ -1542,7 +1542,6 @@ namespace ValveResourceFormat.Renderer.World
             );
 
             SkyboxScene = new Scene(RendererContext);
-            SkyboxScene.LightingInfo.LightingData.IsSkybox = 1u;
 
             // Entities are global: the skybox is another spawn group
             SkyboxScene.EntitySystem = scene.EntitySystem;

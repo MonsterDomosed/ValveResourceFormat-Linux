@@ -230,9 +230,6 @@ namespace ValveResourceFormat.Renderer
         /// <summary>Gets or sets whether GPU indirect drawing is used for eligible aggregate scene nodes.</summary>
         public bool EnableIndirectDraws { get; set; } = true;
 
-        /// <summary>Whether this is the 3d sky scene, which draws behind everything the main scene draws.</summary>
-        internal bool IsSkybox => LightingInfo.LightingData.IsSkybox != 0u;
-
         /// <summary>Gets or sets whether GPU draw compaction is applied after frustum culling to remove empty indirect draw commands.</summary>
         public bool EnableCompaction { get; set; } = true;
 
@@ -1956,7 +1953,6 @@ namespace ValveResourceFormat.Renderer
             var enabled = DepthPyramidValid && pyramid != null;
 
             shader.SetUniform("g_bOcclusionCullEnabled", enabled ? 1 : 0);
-            shader.SetUniform("g_bSkyOcclusion", IsSkybox ? 1 : 0);
 
             if (!enabled)
             {

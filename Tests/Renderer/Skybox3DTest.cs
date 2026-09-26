@@ -315,7 +315,8 @@ namespace Tests.Renderer
 
         /// <summary>
         /// At 1:1 the camera the sky is drawn through is the main camera itself: no magnification to
-        /// carry, so none of the position and none of the clip planes either.
+        /// carry, so none of the position and none of the clip planes either. The main camera is only
+        /// read from, so configuring the sky camera cannot take its clip planes away from it.
         /// </summary>
         [Test]
         public async Task OneToOneSkyCameraIsTheMainCamera()
@@ -330,8 +331,20 @@ namespace Tests.Renderer
                     var sky = new Camera();
                     var magnifiedSky = new Camera();
 
+                    // What the viewer's own camera has to still be once a sky has been drawn through one
+                    var mainNearPlane = main.NearPlane;
+                    var mainFarPlane = main.FarPlane;
+                    var mainLocation = main.Location;
+
                     skybox.ConfigureCamera(sky, main);
-                    magnified.ConfigureCamera(magnifiedSky, main);
+
+                    using (Assert.Multiple())
+                    {
+                        // Dividing by the scale is the sky camera's to do, and the viewer does not move
+                        await Assert.That(main.NearPlane).IsEqualTo(mainNearPlane).Because("the viewer keeps its own near plane");
+                        await Assert.That(main.FarPlane).IsEqualTo(mainFarPlane).Because("the viewer keeps its own far plane");
+                        await Assert.That(main.Location).IsEqualTo(mainLocation).Because("the viewer keeps its own position");
+                    }
 
                     // The camera stands where the viewer is, so it maps back onto the main camera
                     await AssertClose(skybox.ToWorld(sky.Location), main.Location, $"sky camera at {reference.Translation}, far {farPlane}");
@@ -341,8 +354,18 @@ namespace Tests.Renderer
                     await Assert.That(sky.NearPlane).IsEqualTo(main.NearPlane).Because($"near plane at {reference.Translation}, far {farPlane}");
                     await Assert.That(sky.FarPlane).IsEqualTo(main.FarPlane).Because($"far plane at {reference.Translation}, far {farPlane}");
 
+                    magnified.ConfigureCamera(magnifiedSky, main);
+
                     await Assert.That(magnifiedSky.NearPlane).IsEqualTo(main.NearPlane / 16f).Because($"magnified near plane at {reference.Translation}, far {farPlane}");
                     await Assert.That(magnifiedSky.FarPlane).IsEqualTo(main.FarPlane / 16f).Because($"magnified far plane at {reference.Translation}, far {farPlane}");
+
+                    // A magnification does divide the sky camera's clip planes, and still not the viewer's
+                    using (Assert.Multiple())
+                    {
+                        await Assert.That(main.NearPlane).IsEqualTo(mainNearPlane).Because("the viewer keeps its own near plane");
+                        await Assert.That(main.FarPlane).IsEqualTo(mainFarPlane).Because("the viewer keeps its own far plane");
+                        await Assert.That(main.Location).IsEqualTo(mainLocation).Because("the viewer keeps its own position");
+                    }
                 }
             }
         }

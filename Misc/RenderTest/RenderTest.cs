@@ -297,7 +297,13 @@ internal class RenderTestWindow : GameWindow
         var mapPath = vmaps[0].GetFullPath();
         var loadedMap = WorldLoader.LoadMap(mapPath, scene);
 
-        SceneRenderer.SkyboxScene = loadedMap.SkyboxScene;
+        if (loadedMap.SkyboxScene is { } skyScene)
+        {
+            // The loader still bakes the sky scale into its nodes, so there is no magnification for a sky
+            // camera to carry yet: the sky is drawn at 1:1, through a camera that follows the main one.
+            SceneRenderer.Skybox3D = new Skybox3D(skyScene, Matrix4x4.Identity, Vector3.Zero, 1f, scene.FogInfo, []);
+        }
+
         SceneRenderer.Skybox2D = loadedMap.Skybox2D;
 
         // Initialize scene (creates lighting buffers, octrees, etc.)
