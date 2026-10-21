@@ -5,7 +5,7 @@
     <PublishReadyToRun>false</PublishReadyToRun>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="TUnit" Version="1.66.16" />
+    <PackageReference Include="TUnit" Version="1.68.17" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\GUI.Linux\GUI.Linux.csproj" />
