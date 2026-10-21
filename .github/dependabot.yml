@@ -20,3 +20,8 @@ updates:
       interval: "weekly"
     cooldown:
       default-days: 30
+    groups:
+      skiasharp:
+        patterns:
+          - "SkiaSharp"
+          - "SkiaSharp.*"
