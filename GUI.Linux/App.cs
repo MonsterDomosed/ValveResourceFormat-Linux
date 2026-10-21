@@ -2350,6 +2350,50 @@ internal sealed class App : Application
                 await Program.StdOut.WriteLineAsync("[self-check] browser model thumbnails: no sample model folder").ConfigureAwait(true);
             }
 
+            // 5. The export engine the context menu drives: one entry as is, and decompiled.
+            // Big enough to reference sub resources, so the recursion and de-dup get exercised too
+            var exportEntry = pakView.Package.Entries?.GetValueOrDefault("vmdl_c")
+                ?.Where(static entry => entry.Length is > 20_000 and < 500_000)
+                .FirstOrDefault();
+
+            if (exportEntry is not null)
+            {
+                var exportRoot = Path.Combine(Path.GetTempPath(), "s2v-selfcheck-export");
+
+                if (Directory.Exists(exportRoot))
+                {
+                    Directory.Delete(exportRoot, true);
+                }
+
+                // Export as is keeps the compiled bytes, so the copy has to match the entry size
+                var asIsFolder = Path.Combine(exportRoot, "asis");
+                var asIs = new GUI.Linux.Types.Exporter.PackageExporter(pakView.Package, null, decompile: false);
+                asIs.QueueFiles(exportEntry);
+                await asIs.ExecuteToFolderAsync(null, asIsFolder).ConfigureAwait(true);
+
+                var asIsPath = Path.Combine(asIsFolder, exportEntry.GetFullPath());
+                var asIsLength = File.Exists(asIsPath) ? new FileInfo(asIsPath).Length : -1;
+                var asIsOk = asIsLength == exportEntry.TotalLength;
+
+                // Decompiling writes the same relative path with the decompiled extension
+                var decompiledFolder = Path.Combine(exportRoot, "decompiled");
+                var decompiled = new GUI.Linux.Types.Exporter.PackageExporter(pakView.Package, null, decompile: true);
+                decompiled.QueueFiles(exportEntry);
+                decompiled.SetOutputFormat(exportEntry.TypeName, "vmdl");
+                await decompiled.ExecuteToFolderAsync(null, decompiledFolder).ConfigureAwait(true);
+
+                var decompiledPath = Path.Combine(decompiledFolder, Path.ChangeExtension(exportEntry.GetFullPath(), "vmdl"));
+                var decompiledOk = File.Exists(decompiledPath) && new FileInfo(decompiledPath).Length > 0;
+
+                await Program.StdOut.WriteLineAsync(
+                    $"[self-check] browser export: {exportEntry.GetFullPath()} as-is={asIsOk} ({asIsLength}/{exportEntry.TotalLength} bytes), "
+                    + $"decompiled={decompiledOk} ({Path.GetFileName(decompiledPath)})").ConfigureAwait(true);
+            }
+            else
+            {
+                await Program.StdOut.WriteLineAsync("[self-check] browser export: no sample model entry").ConfigureAwait(true);
+            }
+
             if (textureEntry is not null)
             {
                 await window.OpenPackageEntryAsync(pakView.Package, pakPath, textureEntry).ConfigureAwait(true);

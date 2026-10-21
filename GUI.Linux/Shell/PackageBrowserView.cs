@@ -15,6 +15,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using GUI.Linux.Types.Browser;
+using GUI.Linux.Types.Exporter;
 using GUI.Linux.Utils;
 using ValvePak;
 using ValveResourceFormat.IO;
@@ -185,8 +186,9 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
 
         folderTree.Width = 320;
         folderTree.SelectionChanged += (_, _) => OnFolderSelected();
+        folderTree.ContextMenu = BuildFolderContextMenu();
 
-        fileList.SelectionMode = SelectionMode.Single;
+        fileList.SelectionMode = SelectionMode.Multiple;
         fileList.DoubleTapped += (_, _) => OpenSelected();
         fileList.KeyDown += (_, e) =>
         {
@@ -694,22 +696,32 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
 
     private void OpenSelected()
     {
-        if (fileList.SelectedItem is not PackageListEntry entry)
+        var selected = SelectedListEntries();
+
+        // Selecting a folder in the list navigates into it, even as part of a larger selection
+        if (selected.FirstOrDefault(static item => item.Folder is not null) is { } folderEntry)
         {
+            NavigateTo(folderEntry.Folder!);
             return;
         }
 
-        if (entry.Folder is { } folder)
+        // Opening a multi selection opens every selected file, like a double click on it
+        foreach (var item in selected)
         {
-            NavigateTo(folder);
-            return;
-        }
-
-        if (entry.Entry is { } file)
-        {
-            _ = window.OpenPackageEntryAsync(package, vpkPath, file);
+            if (item.Entry is { } file)
+            {
+                _ = window.OpenPackageEntryAsync(package, vpkPath, file);
+            }
         }
     }
+
+    private List<PackageListEntry> SelectedListEntries() => fileList.SelectedItems?
+        .OfType<PackageListEntry>()
+        .ToList() ?? [];
+
+    /// <summary>Package entries behind the current file list selection. Folder rows select nothing.</summary>
+    private List<PackageEntry> SelectedEntries()
+        => SelectedListEntries().Where(static item => item.Entry is not null).Select(static item => item.Entry!).ToList();
 
     private ContextMenu BuildFileContextMenu()
     {
@@ -719,61 +731,81 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
         var copyPath = new MenuItem { Header = "Copy path" };
         copyPath.Click += (_, _) =>
         {
-            if (fileList.SelectedItem is PackageListEntry { Entry: { } entry })
+            foreach (var entry in SelectedEntries())
             {
                 AppClipboard.SetText(entry.GetFullPath());
+                break;
             }
         };
 
-        var export = new MenuItem { Header = "Export..." };
-        export.Click += (_, _) => ExportSelected();
+        var export = new MenuItem { Header = "Export as is", Icon = new GUI.Linux.UI.SvgIcon("Export", 16) };
+        export.Click += (_, _) => ExportSelected(decompile: false);
+
+        var decompile = new MenuItem { Header = "Decompile & export", Icon = new GUI.Linux.UI.SvgIcon("Decompile", 16) };
+        decompile.Click += (_, _) => ExportSelected(decompile: true);
 
         var menu = new ContextMenu();
         menu.Items.Add(open);
         menu.Items.Add(copyPath);
         menu.Items.Add(export);
+        menu.Items.Add(decompile);
 
         menu.Opening += (_, _) =>
         {
-            var isFile = fileList.SelectedItem is PackageListEntry { Entry: not null };
-            copyPath.IsEnabled = isFile;
-            export.IsEnabled = isFile;
+            var selection = SelectedEntries();
+            var singleFile = selection.Count == 1;
+
+            copyPath.IsEnabled = singleFile;
+            export.IsEnabled = selection.Count > 0;
+            decompile.IsEnabled = selection.Count > 0;
         };
 
         return menu;
     }
 
-    private void ExportSelected()
+    /// <summary>Context menu for the folder tree, which exports the selected folder's contents.</summary>
+    private ContextMenu BuildFolderContextMenu()
     {
-        if (fileList.SelectedItem is not PackageListEntry { Entry: { } entry })
+        var export = new MenuItem { Header = "Export as is", Icon = new GUI.Linux.UI.SvgIcon("Export", 16) };
+        export.Click += (_, _) => ExportFolder(decompile: false);
+
+        var decompile = new MenuItem { Header = "Decompile & export", Icon = new GUI.Linux.UI.SvgIcon("Decompile", 16) };
+        decompile.Click += (_, _) => ExportFolder(decompile: true);
+
+        var menu = new ContextMenu();
+        menu.Items.Add(export);
+        menu.Items.Add(decompile);
+
+        return menu;
+    }
+
+    private void ExportFolder(bool decompile)
+    {
+        if (folderTree.SelectedItem is not TreeViewItem { Tag: PackageTreeNode node })
         {
             return;
         }
 
-        var name = entry.GetFileName();
+        _ = ExportFile.ExtractFromFolderAsync(window, package, node, decompile);
+    }
 
-        var dest = AppFileDialogs.SaveFile(
-            "Export file",
-            name,
-            Path.GetExtension(name).TrimStart('.'),
-            "All files (*.*)|*.*");
+    private void ExportSelected(bool decompile)
+    {
+        var entries = SelectedEntries();
 
-        if (string.IsNullOrEmpty(dest))
+        if (entries.Count == 0)
         {
             return;
         }
 
-        try
+        // A single file can be written wherever the user wants, several go into a chosen folder
+        if (entries.Count == 1)
         {
-            using var stream = GameFileLoader.GetPackageEntryStream(package, entry);
-            using var file = File.Create(dest);
-            stream.CopyTo(file);
-            Log.Info(nameof(PackageBrowserView), $"Exported {entry.GetFullPath()} to {dest}");
+            _ = ExportFile.ExtractFromPackageEntryAsync(window, package, entries[0], decompile);
+            return;
         }
-        catch (Exception e)
-        {
-            Log.Error(nameof(PackageBrowserView), e.ToString());
-        }
+
+        _ = ExportFile.ExtractFromEntriesAsync(window, package, entries, decompile);
     }
 
     private void OnFileListPointerPressed(object? sender, PointerPressedEventArgs e)

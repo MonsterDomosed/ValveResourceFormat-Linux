@@ -2,8 +2,10 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using GUI.Linux.GL;
+using GUI.Linux.Shell;
 using GUI.Linux.Types.Audio;
 using GUI.Linux.Types.Browser;
+using GUI.Linux.Types.Exporter;
 using GUI.Linux.Types.GLViewers;
 using GUI.Linux.Types.Graphs.Core;
 using GUI.Linux.Types.Viewers;
@@ -350,6 +352,27 @@ namespace Tests
             }
 
             public Stream? OpenDefaultCubemapStream() => null;
+        }
+
+        [Test]
+        [Arguments("/home/user/out", "models/props/crate.vmdl", "/home/user/out/models/props/crate.vmdl")]
+        [Arguments("/home/user/maps", "maps/de_dust2/world.vwrld", "/home/user/maps/de_dust2/world.vwrld")]
+        [Arguments("/home/user/models", "models/props/crate.vmdl", "/home/user/models/props/crate.vmdl")]
+        [Arguments("/home/user/materials", "materials/x/y.vtex", "/home/user/materials/x/y.vtex")]
+        public async Task ExportAssetFolderAvoidsRepeatingTheChosenFolder(string destination, string asset, string expected)
+        {
+            await Assert.That(PackageExporter.CombineAssetFolder(destination, asset)).IsEqualTo(expected);
+        }
+
+        [Test]
+        [Arguments(0, "0:00")]
+        [Arguments(59, "0:59")]
+        [Arguments(60, "1:00")]
+        [Arguments(3661, "1:01:01")]
+        [Arguments(7325, "2:02:05")]
+        public async Task ProgressElapsedTimeIsFormattedAsMinutesAndSeconds(int seconds, string expected)
+        {
+            await Assert.That(ExportProgressDialog.FormatTime(TimeSpan.FromSeconds(seconds))).IsEqualTo(expected);
         }
 
         private sealed class SettingsSceneHost : IGLViewerHost

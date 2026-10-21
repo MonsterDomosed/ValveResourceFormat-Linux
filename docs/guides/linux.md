@@ -100,6 +100,16 @@ meshes, voxel visibility, animation clips, skeletons, smart props, panorama vect
 graphics, color correction LUTs, animation graphs (AG1 and AG2), pulse graphs, entity I/O
 graphs, and sound. The VPK browser, console, and portable data viewers are also available.
 
+Resources can be exported and decompiled from the VPK browser and from an open tab. The
+`Export as is` and `Decompile & export` actions are on the file and folder context menus of
+the VPK browser (the file list accepts multi-selection, and folders export their whole
+subtree) and on the tab context menu for files opened from disk. Decompiling a single file
+asks where to save it and offers glTF (`.gltf`) and glTF Binary (`.glb`) for models, meshes,
+maps, worlds, world nodes and animation clips. Decompiling several files or a folder first
+shows a per-type output picker, where every compiled type can be written as its native
+extension, as images for textures, as sound for sounds, as glTF, or skipped entirely, and
+then a progress window reports each file as it is written.
+
 The model viewer includes an interactive inspection camera (left-drag orbit, right-drag pan,
 wheel zoom, reset view) and a native animation sidebar (animation selection, play/pause,
 timeline scrubbing, playback speed, looping and restart), with models that have animations

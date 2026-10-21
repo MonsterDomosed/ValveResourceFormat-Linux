@@ -570,6 +570,22 @@ internal sealed class MainWindow : Window
         return hash.ToString("x16", System.Globalization.CultureInfo.InvariantCulture);
     }
 
+    private void ExportTabAsIs(TabItem tab)
+    {
+        if (tabPaths.TryGetValue(tab, out var path))
+        {
+            _ = GUI.Linux.Types.Exporter.ExportFile.ExtractFromPathAsync(this, path, decompile: false);
+        }
+    }
+
+    private void DecompileTab(TabItem tab)
+    {
+        if (tabPaths.TryGetValue(tab, out var path))
+        {
+            _ = GUI.Linux.Types.Exporter.ExportFile.ExtractFromPathAsync(this, path, decompile: true);
+        }
+    }
+
     /// <summary>Closes the first tab whose title matches. Used by the self-check.</summary>
     internal bool CloseTabByTitle(string title)
     {
@@ -778,6 +794,18 @@ internal sealed class MainWindow : Window
         reload.Click += (_, _) => ReloadTab(tab);
         reload.IsEnabled = tabPaths.ContainsKey(tab);
         items.Add(reload);
+
+        items.Add(new Separator());
+
+        var export = new MenuItem { Header = "Export as is", Icon = new GUI.Linux.UI.SvgIcon("Export", 16) };
+        export.Click += (_, _) => ExportTabAsIs(tab);
+        export.IsEnabled = tabPaths.ContainsKey(tab);
+        items.Add(export);
+
+        var decompile = new MenuItem { Header = "Decompile & export", Icon = new GUI.Linux.UI.SvgIcon("Decompile", 16) };
+        decompile.Click += (_, _) => DecompileTab(tab);
+        decompile.IsEnabled = tabPaths.ContainsKey(tab);
+        items.Add(decompile);
 
         items.Add(new Separator());
 

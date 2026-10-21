@@ -38,7 +38,9 @@ format. Parsing network/demo formats such as `.dem` is out of scope
 dedicated dump, "generic" means only the generic KV3/NTRO tree dump described above.
 **Decompiles / exports to** is what file-level extraction ("Decompile & Export") produces;
 a "-" means no dedicated decompile exists, extraction still writes the text dump described
-in the Dump column.
+in the Dump column. On the native Linux application the same actions live on the VPK
+browser's file and folder context menus and on the tab context menu; see the
+[Linux guide](./linux.md).
 
 ### Resource Formats
 
