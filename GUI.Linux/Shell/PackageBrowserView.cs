@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -57,10 +58,23 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
     private readonly ToggleButton iconsToggle = new() { Content = "Icons", IsChecked = true };
     private readonly ToggleButton listToggle = new() { Content = "List" };
     private readonly SemaphoreSlim thumbnailGate = new(3);
+    private readonly DispatcherTimer filterTimer;
+
+    /// <summary>
+    /// How many entries the list shows at once. A package holds over a hundred thousand entries, and
+    /// the list is not virtualized in the icons view, so showing all of them would build a visual
+    /// tree that takes a minute to create.
+    /// </summary>
+    private const int MaxDisplayedResults = 1000;
+
+    /// <summary>How long the filter waits for the typing to settle before it searches.</summary>
+    private static readonly TimeSpan FilterDelay = TimeSpan.FromMilliseconds(200);
 
     private PackageTreeNode currentFolder;
     private List<PackageListEntry> currentEntries = [];
     private CancellationTokenSource? thumbnailCancellation;
+    private int totalMatches;
+    private int refreshCount;
     private bool iconsMode = true;
     private bool suppressTreeRefresh;
     private bool disposed;
@@ -75,6 +89,13 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
         package.Read(vpkPath);
         root = PackageTree.Build(package);
         currentFolder = root;
+
+        filterTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = FilterDelay };
+        filterTimer.Tick += (_, _) =>
+        {
+            filterTimer.Stop();
+            RefreshFileList();
+        };
 
         Content = BuildLayout();
         PopulateFolderTree();
@@ -156,7 +177,10 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
 
         filterBox.PlaceholderText = "Filter by name or path...";
         filterBox.Width = 320;
-        filterBox.TextChanged += (_, _) => RefreshFileList();
+
+        // Searching a whole package matches tens of thousands of entries, so the search waits until
+        // the typing settles instead of running again for every keystroke.
+        filterBox.TextChanged += (_, _) => ScheduleRefresh();
 
         searchAllFolders.IsCheckedChanged += (_, _) => RefreshFileList();
 
@@ -254,15 +278,15 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
         }
         else
         {
-            fileList.ItemsPanel = new FuncTemplate<Panel?>(static () => new StackPanel
-            {
-                Orientation = Orientation.Vertical,
-            });
+            // The list view virtualizes, so only the rows on screen exist as controls. The icons view
+            // has no virtualizing wrap panel to fall back on, which is why the number of results is
+            // capped instead.
+            fileList.ItemsPanel = new FuncTemplate<Panel?>(static () => new VirtualizingStackPanel());
             fileList.ItemTemplate = new FuncDataTemplate<PackageListEntry>((entry, _) => BuildListRow(entry), supportsRecycling: false);
         }
     }
 
-    private static StackPanel BuildGridTile(PackageListEntry entry)
+    private StackPanel BuildGridTile(PackageListEntry entry)
     {
         var preview = new Image
         {
@@ -274,7 +298,9 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
         };
 
         preview.Source = ResolvePreviewSource(entry, 72);
+        preview.Tag = entry;
         entry.ThumbnailImage = preview;
+        RequestThumbnail(entry);
 
         var name = new TextBlock
         {
@@ -306,7 +332,7 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
         return tile;
     }
 
-    private static Grid BuildListRow(PackageListEntry entry)
+    private Grid BuildListRow(PackageListEntry entry)
     {
         var grid = new Grid
         {
@@ -323,7 +349,9 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
         };
 
         icon.Source = ResolvePreviewSource(entry, 16);
+        icon.Tag = entry;
         entry.ThumbnailImage = icon;
+        RequestThumbnail(entry);
 
         var name = new TextBlock { Text = entry.Name, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 1), VerticalAlignment = VerticalAlignment.Center };
         var type = new TextBlock { Text = entry.Type, Opacity = 0.7, Margin = new Thickness(0, 1), VerticalAlignment = VerticalAlignment.Center };
@@ -490,6 +518,8 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
 
     private void RefreshFileList()
     {
+        refreshCount++;
+
         CancelThumbnails();
 
         var query = filterBox.Text?.Trim() ?? string.Empty;
@@ -518,7 +548,9 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
                 });
             }
 
-            foreach (var file in SortedFiles(currentFolder.Files))
+            totalMatches = currentFolder.Files.Count;
+
+            foreach (var file in SortedFiles(currentFolder.Files.Take(MaxDisplayedResults)))
             {
                 entries.Add(CreateFileEntry(file));
             }
@@ -526,8 +558,8 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
         else
         {
             var matches = searchAllFolders.IsChecked == true
-                ? PackageTree.Search(root, query, PackageSearchMode.FileNamePartialMatch)
-                : PackageTree.Search(currentFolder, query, PackageSearchMode.FileNamePartialMatch);
+                ? PackageTree.Search(root, query, PackageSearchMode.FileNamePartialMatch, MaxDisplayedResults, out totalMatches)
+                : PackageTree.Search(currentFolder, query, PackageSearchMode.FileNamePartialMatch, MaxDisplayedResults, out totalMatches);
 
             foreach (var file in SortedFiles(matches))
             {
@@ -540,11 +572,66 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
 
         var folders = ListFolderCount;
         var files = ListFileCount;
-        countLabel.Text = query.Length > 0
-            ? $"{files:N0} file{(files == 1 ? string.Empty : "s")}"
-            : $"{folders:N0} folder{(folders == 1 ? string.Empty : "s")}, {files:N0} file{(files == 1 ? string.Empty : "s")}";
+
+        if (query.Length > 0)
+        {
+            countLabel.Text = totalMatches > files
+                ? $"showing first {files:N0} of {totalMatches:N0} matches, refine the search"
+                : $"{files:N0} file{(files == 1 ? string.Empty : "s")}";
+        }
+        else
+        {
+            countLabel.Text = totalMatches > files
+                ? $"{folders:N0} folder{(folders == 1 ? string.Empty : "s")}, showing first {files:N0} of {totalMatches:N0} files"
+                : $"{folders:N0} folder{(folders == 1 ? string.Empty : "s")}, {files:N0} file{(files == 1 ? string.Empty : "s")}";
+        }
 
         QueueThumbnails();
+    }
+
+    /// <summary>Waits for the typing to settle, then refreshes the list.</summary>
+    private void ScheduleRefresh()
+    {
+        filterTimer.Stop();
+        filterTimer.Start();
+    }
+
+    /// <summary>
+    /// Runs a search over the whole package and reports what the list ended up showing and how long
+    /// it took, for the self-check.
+    /// </summary>
+    internal (int Shown, int Total, long ElapsedMilliseconds) SearchAllFolders(string query)
+    {
+        searchAllFolders.IsChecked = true;
+        filterBox.Text = query;
+
+        var watch = Stopwatch.StartNew();
+        RefreshFileList();
+
+        return (currentEntries.Count, totalMatches, watch.ElapsedMilliseconds);
+    }
+
+    /// <summary>
+    /// Types a query the way a person would, one character at a time, and reports how often the list
+    /// was rebuilt and what it ended up showing, for the self-check.
+    /// </summary>
+    internal async Task<(int Shown, int Total, int Rebuilds)> TypeSearchAsync(string query)
+    {
+        searchAllFolders.IsChecked = true;
+        filterBox.Text = string.Empty;
+        await Task.Delay(FilterDelay * 2).ConfigureAwait(true);
+
+        var rebuildsBefore = refreshCount;
+
+        foreach (var character in query)
+        {
+            filterBox.Text += character;
+            await Task.Delay(20).ConfigureAwait(true);
+        }
+
+        await Task.Delay(FilterDelay * 3).ConfigureAwait(true);
+
+        return (currentEntries.Count, totalMatches, refreshCount - rebuildsBefore);
     }
 
     private static PackageListEntry CreateFileEntry(PackageEntry file) => new()
@@ -568,18 +655,26 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
         }
 
         thumbnailCancellation = new CancellationTokenSource();
-        var token = thumbnailCancellation.Token;
+    }
 
-        foreach (var entry in currentEntries)
+    /// <summary>
+    /// Asks for the preview of a single entry. The list only creates the controls for the entries it
+    /// shows, so this runs for the visible entries rather than for everything the search matched.
+    /// </summary>
+    private void RequestThumbnail(PackageListEntry entry)
+    {
+        if (disposed || entry.Entry is not { } file || entry.Thumbnail is not null || entry.ThumbnailRequested)
         {
-            if (entry.Entry is not { } file || entry.Thumbnail is not null || entry.ThumbnailRequested || !PackageThumbnails.CanThumbnail(file))
-            {
-                continue;
-            }
-
-            entry.ThumbnailRequested = true;
-            _ = LoadThumbnailAsync(entry, file, token);
+            return;
         }
+
+        if (!PackageThumbnails.CanThumbnail(file) || thumbnailCancellation is null)
+        {
+            return;
+        }
+
+        entry.ThumbnailRequested = true;
+        _ = LoadThumbnailAsync(entry, file, thumbnailCancellation.Token);
     }
 
     private async Task LoadThumbnailAsync(PackageListEntry entry, PackageEntry file, CancellationToken cancellationToken)
@@ -606,7 +701,9 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
 
                     entry.Thumbnail = bitmap;
 
-                    if (entry.ThumbnailImage is { } image)
+                    // The list recycles rows, so the image that was showing this entry may now show a
+                    // different one, and updating it would put the wrong preview there.
+                    if (entry.ThumbnailImage is { } image && ReferenceEquals(image.Tag, entry))
                     {
                         image.Source = bitmap;
                     }
@@ -654,15 +751,18 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
 
     private void ResumeThumbnails()
     {
+        QueueThumbnails();
+
+        // The rows that are already on screen keep their controls, so their previews have to be
+        // asked for again. Rows that were never created have no image yet and ask when they appear.
         foreach (var entry in currentEntries)
         {
-            if (entry.Thumbnail is null)
+            if (entry.Thumbnail is null && entry.ThumbnailImage is not null)
             {
                 entry.ThumbnailRequested = false;
+                RequestThumbnail(entry);
             }
         }
-
-        QueueThumbnails();
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -840,6 +940,7 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
         }
 
         disposed = true;
+        filterTimer.Stop();
         CancelThumbnails();
         thumbnailGate.Dispose();
         package.Dispose();

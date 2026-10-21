@@ -179,6 +179,30 @@ namespace Tests
         }
 
         [Test]
+        public async Task PackageTreeSearchCountsEveryMatchWhileCollectingOnlySome()
+        {
+            using var package = new Package();
+            package.OptimizeEntriesForBinarySearch(StringComparison.OrdinalIgnoreCase);
+            package.Read(FilePath("dota_riverflow_fx.vpk"));
+
+            var root = PackageTree.Build(package);
+
+            var all = PackageTree.Search(root, "a", PackageSearchMode.FileNamePartialMatch);
+            await Assert.That(all.Count).IsGreaterThan(0);
+
+            var limited = PackageTree.Search(root, "a", PackageSearchMode.FileNamePartialMatch, 3, out var total);
+
+            using (Assert.Multiple())
+            {
+                // The limit bounds what the list has to show, not what was counted
+                await Assert.That(limited.Count).IsEqualTo(Math.Min(3, all.Count));
+                await Assert.That(total).IsEqualTo(all.Count);
+                await Assert.That(limited.Select(static entry => entry.GetFullPath()))
+                    .IsEquivalentTo(all.Take(3).Select(static entry => entry.GetFullPath()));
+            }
+        }
+
+        [Test]
         public async Task BuildsRecentFileBrowserNodes()
         {
             var node = GameBrowser.BuildRecentFiles([FilePath("beep.vsnd_c")]);

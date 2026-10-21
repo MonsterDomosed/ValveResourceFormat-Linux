@@ -2350,6 +2350,21 @@ internal sealed class App : Application
                 await Program.StdOut.WriteLineAsync("[self-check] browser model thumbnails: no sample model folder").ConfigureAwait(true);
             }
 
+            // 4b. A search over the whole package has to stay responsive, so the list is capped and
+            // the results are counted without building a control for every match.
+            var (shown, total, elapsed) = pakView.SearchAllFolders("a");
+            var searchOk = elapsed < 2000;
+
+            await Program.StdOut.WriteLineAsync(
+                $"[self-check] browser search: query 'a' shown={shown} of {total} in {elapsed}ms, responsive={searchOk}").ConfigureAwait(true);
+
+            // Typing has to settle into a single search instead of running one per character.
+            var (typedShown, typedTotal, rebuilds) = await pakView.TypeSearchAsync("model").ConfigureAwait(true);
+            var debounceOk = rebuilds == 1;
+
+            await Program.StdOut.WriteLineAsync(
+                $"[self-check] browser typing: query 'model' shown={typedShown} of {typedTotal}, rebuilds={rebuilds}, debounced={debounceOk}").ConfigureAwait(true);
+
             // 5. The export engine the context menu drives: one entry as is, and decompiled.
             // Big enough to reference sub resources, so the recursion and de-dup get exercised too
             var exportEntry = pakView.Package.Entries?.GetValueOrDefault("vmdl_c")
