@@ -15,6 +15,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using GUI.Linux.Types.Browser;
 using GUI.Linux.Types.Exporter;
 using GUI.Linux.Utils;
@@ -59,6 +60,8 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
     private readonly ToggleButton listToggle = new() { Content = "List" };
     private readonly SemaphoreSlim thumbnailGate = new(3);
     private readonly DispatcherTimer filterTimer;
+    private readonly DispatcherTimer visibleCheckTimer;
+    private ScrollViewer? fileScrollViewer;
 
     /// <summary>
     /// How many entries the list shows at once. A package holds over a hundred thousand entries, and
@@ -90,12 +93,16 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
         root = PackageTree.Build(package);
         currentFolder = root;
 
-        filterTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = FilterDelay };
+        // The search runs ahead of the preview work, so it is not stuck behind it.
+        filterTimer = new DispatcherTimer(DispatcherPriority.Input) { Interval = FilterDelay };
         filterTimer.Tick += (_, _) =>
         {
             filterTimer.Stop();
             RefreshFileList();
         };
+
+        visibleCheckTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(150) };
+        visibleCheckTimer.Tick += OnVisibleCheckTick;
 
         Content = BuildLayout();
         PopulateFolderTree();
@@ -286,7 +293,7 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
         }
     }
 
-    private StackPanel BuildGridTile(PackageListEntry entry)
+    private static StackPanel BuildGridTile(PackageListEntry entry)
     {
         var preview = new Image
         {
@@ -300,7 +307,6 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
         preview.Source = ResolvePreviewSource(entry, 72);
         preview.Tag = entry;
         entry.ThumbnailImage = preview;
-        RequestThumbnail(entry);
 
         var name = new TextBlock
         {
@@ -332,7 +338,7 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
         return tile;
     }
 
-    private Grid BuildListRow(PackageListEntry entry)
+    private static Grid BuildListRow(PackageListEntry entry)
     {
         var grid = new Grid
         {
@@ -351,7 +357,6 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
         icon.Source = ResolvePreviewSource(entry, 16);
         icon.Tag = entry;
         entry.ThumbnailImage = icon;
-        RequestThumbnail(entry);
 
         var name = new TextBlock { Text = entry.Name, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 1), VerticalAlignment = VerticalAlignment.Center };
         var type = new TextBlock { Text = entry.Type, Opacity = 0.7, Margin = new Thickness(0, 1), VerticalAlignment = VerticalAlignment.Center };
@@ -587,6 +592,7 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
         }
 
         QueueThumbnails();
+        ScheduleVisibleThumbnailCheck();
     }
 
     /// <summary>Waits for the typing to settle, then refreshes the list.</summary>
@@ -600,7 +606,7 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
     /// Runs a search over the whole package and reports what the list ended up showing and how long
     /// it took, for the self-check.
     /// </summary>
-    internal (int Shown, int Total, long ElapsedMilliseconds) SearchAllFolders(string query)
+    internal (int Shown, int Total, long ElapsedMilliseconds, int Models, int Textures) SearchAllFolders(string query)
     {
         searchAllFolders.IsChecked = true;
         filterBox.Text = query;
@@ -608,7 +614,10 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
         var watch = Stopwatch.StartNew();
         RefreshFileList();
 
-        return (currentEntries.Count, totalMatches, watch.ElapsedMilliseconds);
+        var models = currentEntries.Count(static e => e.Entry is not null && e.Entry.GetFileName().EndsWith(".vmdl_c", StringComparison.OrdinalIgnoreCase));
+        var textures = currentEntries.Count(static e => e.Entry is not null && e.Entry.GetFileName().EndsWith(".vtex_c", StringComparison.OrdinalIgnoreCase));
+
+        return (currentEntries.Count, totalMatches, watch.ElapsedMilliseconds, models, textures);
     }
 
     /// <summary>
@@ -655,6 +664,54 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
         }
 
         thumbnailCancellation = new CancellationTokenSource();
+    }
+
+    /// <summary>
+    /// Asks for the previews of the entries that are on screen. A search can match a hundred thousand
+    /// entries, and producing a preview for each of them would keep the user interface busy long
+    /// after the list itself is ready.
+    /// </summary>
+    private void RequestVisibleThumbnails()
+    {
+        if (disposed || thumbnailCancellation is null)
+        {
+            return;
+        }
+
+        var scroll = fileList.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
+
+        if (scroll is null)
+        {
+            return;
+        }
+
+        foreach (var entry in currentEntries)
+        {
+            if (entry.Thumbnail is not null || entry.ThumbnailRequested || entry.ThumbnailImage is not { } image)
+            {
+                continue;
+            }
+
+            if (IsInsideViewport(image, scroll))
+            {
+                RequestThumbnail(entry);
+            }
+        }
+    }
+
+    /// <summary>Whether the image lies within the visible part of the list.</summary>
+    private static bool IsInsideViewport(Control image, ScrollViewer scroll)
+    {
+        if (image.TransformToVisual(scroll) is not { } transform)
+        {
+            return false;
+        }
+
+        var topLeft = transform.Transform(new Point(image.Bounds.Left, image.Bounds.Top));
+        var bottomRight = transform.Transform(new Point(image.Bounds.Right, image.Bounds.Bottom));
+        var bounds = new Rect(topLeft, bottomRight);
+
+        return bounds.Intersects(scroll.Bounds);
     }
 
     /// <summary>
@@ -760,9 +817,10 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
             if (entry.Thumbnail is null && entry.ThumbnailImage is not null)
             {
                 entry.ThumbnailRequested = false;
-                RequestThumbnail(entry);
             }
         }
+
+        RequestVisibleThumbnails();
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -792,6 +850,64 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
         {
             CancelThumbnails();
         }
+    }
+
+    /// <summary>
+    /// Looks for the previews of the entries that came into view. The check runs on a timer, so a
+    /// scroll does not turn into a walk over every entry of the list.
+    /// </summary>
+    private void ScheduleVisibleThumbnailCheck()
+    {
+        if (disposed)
+        {
+            return;
+        }
+
+        visibleCheckTimer.Stop();
+        visibleCheckTimer.Start();
+    }
+
+    private void OnVisibleCheckTick(object? sender, EventArgs e)
+    {
+        visibleCheckTimer.Stop();
+
+        if (!IsEffectivelyVisible)
+        {
+            // The tab is hidden, so the previews wait until it is shown again.
+            visibleCheckTimer.Start();
+            return;
+        }
+
+        if (thumbnailCancellation is null)
+        {
+            QueueThumbnails();
+        }
+
+        RequestVisibleThumbnails();
+    }
+
+    /// <summary>Notices that the list scrolled, so the previews of the new entries can be asked for.</summary>
+    private void OnFileListScrolled(object? sender, ScrollChangedEventArgs e)
+    {
+        ScheduleVisibleThumbnailCheck();
+    }
+
+    protected override void OnLoaded(RoutedEventArgs e)
+    {
+        base.OnLoaded(e);
+
+        // The list creates its scroll viewer with its template, so it is only there once loaded.
+        if (fileScrollViewer is null)
+        {
+            fileScrollViewer = fileList.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
+
+            if (fileScrollViewer is not null)
+            {
+                fileScrollViewer.ScrollChanged += OnFileListScrolled;
+            }
+        }
+
+        ScheduleVisibleThumbnailCheck();
     }
 
     private void OpenSelected()

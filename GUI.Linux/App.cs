@@ -2352,11 +2352,11 @@ internal sealed class App : Application
 
             // 4b. A search over the whole package has to stay responsive, so the list is capped and
             // the results are counted without building a control for every match.
-            var (shown, total, elapsed) = pakView.SearchAllFolders("a");
+            var (shown, total, elapsed, models, textures) = pakView.SearchAllFolders("a");
             var searchOk = elapsed < 2000;
 
             await Program.StdOut.WriteLineAsync(
-                $"[self-check] browser search: query 'a' shown={shown} of {total} in {elapsed}ms, responsive={searchOk}").ConfigureAwait(true);
+                $"[self-check] browser search: query 'a' shown={shown} of {total} in {elapsed}ms, models={models}, textures={textures}, responsive={searchOk}").ConfigureAwait(true);
 
             // Typing has to settle into a single search instead of running one per character.
             var (typedShown, typedTotal, rebuilds) = await pakView.TypeSearchAsync("model").ConfigureAwait(true);
