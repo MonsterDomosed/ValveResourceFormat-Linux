@@ -544,6 +544,22 @@ namespace Tests
         }
 
         [Test]
+        public async Task TestBinaryKV3Uint32ConstantsAreRead()
+        {
+            var file = Path.Combine(TestContext.TestDirectory!, "Files", "deadlock_tarot_tiles_kv3_v5_uint32_constants.vdata_c");
+            using var resource = new Resource();
+            resource.Read(file);
+
+            var blocks = resource.Blocks.OfType<BinaryKV3>().Where(block => block.SerializationVersion == 5).ToList();
+            await Assert.That(blocks).IsNotEmpty();
+
+            // The tile ids are stored as the dedicated zero and one node types
+            var text = string.Join("\n", blocks.Select(block => block.ToString()));
+            await Assert.That(text).Contains("m_unTileDefID = 1");
+            await Assert.That(text).Contains("m_unTileDefID = 2");
+        }
+
+        [Test]
         public async Task TestKV3StringEscaping()
         {
             var expectedFilePath = Path.Combine(TestContext.TestDirectory!, "Files", "KeyValues", "StringEscaping.kv3");

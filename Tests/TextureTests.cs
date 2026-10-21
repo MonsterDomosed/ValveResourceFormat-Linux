@@ -18,6 +18,23 @@ namespace Tests
         public static IEnumerable<string> GetTextureFiles()
             => Directory.EnumerateFiles(TexturesDir, "*.vtex_c").Select(Path.GetFileName)!;
 
+        [Test]
+        public async Task R8UnormTextureDecodesToASingleChannel()
+        {
+            using var resource = new Resource();
+            resource.Read(Path.Combine(TexturesDir, "R8_UNORM_default_tga_75b4d188.vtex_c"));
+
+            var texture = (Texture?)resource.DataBlock;
+            Debug.Assert(texture != null);
+
+            await Assert.That(texture.Format).IsEqualTo(VTexFormat.R8_UNORM);
+
+            using var bitmap = texture.GenerateBitmap();
+            await Assert.That(bitmap).IsNotNull();
+            await Assert.That(bitmap!.Width).IsGreaterThan(0);
+            await Assert.That(bitmap.Height).IsGreaterThan(0);
+        }
+
         [Test, MethodDataSource(nameof(GetTextureFiles))]
         public void ExportTexture(string fileName)
         {
