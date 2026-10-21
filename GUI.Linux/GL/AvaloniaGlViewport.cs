@@ -9,6 +9,8 @@ using Avalonia.Media;
 using Avalonia.OpenGL;
 using Avalonia.OpenGL.Controls;
 using Avalonia.OpenGL.Egl;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using GUI.Linux.Types.GLViewers;
 using GUI.Linux.Utils;
 using ValveResourceFormat.Renderer;
@@ -45,6 +47,10 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
     private Point lastPointer;
     private Framebuffer screenFramebuffer = Framebuffer.GLDefaultFramebuffer;
     private bool cursorHidden;
+    private DispatcherTimer? framePacer;
+    private DispatcherTimer? statePoller;
+    private Window? hostWindow;
+    private bool hostWindowMinimized;
 
     public AvaloniaGlViewport()
     {
@@ -159,10 +165,102 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
 
         FrameRendered?.Invoke();
 
-        if (renderer.ContinuousRendering && IsVisible)
+        if (renderer.ContinuousRendering && IsVisible && IsRenderActive)
+        {
+            ScheduleNextFrame();
+        }
+    }
+
+    /// <summary>
+    /// False while the host window is minimized. Avalonia keeps delivering render callbacks for an
+    /// iconified window, so the frame loop has to stop itself, otherwise a window nobody can see
+    /// keeps redrawing at full cost.
+    /// </summary>
+    private bool IsRenderActive => !hostWindowMinimized;
+
+    private bool HostWindowMinimized => hostWindow?.WindowState == WindowState.Minimized;
+
+    /// <summary>Queues the next continuous frame, honouring the configured frame rate limit.</summary>
+    private void ScheduleNextFrame()
+    {
+        if (Settings.Config.FrameRateLimit <= 0)
+        {
+            RequestNextFrameRendering();
+            return;
+        }
+
+        // The timer owns the schedule, so exactly one frame is asked for per slot. Requesting straight
+        // from the render callback as well would race the timer that already asked for this frame and
+        // deliver two frames per slot.
+        if (framePacer is null)
+        {
+            framePacer = new DispatcherTimer(DispatcherPriority.Render);
+            framePacer.Tick += OnFramePacerTick;
+        }
+
+        framePacer.Stop();
+        framePacer.Interval = TimeSpan.FromSeconds(1.0 / Settings.Config.FrameRateLimit);
+        framePacer.Start();
+    }
+
+    private void OnFramePacerTick(object? sender, EventArgs e)
+    {
+        framePacer?.Stop();
+
+        if (renderer is not null && IsVisible && IsRenderActive)
         {
             RequestNextFrameRendering();
         }
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+
+        hostWindow = TopLevel.GetTopLevel(this) as Window;
+        hostWindowMinimized = HostWindowMinimized;
+
+        statePoller = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(1)
+        };
+        statePoller.Tick += OnHostStatePollTick;
+        statePoller.Start();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        hostWindow = null;
+        hostWindowMinimized = false;
+        framePacer?.Stop();
+        statePoller?.Stop();
+        base.OnDetachedFromVisualTree(e);
+    }
+
+    /// <summary>
+    /// Notices a window that was minimized or restored. Avalonia has no public window state event, and
+    /// a minimized window stops being drawn, so a one second poll is what lets the loop notice that
+    /// nobody is looking at it and stop feeding the GPU.
+    /// </summary>
+    private void OnHostStatePollTick(object? sender, EventArgs e)
+    {
+        var minimized = HostWindowMinimized;
+
+        if (minimized == hostWindowMinimized)
+        {
+            return;
+        }
+
+        hostWindowMinimized = minimized;
+
+        if (minimized)
+        {
+            framePacer?.Stop();
+            return;
+        }
+
+        // Restoring from minimized leaves the surface without a fresh frame, so ask for one.
+        RequestNextFrameRendering();
     }
 
     private void ApplyVerticalSync()
@@ -181,6 +279,8 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
 
     protected override void OnOpenGlDeinit(GlInterface gl)
     {
+        framePacer?.Stop();
+        statePoller?.Stop();
         renderer?.Dispose();
         renderer = null;
         context = null;

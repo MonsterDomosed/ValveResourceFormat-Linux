@@ -54,6 +54,12 @@ internal abstract class ViewportGlRenderer : IGLViewportRenderer
     /// <summary>Current viewport height in pixels.</summary>
     public int ViewportHeight { get; private set; }
 
+    /// <summary>
+    /// Upper bound for this viewer's MSAA sample count, applied on top of the user's global setting.
+    /// Viewers override it where the extra samples cost more bandwidth than they are worth.
+    /// </summary>
+    protected virtual int MaxSampleCount => int.MaxValue;
+
     public virtual bool ContinuousRendering => true;
 
     /// <summary>
@@ -106,7 +112,7 @@ internal abstract class ViewportGlRenderer : IGLViewportRenderer
                 GLEnvironment.EnableParallelShaderCompile();
 
                 var maxSamples = OpenGL.GetInteger(GetPName.MaxSamples);
-                SampleCount = Math.Max(1, Math.Min(Settings.Config.AntiAliasingSamples, maxSamples));
+                SampleCount = Math.Max(1, Math.Min(Settings.Config.AntiAliasingSamples, Math.Min(maxSamples, MaxSampleCount)));
 
                 FileLoader = LinuxGameContent.FileLoader;
 

@@ -17,6 +17,7 @@ namespace GUI.Linux.Shell;
 internal static partial class SettingsView
 {
     private static readonly int[] AntiAliasingSamples = [0, 2, 4, 8, 16];
+    private static readonly int[] FrameRateLimitOptions = [0, 30, 60, 120];
     private static readonly int[] ShadowResolutions = [512, 1024, 2048, 4096];
     private static readonly string[] ShadowNames = ["Low", "Medium", "High", "Very High"];
 
@@ -275,6 +276,26 @@ internal static partial class SettingsView
         {
             Settings.Config.Vsync = value ? 1 : 0;
         }));
+
+        var frameRateLimit = new ComboBox { HorizontalAlignment = HorizontalAlignment.Left, MinWidth = 160 };
+
+        foreach (var value in FrameRateLimitOptions)
+        {
+            frameRateLimit.Items.Add(value == 0 ? "Off" : value.ToString(CultureInfo.InvariantCulture));
+        }
+
+        var selectedOption = Math.Max(0, Array.IndexOf(FrameRateLimitOptions, Settings.Config.FrameRateLimit));
+        frameRateLimit.SelectedIndex = selectedOption;
+        frameRateLimit.SelectionChanged += (_, _) =>
+        {
+            if (frameRateLimit.SelectedIndex < 0)
+            {
+                return;
+            }
+
+            Settings.Config.FrameRateLimit = FrameRateLimitOptions[frameRateLimit.SelectedIndex];
+        };
+        Add(section, "Limit frame rate", frameRateLimit);
 
         Add(section, "Display FPS", CreateCheck(Settings.Config.DisplayFps != 0, value =>
         {

@@ -104,6 +104,8 @@ namespace GUI.Linux.Utils
             public float Volume { get; set; }
             /// <summary>Gets or sets the swap interval (the number of screen updates to wait between swapping front and back buffers).</summary>
             public int Vsync { get; set; }
+            /// <summary>Gets or sets the frame rate limit for 3D viewports; 0 leaves the display rate uncapped.</summary>
+            public int FrameRateLimit { get; set; }
             /// <summary>Gets or sets whether the FPS counter is shown in the viewport.</summary>
             public int DisplayFps { get; set; }
             /// <summary>Gets or sets the <see cref="QuickPreviewFlags"/> bitmask for quick file preview behavior.</summary>
@@ -246,6 +248,7 @@ namespace GUI.Linux.Utils
             Config.ViewmodelFieldOfView = Math.Clamp(Config.ViewmodelFieldOfView, 40, 80);
 
             Config.AntiAliasingSamples = Math.Clamp(Config.AntiAliasingSamples, 0, 64);
+            Config.FrameRateLimit = Math.Clamp(Config.FrameRateLimit, 0, 240);
             Config.Volume = MathUtils.Saturate(Config.Volume);
             Config.TextViewerFontSize = Math.Clamp(Config.TextViewerFontSize, 8, 24);
 
