@@ -30,7 +30,7 @@
     <!-- Avalonia.Skia pins SkiaSharp.NativeAssets.Linux to an older release than the managed
          SkiaSharp used by ValveResourceFormat. Reference the matching native assets explicitly
          so the managed and native Skia versions cannot drift apart. -->
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.151.2" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.152.0" />
     <PackageReference Include="NLayer" Version="3.0.0" />
     <PackageReference Include="OpenTK" Version="4.9.4" />
     <PackageReference Include="Svg.Skia" Version="5.2.3" />
