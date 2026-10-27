@@ -110,15 +110,20 @@ shows a per-type output picker, where every compiled type can be written as its 
 extension, as images for textures, as sound for sounds, as glTF, or skipped entirely, and
 then a progress window reports each file as it is written.
 
-The model viewer includes an interactive inspection camera (left-drag orbit, right-drag pan,
-wheel zoom, reset view) and a native animation sidebar (animation selection, play/pause,
-timeline scrubbing, playback speed, looping and restart), with models that have animations
-autoplaying their first sequence.
+The model viewer includes an interactive inspection camera (left-drag orbit, right-drag pan in
+both screen axes, wheel zoom, reset view) and a native animation sidebar (animation selection,
+play/pause, timeline scrubbing, playback speed, looping and restart). Models open on their bind
+pose; an animation starts when one is picked.
 
 Scene viewers (world/map/world-node, material, mesh, navmesh, physics, particle, skybox,
 smart prop, voxel visibility and animation) share a collapsible inspector sidebar with view,
 background, render mode, wireframe, world layer, saved camera and debug controls, wired to
 the renderer.
+
+Viewers only redraw when something actually changes. A model on its bind pose, or a static
+mesh or navmesh, stops drawing once its textures have loaded instead of redrawing the same
+frame at the display rate. Anything that animates on its own, such as a playing animation,
+particles, or a map with moving entities, keeps drawing.
 
 Known limitations:
 

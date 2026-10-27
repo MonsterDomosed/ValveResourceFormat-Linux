@@ -73,6 +73,14 @@ internal sealed class ModelAnimationSession
 
     private readonly object sync = new();
 
+    /// <summary>
+    /// Called after a command is queued so the host can wake an idle render loop. Without it a viewer
+    /// that only draws on demand would not show the command until the pointer moved.
+    /// </summary>
+    public Action? RequestFrame { get; set; }
+
+    private void Wake() => RequestFrame?.Invoke();
+
     private string[] animations = [];
     private bool ready;
     private string? activeAnimation;
@@ -120,6 +128,8 @@ internal sealed class ModelAnimationSession
             animationChanged = true;
             pendingAnimation = name;
         }
+
+        Wake();
     }
 
     /// <summary>Requests that playback pause or resume.</summary>
@@ -130,6 +140,8 @@ internal sealed class ModelAnimationSession
             playingChanged = true;
             pendingPlaying = value;
         }
+
+        Wake();
     }
 
     /// <summary>Requests looping on or off.</summary>
@@ -140,6 +152,8 @@ internal sealed class ModelAnimationSession
             loopingChanged = true;
             pendingLooping = value;
         }
+
+        Wake();
     }
 
     /// <summary>Requests a playback speed, clamped to the supported range.</summary>
@@ -150,6 +164,8 @@ internal sealed class ModelAnimationSession
             speedChanged = true;
             pendingSpeed = Math.Clamp(value, MinSpeed, MaxSpeed);
         }
+
+        Wake();
     }
 
     /// <summary>Requests a seek to a fraction of the animation cycle, clamped to [0, 1].</summary>
@@ -160,6 +176,8 @@ internal sealed class ModelAnimationSession
             seekRequested = true;
             pendingSeek = Math.Clamp(fraction, 0f, 1f);
         }
+
+        Wake();
     }
 
     /// <summary>Requests that the active animation restart from its beginning.</summary>
@@ -169,6 +187,8 @@ internal sealed class ModelAnimationSession
         {
             restartRequested = true;
         }
+
+        Wake();
     }
 
     /// <summary>Requests that the camera reframe the model.</summary>
@@ -178,6 +198,8 @@ internal sealed class ModelAnimationSession
         {
             resetViewRequested = true;
         }
+
+        Wake();
     }
 
     /// <summary>Selects a hitbox set to draw, or draws none when <paramref name="name"/> is null.</summary>
@@ -188,6 +210,8 @@ internal sealed class ModelAnimationSession
             hitboxSetChanged = true;
             pendingHitboxSet = name;
         }
+
+        Wake();
     }
 
     /// <summary>Requests that the bone hierarchy be drawn or hidden.</summary>
@@ -198,6 +222,8 @@ internal sealed class ModelAnimationSession
             skeletonChanged = true;
             pendingShowBones = value;
         }
+
+        Wake();
     }
 
     /// <summary>Requests that the attachment markers be drawn or hidden.</summary>
@@ -208,6 +234,8 @@ internal sealed class ModelAnimationSession
             attachmentsChanged = true;
             pendingShowAttachments = value;
         }
+
+        Wake();
     }
 
     /// <summary>Requests that only the named attachments are drawn.</summary>
@@ -218,6 +246,8 @@ internal sealed class ModelAnimationSession
             attachmentsChanged = true;
             pendingAttachments = names;
         }
+
+        Wake();
     }
 
     /// <summary>Requests that the model and camera walk along the animation's root motion.</summary>
@@ -228,6 +258,8 @@ internal sealed class ModelAnimationSession
             rootMotionChanged = true;
             pendingWalkWithRootMotion = value;
         }
+
+        Wake();
     }
 
     /// <summary>Takes the pending commands and clears them. Called on the render thread each frame.</summary>

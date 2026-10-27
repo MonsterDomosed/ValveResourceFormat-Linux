@@ -79,6 +79,9 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
             RendererFactory = () => new ModelGlRenderer(fileName, session, openResource),
         };
 
+        // Idle viewers stop drawing, so a command from these controls has to ask for a frame.
+        session.RequestFrame = viewport.RequestFrame;
+
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(280)) { MinWidth = 220, MaxWidth = 560 });
         grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));

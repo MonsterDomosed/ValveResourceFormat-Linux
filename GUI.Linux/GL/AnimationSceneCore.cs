@@ -81,6 +81,10 @@ internal sealed class AnimationSceneCore : GLSceneViewerCore
 
     protected override void OnPrePaint(float frameTime) => animationController?.Update(frameTime);
 
+    /// <summary>A clip viewer only needs frames while its clip is running; a bare skeleton is static.</summary>
+    protected override bool SceneWantsContinuousFrames
+        => animationClip is not null && animationController is { IsPaused: false };
+
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);

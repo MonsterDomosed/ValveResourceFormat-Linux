@@ -124,6 +124,67 @@ public abstract class GLSceneViewerCore : IDisposable
     /// <summary>Uses the animation viewer's camera offset mode.</summary>
     protected virtual bool IsAnimationViewer => false;
 
+    /// <summary>
+    /// Whether the scene changes on its own, so the host has to keep drawing frames. A scene that only
+    /// changes in response to input returns false and the viewer goes idle instead of redrawing the
+    /// same picture at the display rate.
+    /// </summary>
+    protected virtual bool SceneWantsContinuousFrames => true;
+
+    /// <summary>Whether the host should queue another frame right now.</summary>
+    public bool WantsContinuousFrames
+        => Input.ForceUpdate
+            || (Input.WalkMode && Input.Velocity.LengthSquared() > 1e-4f)
+            || Picker?.ActiveNextFrame == true
+            || Renderer.RendererContext.TextureStreaming.HasPendingWork
+            || SceneWantsContinuousFrames;
+
+    /// <summary>Why the host is still being asked for frames, for the self-check. Not for UI use.</summary>
+    internal string ContinuousFramesReason
+    {
+        get
+        {
+            if (Input.ForceUpdate)
+            {
+                return "camera";
+            }
+
+            if (Input.WalkMode && Input.Velocity.LengthSquared() > 1e-4f)
+            {
+                return "walk";
+            }
+
+            if (Picker?.ActiveNextFrame == true)
+            {
+                return "picker";
+            }
+
+            if (Renderer.RendererContext.TextureStreaming.HasPendingWork)
+            {
+                return "streaming";
+            }
+
+            return SceneWantsContinuousFrames ? "scene" : "idle";
+        }
+    }
+
+    /// <summary>Whether any particle system in the scene is still emitting.</summary>
+    protected bool HasLiveParticles
+    {
+        get
+        {
+            foreach (var node in Scene.AllNodes)
+            {
+                if (node is ParticleSceneNode { IsPlaying: true, IsPaused: false })
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
+
     protected GLSceneViewerCore(ISceneViewerContext context, RendererContext rendererContext, IGLViewerHost host)
     {
         Context = context;
@@ -138,6 +199,10 @@ public abstract class GLSceneViewerCore : IDisposable
         TextRenderer = new(rendererContext, Renderer.Camera);
         crosshairRenderer = new CrosshairRenderer(rendererContext);
         Scene = Renderer.Scene;
+
+        // The sidebar sits on the UI thread and only queues commands, so it has to wake the render
+        // loop when it does, or an idle viewer would not show the change.
+        Sidebar.RequestFrame = host.RequestFrame;
     }
 
     protected GLSceneViewerCore(ISceneViewerContext context, RendererContext rendererContext, IGLViewerHost host, Frustum cullFrustum)
@@ -667,8 +732,12 @@ public abstract class GLSceneViewerCore : IDisposable
 
         // The viewport accumulates wheel notches; apply them before the camera tick so an orbit zoom
         // is reflected in the same frame. Avalonia reports one unit per notch, while the input code's
-        // zoom math was written for the traditional 120-unit wheel delta.
-        Input.OnMouseWheel(input.Wheel * MouseWheelNotch);
+        // zoom math was written for the traditional 120-unit wheel delta. A zero delta still starts an
+        // orbit transition, so it must not be fed in on frames without a wheel event.
+        if (input.Wheel != 0f)
+        {
+            Input.OnMouseWheel(input.Wheel * MouseWheelNotch);
+        }
 
         var wasWalkMode = Input.WalkMode;
         Input.Tick(frameTime, pressedKeys, mouseDelta, Renderer.Camera);

@@ -354,7 +354,12 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         Input.Y = (float)position.Y;
         UpdateButtons(e.GetCurrentPoint(this).Properties);
 
-        RequestNextFrameRendering();
+        // A scene viewer only moves the camera while a button is held, or while the pointer is captured
+        // for walk mode. Asking for a frame for every hover motion would keep an idle viewer redrawing.
+        if (Input.Left || Input.Right || Input.Captured || renderer is not SceneCoreGlRenderer)
+        {
+            RequestNextFrameRendering();
+        }
     }
 
     protected override void OnPointerEntered(PointerEventArgs e)

@@ -147,6 +147,9 @@ internal sealed class TextureGlRenderer : ViewportGlRenderer
         return bitmap;
     }
 
+    /// <summary>The zoom ease needs frames until it settles; the texture itself is static.</summary>
+    protected override bool WantsContinuousFrames => scaleChangeTime < 0.4f;
+
     protected override void RenderFrame(GraphicsContext context, ViewerInputState input, float frameTime)
     {
         if (texture is null || shader is null || Host is null || rendererContext is null)

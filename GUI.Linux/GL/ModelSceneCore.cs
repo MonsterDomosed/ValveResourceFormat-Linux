@@ -61,6 +61,15 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
     /// <summary>Frames the model with a little extra margin so pose and attachments are not clipped.</summary>
     protected override float FramePadding => 1.25f;
 
+    /// <summary>
+    /// A paused model on its bind pose only changes when something is done to it, so the viewer stops
+    /// drawing instead of redrawing the same frame while it is being looked at.
+    /// </summary>
+    protected override bool SceneWantsContinuousFrames
+        => (modelSceneNode?.AnimationController is { IsPaused: false })
+            || walkWithRootMotion
+            || HasLiveParticles;
+
     public override void PreSceneLoad()
     {
         RunPreSceneLoad();

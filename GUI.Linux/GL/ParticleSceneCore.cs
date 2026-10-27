@@ -50,6 +50,9 @@ internal sealed class ParticleSceneCore : GLSceneViewerCore
         Input.Camera.LookAt(Vector3.Zero);
     }
 
+    /// <summary>Particles animate on their own, but a finished system can stop redrawing.</summary>
+    protected override bool SceneWantsContinuousFrames => HasLiveParticles;
+
     protected override void LoadScene()
     {
         Scene.LightingInfo.UseSceneBoundsForSunLightFrustum = false;

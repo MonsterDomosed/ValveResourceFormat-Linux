@@ -21,6 +21,9 @@ internal sealed class VoxelVisibilitySceneCore : GLSceneViewerCore
         this.voxelVisibility = voxelVisibility;
     }
 
+    /// <summary>The visibility preview only redraws when asked.</summary>
+    protected override bool SceneWantsContinuousFrames => false;
+
     protected override void LoadScene()
     {
         var sceneNode = new VisibilitySceneNode(Scene, voxelVisibility)
