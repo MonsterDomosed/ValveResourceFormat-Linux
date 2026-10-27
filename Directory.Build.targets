@@ -1,0 +1,19 @@
+<Project>
+
+  <!--
+    A framework-dependent build copies the native assets of every runtime identifier a package ships.
+    That is close to a gigabyte of Windows, macOS, Android and ARM binaries that this host never loads,
+    and it lands in every project's output folder. Keep only the host's own runtime identifier.
+    Publishes that pass a RuntimeIdentifier already get a single one from NuGet and are left alone.
+  -->
+  <Target Name="PruneForeignRuntimeAssets"
+          AfterTargets="ResolveReferences"
+          BeforeTargets="CopyFilesToOutputDirectory;_CopyFilesMarkedCopyLocal"
+          Condition="'$(RuntimeIdentifier)' == '' and '$(NETCoreSdkRuntimeIdentifier)' != '' and '$(PruneForeignRuntimeAssets)' != 'false'">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)"
+          Condition="$([System.String]::Copy('%(ReferenceCopyLocalPaths.DestinationSubDirectory)').StartsWith('runtimes/')) and !$([System.String]::Copy('%(ReferenceCopyLocalPaths.DestinationSubDirectory)').StartsWith('runtimes/$(NETCoreSdkRuntimeIdentifier)/'))" />
+    </ItemGroup>
+  </Target>
+
+</Project>

@@ -6,7 +6,7 @@ The project folders are:
 
 - **ValveResourceFormat/**: Core parsing library published to NuGet
 - **GUI.Linux/**: The native Linux application, built with Avalonia and OpenGL. It owns the shell, the portable viewers, the GL viewer core, the graph presenter, audio decoding, the package browser model, settings and the platform services. This is the primary product of the repository; there is no separate shared GUI project.
-    - Run `dotnet build GUI.Linux/GUI.Linux.csproj -c Release`. A runtime smoke check is `dotnet GUI.Linux/bin/Release/Source2Viewer.dll --self-check=smoke --x11`; the full `--self-check` needs a game installation.
+    - Run `dotnet build GUI.Linux/GUI.Linux.csproj -c Release`. A runtime smoke check is `dotnet GUI.Linux/bin/Release/Source2Viewer.dll --self-check=smoke --x11`; the full `--self-check` needs a game installation and takes a few minutes, so run one part of it with `--self-check-section=<name>` while iterating. The section names are the ones printed in the `[self-check] timing:` lines (`model`, `browser`, `world`, `gl`, `fixtures`, `gameanimations`, and so on).
     - The release tarball is built with `Misc/Linux/package-linux.sh` and published by the `source2viewer-linux` CI job.
 - **CLI/**: Command-line decompiler and file viewer
 - **Renderer/**: OpenGL rendering engine for Source 2 assets.
@@ -15,6 +15,7 @@ The project folders are:
 - **Tests/**: TUnit test suite for the ValveResourceFormat library, headless Renderer logic tests in `Tests/Renderer/`, and portable Linux application logic tests in `Tests/LinuxGuiTest.cs`.
     - Run tests when changing code in `ValveResourceFormat/`, `Renderer/` or `GUI.Linux/`. The Avalonia shell itself (`GUI.Linux/Shell/`, `GUI.Linux/Program.cs`) is not covered directly.
     - Tests are fast, run the whole suite with `dotnet test`. If it reports `Zero tests ran` (exit code 5), do a full `dotnet build` and retry.
+    - The suite takes seconds; the build is what costs time. Release turns on the full analyzer pass, which adds about 20 seconds to every build, so iterate with `dotnet test` (Debug) or `dotnet build -c Release -p:RunAnalyzersDuringBuild=false`, and run one plain `dotnet build -c Release` before committing.
     - When a parsing change legitimately alters text output, run tests with `VRF_REGEN_FIXTURES=1` to rewrite the mismatching `Tests/Files/ValidOutput` dumps in the source tree.
 - **Misc/**: Auxiliary tools (ShaderValidator, RenderTest, etc.) in their own solution `Misc/MiscVrfProjects.slnx`.
 - **docs/**: VitePress documentation site. When changing what VRF can parse, decompile, or export, update the support matrix and limitation tables in `docs/guides/format-support.md` in the same change.

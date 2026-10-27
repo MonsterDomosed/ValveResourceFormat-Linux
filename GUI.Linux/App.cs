@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -207,32 +208,34 @@ internal sealed class App : Application
             return;
         }
 
-        await RunViewerFactoryChecksAsync().ConfigureAwait(true); await RunGameContentCheckAsync().ConfigureAwait(true);
-        await RunGameContentViewerCheckAsync(window).ConfigureAwait(true);
-        await RunWorldRenderCheckAsync(window).ConfigureAwait(true);
-        await RunGlInfrastructureCheckAsync().ConfigureAwait(true);
-        await RunNavMeshRenderCheckAsync(window).ConfigureAwait(true);
-        await RunTwoViewportsCheckAsync(window).ConfigureAwait(true);
-        await RunMeshRenderCheckAsync(window).ConfigureAwait(true);
-        await RunParticleRenderCheckAsync(window).ConfigureAwait(true);
-        await RunFixtureGlRenderCheckAsync<GUI.Linux.GL.TextureGlRenderer>(window, "Tests/Files/pip-left.vsvg_c", "panorama vector").ConfigureAwait(true);
-        await RunFixtureGlRenderCheckAsync<GUI.Linux.GL.ParticleSnapshotGlRenderer>(window, "Tests/Files/test.vsnap_c", "particle snapshot").ConfigureAwait(true);
-        await RunFixtureGlRenderCheckAsync<GUI.Linux.GL.WorldNodeGlRenderer>(window, "Tests/Files/node000_kv3_v2_zstd.vwnod_c", "world node").ConfigureAwait(true);
-        await RunFixtureGlRenderCheckAsync<GUI.Linux.GL.TextureGlRenderer>(window, "Tests/Files/a1_eli_corridor_kv3_v1_uncompressed.vpost_c", "postprocessing lut").ConfigureAwait(true);
-        await RunFixtureGlRenderCheckAsync<GUI.Linux.GL.GraphGlRenderer>(window, "Tests/Files/vrf_all_nodes.vanmgrph_c", "ag1 graph").ConfigureAwait(true);
-        await RunFixtureGlRenderCheckAsync<GUI.Linux.GL.GraphGlRenderer>(window, "Tests/Files/de_inferno_script.vpulse_c", "pulse graph").ConfigureAwait(true);
-        await RunFixtureGlRenderCheckAsync<GUI.Linux.GL.GraphGlRenderer>(window, "Tests/Files/default_ents.vents_c", "entity io graph").ConfigureAwait(true);
-        await RunVoxelVisibilityRenderCheckAsync(window).ConfigureAwait(true);
-        await RunModelRenderCheckAsync(window).ConfigureAwait(true);
-        await RunModelAnimationCheckAsync(window).ConfigureAwait(true);
-        await RunKeyboardRoutingCheckAsync(window).ConfigureAwait(true);
-        await RunMaterialRenderCheckAsync(window).ConfigureAwait(true);
-        await RunAnimationRenderCheckAsync(window).ConfigureAwait(true);
-        await RunPhysicsRenderCheckAsync(window).ConfigureAwait(true);
-        await RunGraphRenderCheckAsync(window).ConfigureAwait(true);
-        await RunSkyboxRenderCheckAsync(window).ConfigureAwait(true);
-        await RunBrowserCheckAsync(window).ConfigureAwait(true);
-        await RunAudioCheckAsync(window).ConfigureAwait(true);
+        // Name any of these with --self-check-section to run just that part; naming none runs them all.
+        await RunSelfCheckSectionAsync("viewers", () => RunViewerFactoryChecksAsync()).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("game", () => RunGameContentCheckAsync()).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("game", () => RunGameContentViewerCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("world", () => RunWorldRenderCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("gl", () => RunGlInfrastructureCheckAsync()).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("navmesh", () => RunNavMeshRenderCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("twoviewports", () => RunTwoViewportsCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("mesh", () => RunMeshRenderCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("particle", () => RunParticleRenderCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("fixtures", () => RunFixtureGlRenderCheckAsync<GUI.Linux.GL.TextureGlRenderer>(window, "Tests/Files/pip-left.vsvg_c", "panorama vector")).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("fixtures", () => RunFixtureGlRenderCheckAsync<GUI.Linux.GL.ParticleSnapshotGlRenderer>(window, "Tests/Files/test.vsnap_c", "particle snapshot")).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("fixtures", () => RunFixtureGlRenderCheckAsync<GUI.Linux.GL.WorldNodeGlRenderer>(window, "Tests/Files/node000_kv3_v2_zstd.vwnod_c", "world node")).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("fixtures", () => RunFixtureGlRenderCheckAsync<GUI.Linux.GL.TextureGlRenderer>(window, "Tests/Files/a1_eli_corridor_kv3_v1_uncompressed.vpost_c", "postprocessing lut")).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("fixtures", () => RunFixtureGlRenderCheckAsync<GUI.Linux.GL.GraphGlRenderer>(window, "Tests/Files/vrf_all_nodes.vanmgrph_c", "ag1 graph")).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("fixtures", () => RunFixtureGlRenderCheckAsync<GUI.Linux.GL.GraphGlRenderer>(window, "Tests/Files/de_inferno_script.vpulse_c", "pulse graph")).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("fixtures", () => RunFixtureGlRenderCheckAsync<GUI.Linux.GL.GraphGlRenderer>(window, "Tests/Files/default_ents.vents_c", "entity io graph")).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("viz", () => RunVoxelVisibilityRenderCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("model", () => RunModelRenderCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("model", () => RunModelAnimationCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("keyboard", () => RunKeyboardRoutingCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("material", () => RunMaterialRenderCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("animation", () => RunAnimationRenderCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("physics", () => RunPhysicsRenderCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("graph", () => RunGraphRenderCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("skybox", () => RunSkyboxRenderCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("browser", () => RunBrowserCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("audio", () => RunAudioCheckAsync(window)).ConfigureAwait(true);
 
         output.WriteLine("[self-check] shell opened, exiting");
         DispatcherTimer.RunOnce(window.Close, TimeSpan.FromSeconds(1));
@@ -1438,6 +1441,12 @@ internal sealed class App : Application
             return;
         }
 
+        // The sweep opens a dozen real game models, which is most of this check's run time.
+        if (!Program.WantsSelfCheckSection("gameanimations"))
+        {
+            return;
+        }
+
         try
         {
             var vpkPath = Path.Combine(install.ContentRoot, "pak01_dir.vpk");
@@ -1653,12 +1662,21 @@ internal sealed class App : Application
         await SimulatePointerDragAsync(viewport, ViewerKey.MouseLeft, new System.Numerics.Vector2(12, 4), 8).ConfigureAwait(true);
         var orbitDistance = System.Numerics.Vector3.Distance(start, renderer.CameraLocation);
 
-        var beforePan = renderer.CameraLocation;
+        var beforeHorizontalPan = renderer.CameraLocation;
         await SimulatePointerDragAsync(viewport, ViewerKey.MouseRight, new System.Numerics.Vector2(10, 0), 8).ConfigureAwait(true);
-        var panDistance = System.Numerics.Vector3.Distance(beforePan, renderer.CameraLocation);
+        var panHorizontal = System.Numerics.Vector3.Distance(beforeHorizontalPan, renderer.CameraLocation);
+
+        // Right-drag has to pan in both screen axes, not just sideways.
+        var beforeVerticalPan = renderer.CameraLocation;
+        await SimulatePointerDragAsync(viewport, ViewerKey.MouseRight, new System.Numerics.Vector2(0, 8), 8).ConfigureAwait(true);
+        var panVertical = System.Numerics.Vector3.Distance(beforeVerticalPan, renderer.CameraLocation);
 
         var beforeZoom = core.Input.OrbitDistance;
         await SimulateMouseWheelAsync(viewport, 1f, 4).ConfigureAwait(true);
+
+        // A slow frame must not fail the check merely because the wheel was applied later than the
+        // fixed delay in the helper expects.
+        await WaitForAsync(() => core.Input.OrbitDistance < beforeZoom, 40).ConfigureAwait(true);
         var afterZoom = core.Input.OrbitDistance;
 
         var beforeReset = core.Input.OrbitDistance;
@@ -1667,7 +1685,7 @@ internal sealed class App : Application
         var afterReset = core.Input.OrbitDistance;
 
         var orbitOk = orbitDistance > 0.05f;
-        var panOk = panDistance > 0.01f;
+        var panOk = panHorizontal > 0.01f && panVertical > 0.01f;
         var zoomOk = afterZoom < beforeZoom;
 
         // Reset must frame the model bounds and point the orbit target at their center.
@@ -1686,13 +1704,36 @@ internal sealed class App : Application
         var pointerOk = hitOk && pointerEntered && pointerExited;
 
         await Program.StdOut.WriteLineAsync(
-            $"[self-check] {label} camera: orbit={orbitDistance:0.00}, pan={panDistance:0.00}, "
+            $"[self-check] {label} camera: orbit={orbitDistance:0.00}, panX={panHorizontal:0.00}, panY={panVertical:0.00}, "
             + $"zoom {beforeZoom:0.00}->{afterZoom:0.00}, reset {beforeReset:0.00}->{afterReset:0.00}, "
             + $"startDistance={startDistance:0.00}, hitTest/pointerEnter/exit={pointerOk}").ConfigureAwait(true);
 
-        await Program.StdOut.WriteLineAsync(orbitOk && panOk && zoomOk && resetOk && pointerOk
-            ? $"[self-check] {label} camera: orbit, pan, zoom and reset view all responded"
-            : $"[self-check] {label} camera: incomplete (orbit={orbitOk}, pan={panOk}, zoom={zoomOk}, reset={resetOk}, pointer={pointerOk})").ConfigureAwait(true);
+        // The model sits on the bind pose, so once its textures have streamed in and the camera
+        // transitions are done the viewer has to go idle instead of redrawing at the display rate.
+        var idleEligible = false;
+
+        for (var i = 0; i < 60 && !idleEligible; i++)
+        {
+            await Task.Delay(100).ConfigureAwait(true);
+            idleEligible = renderer.SceneCore?.WantsContinuousFrames == false;
+        }
+
+        await Task.Delay(600).ConfigureAwait(true);
+
+        var framesBeforeIdle = renderer.RenderedFrames;
+        await Task.Delay(1000).ConfigureAwait(true);
+        var idleFrames = renderer.RenderedFrames - framesBeforeIdle;
+
+        // A couple of frames can still be owed to layout or a command queued just before the window
+        // started; what matters is that the viewer is nowhere near redrawing at the display rate.
+        var idleOk = idleFrames <= 10;
+
+        await Program.StdOut.WriteLineAsync(
+            $"[self-check] {label} idle: frames={idleFrames} in 1s, settling={idleEligible}, reason={renderer.SceneCore?.ContinuousFramesReason}").ConfigureAwait(true);
+
+        await Program.StdOut.WriteLineAsync(orbitOk && panOk && zoomOk && resetOk && pointerOk && idleOk
+            ? $"[self-check] {label} camera: orbit, pan in both axes, zoom, reset view and idle rendering all verified"
+            : $"[self-check] {label} camera: incomplete (orbit={orbitOk}, pan={panOk}, zoom={zoomOk}, reset={resetOk}, pointer={pointerOk}, idle={idleOk})").ConfigureAwait(true);
     }
 
     private static async Task ExerciseModelAnimationControlsAsync(ModelViewerControl control, ModelAnimationSession session, string label)
@@ -2665,6 +2706,21 @@ internal sealed class App : Application
         {
             await Task.Delay(50).ConfigureAwait(true);
         }
+    }
+
+    /// <summary>Runs one named part of the full self-check, when it was asked for, and times it.</summary>
+    private static async Task RunSelfCheckSectionAsync(string name, Func<Task> section)
+    {
+        if (!Program.WantsSelfCheckSection(name))
+        {
+            return;
+        }
+
+        var start = Stopwatch.GetTimestamp();
+        await section().ConfigureAwait(true);
+        var elapsed = Stopwatch.GetElapsedTime(start);
+
+        await Program.StdOut.WriteLineAsync($"[self-check] timing: {name} {elapsed.TotalMilliseconds:0}ms").ConfigureAwait(true);
     }
 
     private static async Task RunViewerFactoryChecksAsync()
