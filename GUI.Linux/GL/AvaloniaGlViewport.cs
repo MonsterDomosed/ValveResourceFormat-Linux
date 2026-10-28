@@ -11,6 +11,7 @@ using Avalonia.OpenGL.Controls;
 using Avalonia.OpenGL.Egl;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using GUI.Linux.Platform;
 using GUI.Linux.Types.GLViewers;
 using GUI.Linux.Utils;
 using ValveResourceFormat.Renderer;
@@ -52,11 +53,7 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
     private Window? hostWindow;
     private bool hostWindowMinimized;
 
-    // How fast and which way the current drag is going, so it can carry on at the screen edge
-    private float dragSpeed;
-    private long lastDragMoveTicks;
-    private int dragDirectionX;
-    private int dragDirectionY;
+    private X11PointerWarp? pointerWarp;
 
     public AvaloniaGlViewport()
     {
@@ -166,8 +163,6 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
             ? Framebuffer.GLDefaultFramebuffer
             : Framebuffer.FromExternalHandle(fb, "AvaloniaScreen");
 
-        var edgeDragging = ApplyEdgeDrag((float)frameTime);
-
         renderer.Render(context, width, height, Input, frameTime);
         Input.EndFrame();
 
@@ -176,11 +171,6 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         if (renderer.ContinuousRendering && IsVisible && IsRenderActive)
         {
             ScheduleNextFrame();
-        }
-        else if (edgeDragging)
-        {
-            // The pointer is pinned at the edge, so no more motion events arrive to ask for a frame
-            RequestNextFrameRendering();
         }
     }
 
@@ -232,6 +222,7 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
 
         hostWindow = TopLevel.GetTopLevel(this) as Window;
         hostWindowMinimized = HostWindowMinimized;
+        pointerWarp = X11PointerWarp.TryCreate(hostWindow);
 
         statePoller = new DispatcherTimer(DispatcherPriority.Background)
         {
@@ -245,6 +236,8 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
     {
         hostWindow = null;
         hostWindowMinimized = false;
+        pointerWarp?.Dispose();
+        pointerWarp = null;
         framePacer?.Stop();
         statePoller?.Stop();
         base.OnDetachedFromVisualTree(e);
@@ -338,7 +331,6 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         // The drag starts from this point, so movement from hovering before the press is discarded
         // instead of being applied in one jump by the first frame of the drag.
         Input.Delta = Vector2.Zero;
-        ResetDragTracking();
         UpdateButtons(e.GetCurrentPoint(this).Properties);
 
         if (renderer is ViewportGlRenderer viewportRenderer)
@@ -373,18 +365,13 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         // pointer had wandered.
         if (FollowsPointer)
         {
-            var movement = new Vector2((float)(position.X - lastPointer.X), (float)(position.Y - lastPointer.Y));
-            Input.Delta += movement;
-
-            if (IsDragging)
-            {
-                TrackDrag(movement);
-            }
+            Input.Delta += new Vector2((float)(position.X - lastPointer.X), (float)(position.Y - lastPointer.Y));
         }
 
         lastPointer = position;
         Input.X = (float)position.X;
         Input.Y = (float)position.Y;
+        WarpPointerAtEdge(position);
 
         // A scene viewer only needs a frame while the pointer is doing something. Asking for one for
         // every hover motion would keep an idle viewer redrawing.
@@ -425,7 +412,6 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
 
         e.Pointer.Capture(null);
         Input.Captured = false;
-        ResetDragTracking();
         UpdateButtons(e.GetCurrentPoint(this).Properties);
 
         if (renderer is ViewportGlRenderer viewportRenderer)
@@ -452,7 +438,6 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
     {
         base.OnPointerCaptureLost(e);
         Input.Captured = false;
-        ResetDragTracking();
         UpdateButtons(default);
         RestoreCursor();
     }
@@ -572,78 +557,40 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
     private bool IsDragging => Input.Left || Input.Middle || Input.Right || Input.Captured;
 
     /// <summary>
-    /// Follows how fast the drag is moving and which way, so a drag that runs into the edge of the
-    /// screen can carry on at the speed it had reached.
+    /// Puts the pointer back in the middle of the viewport when a drag runs into the edge of the
+    /// window, so the drag can carry on across the whole desk instead of stopping where the pointer
+    /// does. Does nothing on Wayland, which does not let a client move the pointer.
     /// </summary>
-    private void TrackDrag(Vector2 movement)
+    private void WarpPointerAtEdge(Point position)
     {
-        if (movement.X != 0f)
+        if (!IsDragging || pointerWarp is null || hostWindow is null
+            || this.TranslatePoint(position, hostWindow) is not { } windowPoint)
         {
-            dragDirectionX = Math.Sign(movement.X);
+            return;
         }
 
-        if (movement.Y != 0f)
+        // One pixel of margin, because the pointer stops exactly on the last pixel of the client area
+        const double Edge = 1;
+        var client = hostWindow.ClientSize;
+
+        if (windowPoint.X > Edge && windowPoint.Y > Edge
+            && windowPoint.X < client.Width - Edge && windowPoint.Y < client.Height - Edge)
         {
-            dragDirectionY = Math.Sign(movement.Y);
+            return;
         }
 
-        var now = Stopwatch.GetTimestamp();
+        var center = new Point(Bounds.Width / 2, Bounds.Height / 2);
 
-        if (lastDragMoveTicks != 0)
+        if (!pointerWarp.Warp(this, center))
         {
-            var seconds = (float)Stopwatch.GetElapsedTime(lastDragMoveTicks, now).TotalSeconds;
-
-            if (seconds is > 1e-4f and < 0.2f)
-            {
-                var instant = movement.Length() / seconds;
-                dragSpeed = dragSpeed <= 0f ? instant : (dragSpeed * 0.6f) + (instant * 0.4f);
-            }
-            else if (seconds >= 0.2f)
-            {
-                // A pause is not a drag, so nothing continues until the pointer moves again
-                dragSpeed = 0f;
-            }
+            return;
         }
 
-        lastDragMoveTicks = now;
-    }
-
-    private void ResetDragTracking()
-    {
-        dragSpeed = 0f;
-        lastDragMoveTicks = 0;
-        dragDirectionX = 0;
-        dragDirectionY = 0;
-    }
-
-    /// <summary>
-    /// Keeps the drag moving once the pointer has run into the edge of the screen, where it cannot go
-    /// further. Returns whether movement was added, so the frame loop keeps running.
-    /// </summary>
-    private bool ApplyEdgeDrag(float frameTime)
-    {
-        if (!IsDragging || dragSpeed < EdgeDrag.MinimumSpeed || TopLevel.GetTopLevel(this) is not Window window)
-        {
-            return false;
-        }
-
-        if (window.Screens.ScreenFromWindow(window) is not { } screen
-            || this.TranslatePoint(new Point(Input.X, Input.Y), window) is not { } client)
-        {
-            return false;
-        }
-
-        var pointer = window.PointToScreen(client);
-        var edges = EdgeDrag.PushedInto(EdgeDrag.EdgesAt(pointer, screen.Bounds), (dragDirectionX, dragDirectionY));
-
-        if (edges is (0, 0))
-        {
-            return false;
-        }
-
-        Input.Delta += EdgeDrag.Step(edges, dragSpeed, frameTime);
-
-        return true;
+        // The warp produces its own motion event at the new position, so measuring from there keeps
+        // the jump from being read as a drag
+        lastPointer = center;
+        Input.X = (float)center.X;
+        Input.Y = (float)center.Y;
     }
 
     /// <summary>

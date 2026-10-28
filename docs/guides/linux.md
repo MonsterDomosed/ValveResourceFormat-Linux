@@ -35,7 +35,7 @@ update-desktop-database ~/.local/share/applications
 | 64-bit Linux (`linux-x64`) | `linux-arm64` is not built yet. |
 | OpenGL 4.6 | AMD (Mesa `radeonsi`), Intel, and NVIDIA driver stacks work. The bundled shaders and viewports require a 4.6 core profile. |
 | Software rendering | `llvmpipe` works for lightweight views and is enough for the smoke test, but world and particle rendering are slow. |
-| Wayland or X11 | The shell prefers Wayland and falls back to X11/XWayland automatically. |
+| Wayland or X11 | The shell runs as an X11 client on a Wayland desktop (through Xwayland), which is what lets a drag move the pointer. Native Wayland is available with `--wayland`. |
 | PulseAudio or PipeWire-Pulse | Required for audio playback and scene sound events. Without a running sound server the app still starts, silently. |
 | fontconfig, ICU | Provided by essentially every desktop distribution; the app uses them through Skia and Avalonia. |
 
@@ -45,10 +45,13 @@ Skia, HarfBuzz, and the other rendering natives are bundled in the tarball.
 
 The shell selects a backend at startup:
 
-- `--wayland` forces the Wayland backend.
-- `--x11` forces X11 (useful under XWayland or a plain X session).
+- `--wayland` forces the native Wayland backend.
+- `--x11` forces X11 (the default when an X server is reachable).
 
-Without either flag it uses Wayland when a compositor is available and otherwise X11.
+Without either flag it uses X11 when an X server is reachable and otherwise Wayland. X11 on a
+Wayland desktop means Xwayland, which is what other 3D applications use as well: a Wayland client
+is not allowed to move the pointer, so dragging a model would stop at the edge of the screen
+instead of continuing. On native Wayland that is still the case and long drags stop at the edge.
 
 ## Configuration
 
@@ -114,9 +117,10 @@ The model viewer includes an interactive inspection camera (left-drag orbit, rig
 both screen axes, wheel zoom, reset view) and a native animation sidebar (animation selection,
 play/pause, timeline scrubbing, playback speed, looping and restart). Models open on their bind
 pose; an animation starts when one is picked. Orbiting keeps turning over the top and bottom
-instead of stopping at straight up or down, and a drag that reaches the edge of the screen keeps
-the view moving in the same direction at the speed it had reached: the pointer cannot cross the
-screen edge, so the drag continues rather than stopping there.
+instead of stopping at straight up or down. When a drag reaches the edge of the window the pointer
+is put back in the middle of the viewport, so a drag continues across the whole desk instead of
+stopping where the cursor stops. That pointer move needs the X11 backend; on native Wayland the
+drag stops at the edge.
 
 Scene viewers (world/map/world-node, material, mesh, navmesh, physics, particle, skybox,
 smart prop, voxel visibility and animation) share a collapsible inspector sidebar with view,

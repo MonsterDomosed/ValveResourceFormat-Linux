@@ -97,6 +97,8 @@ internal sealed class App : Application
 
         output.WriteLine($"[self-check] settings directory: {PlatformServices.Current.SettingsDirectory}");
 
+        output.WriteLine($"[self-check] windowing: {window.TryGetPlatformHandle()?.HandleDescriptor ?? "<none>"}");
+
         // Wayland only accepts a new clipboard selection from a focused client, so activate the window
         // and give the compositor a moment before testing the clipboard.
         window.Activate();
@@ -228,6 +230,7 @@ internal sealed class App : Application
         await RunSelfCheckSectionAsync("viz", () => RunVoxelVisibilityRenderCheckAsync(window)).ConfigureAwait(true);
         await RunSelfCheckSectionAsync("model", () => RunModelRenderCheckAsync(window)).ConfigureAwait(true);
         await RunSelfCheckSectionAsync("model", () => RunModelAnimationCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("pointer", () => RunPointerWarpCheckAsync(window)).ConfigureAwait(true);
         await RunSelfCheckSectionAsync("keyboard", () => RunKeyboardRoutingCheckAsync(window)).ConfigureAwait(true);
         await RunSelfCheckSectionAsync("material", () => RunMaterialRenderCheckAsync(window)).ConfigureAwait(true);
         await RunSelfCheckSectionAsync("animation", () => RunAnimationRenderCheckAsync(window)).ConfigureAwait(true);
@@ -1308,6 +1311,45 @@ internal sealed class App : Application
         }
     }
 
+    /// <summary>
+    /// Verifies that the pointer can be moved while a drag is in progress, which is what lets a drag
+    /// carry on after it reaches the edge of the screen. Only the X11 backend allows it.
+    /// </summary>
+    private static async Task RunPointerWarpCheckAsync(Window window)
+    {
+        using var warp = X11PointerWarp.TryCreate(window);
+
+        if (warp is null)
+        {
+            await Program.StdOut.WriteLineAsync("[self-check] pointer warp: not available on this backend").ConfigureAwait(true);
+            return;
+        }
+
+        var target = new Point(40, 40);
+        var expected = window.PointToScreen(target);
+        var requested = warp.Warp(window, target);
+
+        var reached = false;
+        var actual = default(PixelPoint);
+
+        for (var i = 0; i < 20 && !reached; i++)
+        {
+            if (warp.TryGetPosition(out var current))
+            {
+                actual = current;
+                reached = Math.Abs(current.X - expected.X) <= 2 && Math.Abs(current.Y - expected.Y) <= 2;
+            }
+
+            if (!reached)
+            {
+                await Task.Delay(50).ConfigureAwait(true);
+            }
+        }
+
+        await Program.StdOut.WriteLineAsync(
+            $"[self-check] pointer warp: requested={requested}, expected={expected}, actual={actual}, reached={reached}").ConfigureAwait(true);
+    }
+
     private static async Task RunKeyboardRoutingCheckAsync(MainWindow window)
     {
         const string modelPath = "Tests/Files/export_test.vmdl_c";
@@ -1675,6 +1717,32 @@ internal sealed class App : Application
             && Math.Abs(dragDelta.X - 10f) < 0.5f
             && Math.Abs(dragDelta.Y) < 0.5f;
 
+        // A drag that reaches the edge of the window must keep going: the pointer is put back in the
+        // middle of the viewport, which is only possible on the X11 backend.
+        var warpOk = true;
+
+        using var warp = X11PointerWarp.TryCreate(window);
+
+        if (warp is not null)
+        {
+            // The event takes a point in the window, so aim at its last pixel
+            viewport.Input.Captured = true;
+            RaisePointerMoved(viewport, new Point(window.ClientSize.Width - 0.5, window.ClientSize.Height / 2));
+            await Task.Delay(120).ConfigureAwait(true);
+
+            var viewportCenter = new Point(viewport.Bounds.Width / 2, viewport.Bounds.Height / 2);
+            var expectedWarp = viewport.PointToScreen(viewportCenter);
+
+            warpOk = await WaitForAsync(
+                () => warp.TryGetPosition(out var position)
+                    && Math.Abs(position.X - expectedWarp.X) <= 2
+                    && Math.Abs(position.Y - expectedWarp.Y) <= 2,
+                20).ConfigureAwait(true);
+
+            viewport.Input.Captured = false;
+            viewport.Input.Delta = System.Numerics.Vector2.Zero;
+        }
+
         var start = renderer.CameraLocation;
         var startDistance = core.Input.OrbitDistance;
 
@@ -1757,7 +1825,7 @@ internal sealed class App : Application
             + $"zoom {beforeZoom:0.00}->{afterZoom:0.00}, reset {beforeReset:0.00}->{afterReset:0.00}, "
             + $"startDistance={startDistance:0.00}, hitTest/pointerEnter/exit={pointerOk}, "
             + $"hoverPrime={hoverDelta.Length():0.00}/dragDelta={dragDelta.X:0.00},{dragDelta.Y:0.00}, "
-            + $"tumble={tumblePitch:0.00}rad/{renderedTumblePitch:0.00}rad").ConfigureAwait(true);
+            + $"tumble={tumblePitch:0.00}rad/{renderedTumblePitch:0.00}rad, warp={warpOk}").ConfigureAwait(true);
 
         // The model sits on the bind pose, so once its textures have streamed in and the camera
         // transitions are done the viewer has to go idle instead of redrawing at the display rate.
@@ -1782,9 +1850,9 @@ internal sealed class App : Application
         await Program.StdOut.WriteLineAsync(
             $"[self-check] {label} idle: frames={idleFrames} in 1s, settling={idleEligible}, reason={renderer.SceneCore?.ContinuousFramesReason}").ConfigureAwait(true);
 
-        await Program.StdOut.WriteLineAsync(orbitOk && panOk && zoomOk && resetOk && pointerOk && idleOk && dragStartsFromPointer && tumbleOk
-            ? $"[self-check] {label} camera: orbit, both pan axes, over-pole tumble, zoom, reset view, drag start and idle rendering all verified"
-            : $"[self-check] {label} camera: incomplete (orbit={orbitOk}, pan={panOk}, zoom={zoomOk}, reset={resetOk}, pointer={pointerOk}, idle={idleOk}, dragStart={dragStartsFromPointer}, tumble={tumbleOk})").ConfigureAwait(true);
+        await Program.StdOut.WriteLineAsync(orbitOk && panOk && zoomOk && resetOk && pointerOk && idleOk && dragStartsFromPointer && tumbleOk && warpOk
+            ? $"[self-check] {label} camera: orbit, both pan axes, over-pole tumble, zoom, reset view, drag start, edge warp and idle rendering all verified"
+            : $"[self-check] {label} camera: incomplete (orbit={orbitOk}, pan={panOk}, zoom={zoomOk}, reset={resetOk}, pointer={pointerOk}, idle={idleOk}, dragStart={dragStartsFromPointer}, tumble={tumbleOk}, warp={warpOk})").ConfigureAwait(true);
     }
 
     private static async Task ExerciseModelAnimationControlsAsync(ModelViewerControl control, ModelAnimationSession session, string label)

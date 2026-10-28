@@ -118,17 +118,14 @@ internal static class Program
             .UsePlatformDetect()
             .LogToTrace(LogEventLevel.Information);
 
-        if (OperatingSystem.IsLinux())
+        if (OperatingSystem.IsLinux() && args.Contains("--wayland", StringComparer.Ordinal))
         {
-            if (args.Contains("--wayland", StringComparer.Ordinal))
-            {
-                builder = builder.UseWayland();
-            }
-            else if (!args.Contains("--x11", StringComparer.Ordinal))
-            {
-                // Use Wayland when a compositor is available, otherwise the X11 backend selected above.
-                builder = builder.UseWaylandWithFallback();
-            }
+            // Native Wayland is available on request, but it is not the default: a Wayland client cannot
+            // move the pointer, so dragging a model stops where the pointer stops. The X11 backend runs
+            // through Xwayland on a Wayland desktop, where the pointer warp that keeps a drag going is
+            // emulated, which is also what other 3D applications rely on. UsePlatformDetect already
+            // prefers X11 when an X server is reachable and falls back to Wayland when there is none.
+            builder = builder.UseWayland();
         }
 
         return builder;
