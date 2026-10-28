@@ -1719,6 +1719,36 @@ internal sealed class App : Application
             centerOk = System.Numerics.Vector3.Distance(target, bounds.Center) <= tolerance;
         }
 
+        // Orbiting has to tumble over the pole and keep going instead of stopping at straight up or
+        // down. The rendered camera has to keep the angle too, not clamp it back.
+        // Frames coalesce, so the drag is repeated until the pitch is visibly past a quarter turn
+        // rather than assuming every simulated tick got its own frame.
+        var tumbleOk = false;
+        var tumblePitch = 0f;
+        var renderedTumblePitch = 0f;
+
+        viewport.Input.Keys |= ViewerKey.MouseLeft;
+
+        for (var i = 0; i < 40 && !tumbleOk; i++)
+        {
+            viewport.Input.Delta = new System.Numerics.Vector2(0, 500);
+            viewport.RequestFrame();
+            await Task.Delay(40).ConfigureAwait(true);
+
+            tumblePitch = MathF.Abs(core.Input.Camera.Pitch);
+            renderedTumblePitch = MathF.Abs(core.Renderer.Camera.Pitch);
+            tumbleOk = tumblePitch > MathF.PI / 2f && renderedTumblePitch > MathF.PI / 2f;
+        }
+
+        viewport.Input.Keys &= ~ViewerKey.MouseLeft;
+        viewport.Input.Delta = System.Numerics.Vector2.Zero;
+        viewport.RequestFrame();
+        await Task.Delay(80).ConfigureAwait(true);
+
+        // Put the camera back for the idle check below.
+        control.ResetViewButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        await Task.Delay(200).ConfigureAwait(true);
+
         var resetOk = centerOk && afterReset > 0.01f;
         var pointerOk = hitOk && pointerEntered && pointerExited;
 
@@ -1726,7 +1756,8 @@ internal sealed class App : Application
             $"[self-check] {label} camera: orbit={orbitDistance:0.00}, panX={panHorizontal:0.00}, panY={panVertical:0.00}, "
             + $"zoom {beforeZoom:0.00}->{afterZoom:0.00}, reset {beforeReset:0.00}->{afterReset:0.00}, "
             + $"startDistance={startDistance:0.00}, hitTest/pointerEnter/exit={pointerOk}, "
-            + $"hoverPrime={hoverDelta.Length():0.00}/dragDelta={dragDelta.X:0.00},{dragDelta.Y:0.00}").ConfigureAwait(true);
+            + $"hoverPrime={hoverDelta.Length():0.00}/dragDelta={dragDelta.X:0.00},{dragDelta.Y:0.00}, "
+            + $"tumble={tumblePitch:0.00}rad/{renderedTumblePitch:0.00}rad").ConfigureAwait(true);
 
         // The model sits on the bind pose, so once its textures have streamed in and the camera
         // transitions are done the viewer has to go idle instead of redrawing at the display rate.
@@ -1751,9 +1782,9 @@ internal sealed class App : Application
         await Program.StdOut.WriteLineAsync(
             $"[self-check] {label} idle: frames={idleFrames} in 1s, settling={idleEligible}, reason={renderer.SceneCore?.ContinuousFramesReason}").ConfigureAwait(true);
 
-        await Program.StdOut.WriteLineAsync(orbitOk && panOk && zoomOk && resetOk && pointerOk && idleOk && dragStartsFromPointer
-            ? $"[self-check] {label} camera: orbit, pan in both axes, zoom, reset view, drag start and idle rendering all verified"
-            : $"[self-check] {label} camera: incomplete (orbit={orbitOk}, pan={panOk}, zoom={zoomOk}, reset={resetOk}, pointer={pointerOk}, idle={idleOk}, dragStart={dragStartsFromPointer})").ConfigureAwait(true);
+        await Program.StdOut.WriteLineAsync(orbitOk && panOk && zoomOk && resetOk && pointerOk && idleOk && dragStartsFromPointer && tumbleOk
+            ? $"[self-check] {label} camera: orbit, both pan axes, over-pole tumble, zoom, reset view, drag start and idle rendering all verified"
+            : $"[self-check] {label} camera: incomplete (orbit={orbitOk}, pan={panOk}, zoom={zoomOk}, reset={resetOk}, pointer={pointerOk}, idle={idleOk}, dragStart={dragStartsFromPointer}, tumble={tumbleOk})").ConfigureAwait(true);
     }
 
     private static async Task ExerciseModelAnimationControlsAsync(ModelViewerControl control, ModelAnimationSession session, string label)

@@ -466,6 +466,23 @@ namespace ValveResourceFormat.Renderer
         }
 
         /// <summary>
+        /// Keeps the angles in the range the trigonometry stays accurate in, but leaves the pitch free to
+        /// tumble past straight up and down. Orbit controls use this: going over the pole and carrying on
+        /// is expected there, and the direction vectors flip with it.
+        /// </summary>
+        public void WrapRotation()
+        {
+            Yaw = MathF.IEEERemainder(Yaw, MathF.Tau);
+
+            // Only wrap a full turn, so ordinary poses keep their exact angle and an in-progress camera
+            // transition never gets sent the long way round
+            if (MathF.Abs(Pitch) > MathF.Tau)
+            {
+                Pitch = MathF.IEEERemainder(Pitch, MathF.Tau);
+            }
+        }
+
+        /// <summary>
         /// Returns the vertical FOV in radians used to build <see cref="ProjectionMatrix"/>, converted from
         /// <see cref="FieldOfView"/> via <see cref="Calculate4By3Fov"/>.
         /// </summary>
