@@ -321,6 +321,10 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         Input.X = (float)lastPointer.X;
         Input.Y = (float)lastPointer.Y;
         Input.Captured = true;
+
+        // The drag starts from this point, so movement from hovering before the press is discarded
+        // instead of being applied in one jump by the first frame of the drag.
+        Input.Delta = Vector2.Zero;
         UpdateButtons(e.GetCurrentPoint(this).Properties);
 
         if (renderer is ViewportGlRenderer viewportRenderer)
@@ -348,15 +352,23 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         Input.MouseOverViewport = true;
 
         var position = e.GetPosition(this);
-        Input.Delta += new Vector2((float)(position.X - lastPointer.X), (float)(position.Y - lastPointer.Y));
+        UpdateButtons(e.GetCurrentPoint(this).Properties);
+
+        // Hovering is not sampled every frame anymore, so accumulating it here would hand the whole
+        // hover travel to the first frame of the next drag and make the camera jump to wherever the
+        // pointer had wandered.
+        if (FollowsPointer)
+        {
+            Input.Delta += new Vector2((float)(position.X - lastPointer.X), (float)(position.Y - lastPointer.Y));
+        }
+
         lastPointer = position;
         Input.X = (float)position.X;
         Input.Y = (float)position.Y;
-        UpdateButtons(e.GetCurrentPoint(this).Properties);
 
-        // A scene viewer only moves the camera while a button is held, or while the pointer is captured
-        // for walk mode. Asking for a frame for every hover motion would keep an idle viewer redrawing.
-        if (Input.Left || Input.Right || Input.Captured || renderer is not SceneCoreGlRenderer)
+        // A scene viewer only needs a frame while the pointer is doing something. Asking for one for
+        // every hover motion would keep an idle viewer redrawing.
+        if (FollowsPointer)
         {
             RequestNextFrameRendering();
         }
@@ -366,6 +378,13 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
     {
         base.OnPointerEntered(e);
 
+        // Entering is not a move: the first move has to measure from where the pointer came in, not
+        // from wherever it last was inside the viewport.
+        if (!IsDragging)
+        {
+            lastPointer = e.GetPosition(this);
+        }
+
         Input.MouseOverViewport = true;
         RequestNextFrameRendering();
     }
@@ -374,7 +393,9 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
     {
         base.OnPointerExited(e);
 
-        Input.MouseOverViewport = false;
+        // A drag that runs past the edge of the viewport keeps driving the camera, because the pointer
+        // is captured; only a free pointer leaving means the camera should stop following it.
+        Input.MouseOverViewport = IsDragging;
         RequestNextFrameRendering();
     }
 
@@ -521,6 +542,21 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         RestoreCursor();
         RequestNextFrameRendering();
     }
+
+    /// <summary>
+    /// Whether a drag is in progress. The core sets <see cref="ViewerInputState.Captured"/> while mouse
+    /// look owns the pointer, so walk mode counts too even without a button.
+    /// </summary>
+    private bool IsDragging => Input.Left || Input.Middle || Input.Right || Input.Captured;
+
+    /// <summary>
+    /// Whether pointer movement currently does something in the view. Besides a drag, scene viewers
+    /// adjust the sun on ctrl-hover, and the graph and texture viewers follow the pointer for hover
+    /// feedback, so those keep sampling motion.
+    /// </summary>
+    private bool FollowsPointer => IsDragging
+        || renderer is not SceneCoreGlRenderer
+        || (Input.Keys & ViewerKey.Control) != 0;
 
     private void UpdateButtons(PointerPointProperties properties)
     {

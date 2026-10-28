@@ -1656,6 +1656,25 @@ internal sealed class App : Application
         RaisePointerEntered(viewport);
         await Task.Delay(80).ConfigureAwait(true);
 
+        // Hovering before a drag must not build up movement for it: hover no longer renders a frame,
+        // so an accumulated delta would be applied in one jump by the first frame of the drag.
+        RaisePointerMoved(viewport, new Point(300, 300));
+        RaisePointerMoved(viewport, new Point(420, 380));
+        var hoverDelta = viewport.Input.Delta;
+
+        viewport.Input.Captured = true;
+        RaisePointerMoved(viewport, new Point(430, 380));
+        var dragDelta = viewport.Input.Delta;
+
+        viewport.Input.Captured = false;
+        viewport.Input.Delta = System.Numerics.Vector2.Zero;
+        viewport.RequestFrame();
+        await Task.Delay(60).ConfigureAwait(true);
+
+        var dragStartsFromPointer = hoverDelta.Length() < 0.001f
+            && Math.Abs(dragDelta.X - 10f) < 0.5f
+            && Math.Abs(dragDelta.Y) < 0.5f;
+
         var start = renderer.CameraLocation;
         var startDistance = core.Input.OrbitDistance;
 
@@ -1706,7 +1725,8 @@ internal sealed class App : Application
         await Program.StdOut.WriteLineAsync(
             $"[self-check] {label} camera: orbit={orbitDistance:0.00}, panX={panHorizontal:0.00}, panY={panVertical:0.00}, "
             + $"zoom {beforeZoom:0.00}->{afterZoom:0.00}, reset {beforeReset:0.00}->{afterReset:0.00}, "
-            + $"startDistance={startDistance:0.00}, hitTest/pointerEnter/exit={pointerOk}").ConfigureAwait(true);
+            + $"startDistance={startDistance:0.00}, hitTest/pointerEnter/exit={pointerOk}, "
+            + $"hoverPrime={hoverDelta.Length():0.00}/dragDelta={dragDelta.X:0.00},{dragDelta.Y:0.00}").ConfigureAwait(true);
 
         // The model sits on the bind pose, so once its textures have streamed in and the camera
         // transitions are done the viewer has to go idle instead of redrawing at the display rate.
@@ -1731,9 +1751,9 @@ internal sealed class App : Application
         await Program.StdOut.WriteLineAsync(
             $"[self-check] {label} idle: frames={idleFrames} in 1s, settling={idleEligible}, reason={renderer.SceneCore?.ContinuousFramesReason}").ConfigureAwait(true);
 
-        await Program.StdOut.WriteLineAsync(orbitOk && panOk && zoomOk && resetOk && pointerOk && idleOk
-            ? $"[self-check] {label} camera: orbit, pan in both axes, zoom, reset view and idle rendering all verified"
-            : $"[self-check] {label} camera: incomplete (orbit={orbitOk}, pan={panOk}, zoom={zoomOk}, reset={resetOk}, pointer={pointerOk}, idle={idleOk})").ConfigureAwait(true);
+        await Program.StdOut.WriteLineAsync(orbitOk && panOk && zoomOk && resetOk && pointerOk && idleOk && dragStartsFromPointer
+            ? $"[self-check] {label} camera: orbit, pan in both axes, zoom, reset view, drag start and idle rendering all verified"
+            : $"[self-check] {label} camera: incomplete (orbit={orbitOk}, pan={panOk}, zoom={zoomOk}, reset={resetOk}, pointer={pointerOk}, idle={idleOk}, dragStart={dragStartsFromPointer})").ConfigureAwait(true);
     }
 
     private static async Task ExerciseModelAnimationControlsAsync(ModelViewerControl control, ModelAnimationSession session, string label)
@@ -1903,6 +1923,9 @@ internal sealed class App : Application
         => RaisePointerEvent(viewport, InputElement.PointerExitedEvent);
 
     private static void RaisePointerEvent(AvaloniaGlViewport viewport, RoutedEvent pointerEvent)
+        => RaisePointerEvent(viewport, pointerEvent, new Point(8, 8));
+
+    private static void RaisePointerEvent(AvaloniaGlViewport viewport, RoutedEvent pointerEvent, Point position)
     {
         using var pointer = new Pointer(1, PointerType.Mouse, true);
         var properties = new PointerPointProperties();
@@ -1911,11 +1934,15 @@ internal sealed class App : Application
             viewport,
             pointer,
             viewport,
-            new Point(8, 8),
+            position,
             0,
             properties,
             KeyModifiers.None));
     }
+
+    /// <summary>Raises a real Avalonia pointer-move event at the given position in the viewport.</summary>
+    private static void RaisePointerMoved(AvaloniaGlViewport viewport, Point position)
+        => RaisePointerEvent(viewport, InputElement.PointerMovedEvent, position);
 
     private static async Task<bool> WaitForAsync(Func<bool> condition, int attempts)
     {
