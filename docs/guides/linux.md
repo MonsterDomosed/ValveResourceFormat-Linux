@@ -113,7 +113,10 @@ then a progress window reports each file as it is written.
 The model viewer includes an interactive inspection camera (left-drag orbit, right-drag pan in
 both screen axes, wheel zoom, reset view) and a native animation sidebar (animation selection,
 play/pause, timeline scrubbing, playback speed, looping and restart). Models open on their bind
-pose; an animation starts when one is picked.
+pose; an animation starts when one is picked. Orbiting keeps turning over the top and bottom
+instead of stopping at straight up or down, and a drag that reaches the edge of the screen keeps
+the view moving in the same direction at the speed it had reached: the pointer cannot cross the
+screen edge, so the drag continues rather than stopping there.
 
 Scene viewers (world/map/world-node, material, mesh, navmesh, physics, particle, skybox,
 smart prop, voxel visibility and animation) share a collapsible inspector sidebar with view,
