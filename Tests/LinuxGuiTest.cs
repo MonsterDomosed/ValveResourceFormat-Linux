@@ -230,8 +230,20 @@ namespace Tests
         public async Task ClampsViewerFrameTime()
         {
             await Assert.That(AvaloniaGlViewport.ClampFrameTime(-1.0)).IsEqualTo(0.0);
-            await Assert.That(AvaloniaGlViewport.ClampFrameTime(0.25)).IsEqualTo(0.25);
-            await Assert.That(AvaloniaGlViewport.ClampFrameTime(2.0)).IsEqualTo(1.0);
+            await Assert.That(AvaloniaGlViewport.ClampFrameTime(0.05)).IsEqualTo(0.05);
+
+            // A long hitch must not turn into a long simulation step
+            await Assert.That(AvaloniaGlViewport.ClampFrameTime(0.25)).IsEqualTo(0.1);
+            await Assert.That(AvaloniaGlViewport.ClampFrameTime(2.0)).IsEqualTo(0.1);
+        }
+
+        [Test]
+        public async Task ResumingAnIdleViewerDoesNotSimulateTheIdleGap()
+        {
+            // Viewers stop drawing when nothing changes, so the gap before the next frame can be minutes
+            await Assert.That(AvaloniaGlViewport.GetFrameTime(30.0)).IsEqualTo(0.0);
+            await Assert.That(AvaloniaGlViewport.GetFrameTime(0.2)).IsEqualTo(0.1);
+            await Assert.That(AvaloniaGlViewport.GetFrameTime(0.016)).IsEqualTo(0.016);
         }
 
         [Test]

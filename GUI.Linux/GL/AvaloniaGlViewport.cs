@@ -122,7 +122,13 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
 
     void IGLViewerHost.SetClipboardImage(SkiaSharp.SKBitmap bitmap) => AppClipboard.SetImage(bitmap);
 
-    internal static double ClampFrameTime(double elapsed) => Math.Clamp(elapsed, 0.0, 1.0);
+    internal static double ClampFrameTime(double elapsed) => Math.Clamp(elapsed, 0.0, 0.1);
+
+    /// <summary>
+    /// The frame time for a rendered frame. A viewer that was idle for a while gets no time at all
+    /// rather than the whole idle gap, which would advance animations and physics by seconds at once.
+    /// </summary>
+    internal static double GetFrameTime(double elapsed) => elapsed > 0.25 ? 0.0 : ClampFrameTime(elapsed);
 
     protected override void OnOpenGlInit(GlInterface gl)
     {
@@ -152,7 +158,7 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         ApplyVerticalSync();
 
         var now = Stopwatch.GetTimestamp();
-        var frameTime = ClampFrameTime((now - lastTicks) / (double)Stopwatch.Frequency);
+        var frameTime = GetFrameTime((now - lastTicks) / (double)Stopwatch.Frequency);
         lastTicks = now;
 
         var scaling = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1.0;
