@@ -83,14 +83,22 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
     private bool disposed;
 
     public PackageBrowserView(string vpkPath, MainWindow window)
+        : this(vpkPath, window, Prepare(vpkPath))
+    {
+    }
+
+    private PackageBrowserView(string vpkPath, MainWindow window, (Package Package, PackageTreeNode Root) prepared)
+        : this(vpkPath, window, prepared.Package, prepared.Root)
+    {
+    }
+
+    internal PackageBrowserView(string vpkPath, MainWindow window, Package package, PackageTreeNode root)
     {
         this.vpkPath = vpkPath;
         this.window = window;
 
-        package = new Package();
-        package.OptimizeEntriesForBinarySearch(StringComparison.OrdinalIgnoreCase);
-        package.Read(vpkPath);
-        root = PackageTree.Build(package);
+        this.package = package;
+        this.root = root;
         currentFolder = root;
 
         // The search runs ahead of the preview work, so it is not stuck behind it.
@@ -113,6 +121,22 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
     }
 
     /// <summary>Total entries in the package, for the self-check.</summary>
+    /// <summary>
+    /// Reads a package and builds its tree. Does no UI work, so the shell can run it off the UI
+    /// thread before constructing the view.
+    /// </summary>
+    public static (Package Package, PackageTreeNode Root) Prepare(string vpkPath)
+    {
+        var package = new Package();
+        package.OptimizeEntriesForBinarySearch(StringComparison.OrdinalIgnoreCase);
+        package.Read(vpkPath);
+
+        return (package, PackageTree.Build(package));
+    }
+
+    /// <summary>The package file this browser shows.</summary>
+    internal string VpkPath => vpkPath;
+
     internal int EntryCount => root.TotalFileCount;
 
     /// <summary>The opened package, for the self-check.</summary>
@@ -871,6 +895,11 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
     {
         visibleCheckTimer.Stop();
 
+        if (disposed)
+        {
+            return;
+        }
+
         if (!IsEffectivelyVisible)
         {
             // The tab is hidden, so the previews wait until it is shown again.
@@ -1057,6 +1086,7 @@ internal sealed class PackageBrowserView : UserControl, IDisposable
 
         disposed = true;
         filterTimer.Stop();
+        visibleCheckTimer.Stop();
         CancelThumbnails();
         thumbnailGate.Dispose();
         package.Dispose();

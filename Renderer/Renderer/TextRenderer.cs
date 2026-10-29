@@ -255,6 +255,22 @@ namespace ValveResourceFormat.Renderer
             textVertices.AttachTo(vao, Vertex.InputLayout.Stride);
         }
 
+        /// <summary>Deletes the font atlas, the text vertex buffer and its vertex array.</summary>
+        public void Delete()
+        {
+            fontTexture?.Delete();
+            fontTexture = null;
+
+            textVertices?.Delete();
+            textVertices = null;
+
+            if (vao != 0)
+            {
+                VertexArray.Delete(vao);
+                vao = 0;
+            }
+        }
+
         /// <summary>Projects a 3D world position to screen space and queues the text for rendering.</summary>
         /// <param name="position">World-space position to project.</param>
         /// <param name="textRenderRequest">Text rendering parameters.</param>

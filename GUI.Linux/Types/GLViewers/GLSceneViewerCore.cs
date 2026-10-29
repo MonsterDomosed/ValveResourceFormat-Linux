@@ -229,10 +229,41 @@ public abstract class GLSceneViewerCore : IDisposable
         physicsTraceRenderer?.Delete();
         physicsTraceRenderer = null;
 
+        SelectedNodeRenderer?.Delete();
+        SelectedNodeRenderer = null;
+
+        baseGrid?.Delete();
+        baseGrid = null;
+
+        crosshairRenderer.Delete();
+        TextRenderer.Delete();
+
+        if (frametimeQuery1 != 0)
+        {
+            OpenGL.DeleteQuery(frametimeQuery1);
+            frametimeQuery1 = 0;
+        }
+
+        if (frametimeQuery2 != 0)
+        {
+            OpenGL.DeleteQuery(frametimeQuery2);
+            frametimeQuery2 = 0;
+        }
+
         DisposeAudio();
 
         QuadOverdrawRenderer?.Dispose();
         QuadOverdrawRenderer = null;
+
+        Picker?.Delete();
+        Picker = null;
+
+        saveAsFramebuffer?.Delete();
+        saveAsFramebuffer = null;
+
+        // The host owns the target it handed over, but nothing else frees the attachments
+        MainFramebuffer?.Delete();
+        MainFramebuffer = null;
 
         Renderer.Dispose();
         Renderer.RendererContext.Dispose();
@@ -816,11 +847,21 @@ public abstract class GLSceneViewerCore : IDisposable
             if (Picker.ActiveNextFrame)
             {
                 using var _ = new GLDebugGroup("Picker Object Id Render");
-                renderContext.ReplacementShader = Picker.Shader;
-                renderContext.Framebuffer = Picker;
 
-                Renderer.RenderScenesWithView(renderContext);
+                // The pick pass has its own target and shader. Sharing this frame's context would leave
+                // the main pass drawing into the picker and presenting the previous frame.
+                var pickContext = renderContext with
+                {
+                    Framebuffer = Picker,
+                    ReplacementShader = Picker.Shader,
+                };
+
+                Renderer.RenderScenesWithView(pickContext);
                 Picker.Finish();
+
+                // The clicked frame went to the picker, so the viewer needs one more frame to show the
+                // result, including the selection this pick just changed.
+                Host.RequestFrame();
             }
             else if (Picker.IsDebugActive)
             {

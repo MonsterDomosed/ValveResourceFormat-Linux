@@ -78,6 +78,19 @@ namespace ValveResourceFormat.Renderer
             PerfStats.Active.ResumeTriangleCounter();
         }
 
+        /// <summary>Deletes the crosshair geometry.</summary>
+        public void Delete()
+        {
+            crosshairVertices?.Delete();
+            crosshairVertices = null;
+
+            if (vao != 0)
+            {
+                VertexArray.Delete(vao);
+                vao = 0;
+            }
+        }
+
         private void BuildVertices(Vector2 windowSize)
         {
             builtForWindowSize = windowSize;

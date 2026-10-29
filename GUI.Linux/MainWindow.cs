@@ -214,6 +214,20 @@ internal sealed class MainWindow : Window
     {
         Log.Info(nameof(MainWindow), "Shell opened");
 
+        if (Settings.DowngradeWarning is { } warning)
+        {
+            var continueAnyway = await AppMessageDialogs.ConfirmAsync(
+                warning,
+                "Source 2 Viewer downgraded",
+                buttons: ConfirmButtons.YesNo).ConfigureAwait(true);
+
+            if (!continueAnyway)
+            {
+                Close();
+                return;
+            }
+        }
+
         if (args.Length > 0)
         {
             foreach (var file in args)
@@ -365,7 +379,7 @@ internal sealed class MainWindow : Window
         // VPKs are containers, not resources; they open in the package browser.
         if (string.Equals(Path.GetExtension(path), ".vpk", StringComparison.OrdinalIgnoreCase))
         {
-            OpenPackage(path);
+            await OpenPackageAsync(path).ConfigureAwait(true);
             return;
         }
 
@@ -513,22 +527,74 @@ internal sealed class MainWindow : Window
         return browser;
     }
 
-    /// <summary>Opens a VPK in a package browser tab and returns its view, or null when it is missing.</summary>
-    internal PackageBrowserView? OpenPackage(string vpkPath)
+    /// <summary>
+    /// Opens a VPK in a package browser tab, reading it off the UI thread, and returns its view.
+    /// An already open browser for the same file is brought to the front instead of being read again.
+    /// </summary>
+    internal async Task<PackageBrowserView?> OpenPackageAsync(string vpkPath)
     {
+        vpkPath = Path.GetFullPath(vpkPath);
+
         if (!File.Exists(vpkPath))
         {
             Log.Error(nameof(MainWindow), $"Package '{vpkPath}' does not exist.");
             return null;
         }
 
-        var view = new PackageBrowserView(vpkPath, this);
-        var tab = CreateTab(Path.GetFileName(vpkPath), view, CloseTab, select: true, iconName: "vpk");
-        tab.Tag = view;
+        foreach (var item in mainTabs.Items)
+        {
+            if (item is TabItem existing && existing.Tag is PackageBrowserView open
+                && string.Equals(open.VpkPath, vpkPath, StringComparison.Ordinal))
+            {
+                mainTabs.SelectedItem = existing;
+                return open;
+            }
+        }
+
+        var loading = new StackPanel
+        {
+            Margin = new Thickness(24),
+            Spacing = 12,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                new GUI.Linux.UI.SvgIcon("vpk", 48),
+                new TextBlock { Text = Path.GetFileName(vpkPath), Classes = { "section" }, HorizontalAlignment = HorizontalAlignment.Center },
+                new ProgressBar { IsIndeterminate = true, Width = 240 },
+                new TextBlock { Text = "Reading package...", Classes = { "hint" }, HorizontalAlignment = HorizontalAlignment.Center },
+            },
+        };
+
+        var tab = CreateTab(Path.GetFileName(vpkPath), loading, CloseTab, select: true, iconName: "vpk");
         mainTabs.Items.Add(tab);
         mainTabs.SelectedItem = tab;
         UpdateStatus();
-        return view;
+
+        try
+        {
+            var prepared = await Task.Run(() => PackageBrowserView.Prepare(vpkPath)).ConfigureAwait(true);
+
+            if (!mainTabs.Items.Contains(tab))
+            {
+                // Closed while it was being read
+                prepared.Package.Dispose();
+                return null;
+            }
+
+            var view = new PackageBrowserView(vpkPath, this, prepared.Package, prepared.Root);
+            tab.Tag = view;
+            SetTabContent(tab, view);
+            UpdateStatus();
+
+            return view;
+        }
+        catch (Exception e)
+        {
+            Log.Error(nameof(MainWindow), $"Could not open package '{vpkPath}': {e}");
+            SetTabContent(tab, CreateErrorView(vpkPath, e));
+            return null;
+        }
     }
 
     /// <summary>
@@ -1042,8 +1108,39 @@ internal sealed class MainWindow : Window
         {
             contentHost.Children.Remove(content);
 
-            // Viewer controls own timers and sessions; dispose them with the tab.
-            (content as IDisposable)?.Dispose();
+            // Viewer controls own timers, sessions and renderers, and several of them sit inside a
+            // nested tab control rather than being the tab's own content, so the whole tree is walked.
+            DisposeControls(content);
+        }
+    }
+
+    /// <summary>Disposes every disposable control below <paramref name="root"/>, deepest first.</summary>
+    private static void DisposeControls(Control root)
+    {
+        var disposables = new List<IDisposable>();
+
+        void Collect(object node)
+        {
+            if (node is IDisposable disposable)
+            {
+                disposables.Add(disposable);
+            }
+
+            if (node is Avalonia.LogicalTree.ILogical logical)
+            {
+                foreach (var child in logical.LogicalChildren)
+                {
+                    Collect(child);
+                }
+            }
+        }
+
+        Collect(root);
+
+        // Children first: a parent's Dispose may stop timers the child needs while shutting down
+        for (var i = disposables.Count - 1; i >= 0; i--)
+        {
+            disposables[i].Dispose();
         }
     }
 
@@ -1102,8 +1199,7 @@ internal sealed class MainWindow : Window
         {
             if (item is TabItem tab
                 && tab.Header is StackPanel panel
-                && panel.Children.Count > 0
-                && panel.Children[0] is TextBlock text
+                && panel.Children.OfType<TextBlock>().FirstOrDefault() is { } text
                 && text.Text == header)
             {
                 return tab;
@@ -1121,14 +1217,9 @@ internal sealed class MainWindow : Window
     }
 
     private static string GetTabTitle(TabItem? tab)
-    {
-        if (tab?.Header is StackPanel panel && panel.Children.Count > 0 && panel.Children[0] is TextBlock text)
-        {
-            return text.Text ?? string.Empty;
-        }
-
-        return string.Empty;
-    }
+        => tab?.Header is StackPanel panel
+            ? panel.Children.OfType<TextBlock>().FirstOrDefault()?.Text ?? string.Empty
+            : string.Empty;
 
     private void RestoreWindowGeometry()
     {

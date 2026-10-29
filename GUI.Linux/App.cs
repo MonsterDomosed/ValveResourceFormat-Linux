@@ -2440,7 +2440,7 @@ internal sealed class App : Application
             await Task.Delay(200).ConfigureAwait(true);
 
             var pakPath = Path.Combine(install.ContentRoot, "pak01_dir.vpk");
-            var pakView = window.OpenPackage(pakPath);
+            var pakView = await window.OpenPackageAsync(pakPath).ConfigureAwait(true);
 
             if (pakView is null)
             {
@@ -2627,7 +2627,7 @@ internal sealed class App : Application
 
             if (mapVpkPath is not null && worldEntryPath is not null)
             {
-                var mapView = window.OpenPackage(mapVpkPath);
+                var mapView = await window.OpenPackageAsync(mapVpkPath).ConfigureAwait(true);
 
                 if (mapView?.Package.FindEntry(worldEntryPath) is { } worldEntry)
                 {
@@ -2690,7 +2690,7 @@ internal sealed class App : Application
         try
         {
             var pakPath = Path.Combine(install.ContentRoot, "pak01_dir.vpk");
-            var pakView = window.OpenPackage(pakPath);
+            var pakView = await window.OpenPackageAsync(pakPath).ConfigureAwait(true);
 
             if (pakView is null)
             {
