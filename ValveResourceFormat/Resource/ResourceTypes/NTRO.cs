@@ -60,7 +60,31 @@ namespace ValveResourceFormat.ResourceTypes
             }
         }
 
+        /// <summary>Deepest struct nesting accepted, so a self-referencing manifest cannot overflow the stack.</summary>
+        private const int MaxStructDepth = 32;
+
+        private int structDepth;
+
         private KVObject ReadStructure(ResourceIntrospectionManifest.ResourceDiskStruct refStruct, long startingOffset)
+        {
+            Debug.Assert(IntrospectionManifest != null);
+
+            if (++structDepth > MaxStructDepth)
+            {
+                throw new InvalidDataException($"Structure nesting is deeper than {MaxStructDepth} levels.");
+            }
+
+            try
+            {
+                return ReadStructureCore(refStruct, startingOffset);
+            }
+            finally
+            {
+                structDepth--;
+            }
+        }
+
+        private KVObject ReadStructureCore(ResourceIntrospectionManifest.ResourceDiskStruct refStruct, long startingOffset)
         {
             Debug.Assert(IntrospectionManifest != null);
 

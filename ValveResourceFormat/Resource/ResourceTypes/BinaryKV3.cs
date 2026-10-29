@@ -313,6 +313,27 @@ namespace ValveResourceFormat.ResourceTypes
                 sizeUncompressedBuffer1 = sizeUncompressedTotal;
             }
 
+            // These are read straight from the file and used as pooled buffer sizes below. The
+            // uncompressed sizes are legitimately larger than the block, so only reject the values a
+            // real file cannot have: negative ones, and sizes no single block could hold.
+            const int LargestPlausibleBuffer = 1 << 30;
+
+            if (countBytes1 < 0 || countBytes4 < 0 || countBytes8 < 0 || countTypes < 0
+                || countObjects < 0 || countArrays < 0 || countBlocks < 0
+                || sizeUncompressedTotal < 0 || sizeCompressedTotal < 0
+                || sizeUncompressedBuffer1 < 0 || sizeCompressedBuffer1 < 0
+                || sizeUncompressedBuffer2 < 0 || sizeCompressedBuffer2 < 0
+                || sizeBinaryBlobsBytes < 0
+                || sizeUncompressedBuffer1 > LargestPlausibleBuffer
+                || sizeUncompressedBuffer2 > LargestPlausibleBuffer
+                || sizeBinaryBlobsBytes > LargestPlausibleBuffer
+                || sizeCompressedTotal > LargestPlausibleBuffer
+                || sizeCompressedBuffer1 > LargestPlausibleBuffer
+                || sizeCompressedBuffer2 > LargestPlausibleBuffer)
+            {
+                throw new InvalidDataException("KV3 header declares impossible buffer sizes.");
+            }
+
             var buffer1Raw = ArrayPool<byte>.Shared.Rent(
                 version < 5 && compressionMethod == KV3BinaryCompressionMethod.Zstd
                     ? sizeUncompressedBuffer1 + sizeBinaryBlobsBytes

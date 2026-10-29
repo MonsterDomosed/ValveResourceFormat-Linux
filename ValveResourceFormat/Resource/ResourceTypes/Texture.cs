@@ -460,6 +460,12 @@ namespace ValveResourceFormat.ResourceTypes
 
                     var prevOffset = reader.BaseStream.Position;
 
+                    if (offset > reader.BaseStream.Length - reader.BaseStream.Position
+                        || size > reader.BaseStream.Length - (reader.BaseStream.Position + offset))
+                    {
+                        throw new InvalidDataException($"Texture extra data block {type} does not fit in the file.");
+                    }
+
                     reader.BaseStream.Position += offset;
                     ExtraData.Add(type, reader.ReadBytes((int)size));
                     reader.BaseStream.Position -= size;

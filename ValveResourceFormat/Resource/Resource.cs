@@ -210,6 +210,16 @@ namespace ValveResourceFormat
 
             Reader.BaseStream.Position += blockOffset - 8; // 8 is 2 uint32s we just read
 
+            // Every block entry is 12 bytes. A count of 0x40000000 would otherwise reserve gigabytes
+            // before a single header has been read.
+            var remainingAfterBlockTable = Reader.BaseStream.Length - Reader.BaseStream.Position;
+
+            if (remainingAfterBlockTable < 0 || blockCount > remainingAfterBlockTable / 12)
+            {
+                throw new InvalidDataException(
+                    $"Resource declares {blockCount} blocks, which does not fit in {Reader.BaseStream.Length} bytes.");
+            }
+
             Blocks.EnsureCapacity((int)blockCount);
 
             for (var i = 0; i < blockCount; i++)
@@ -224,6 +234,15 @@ namespace ValveResourceFormat
                 if (size == 0)
                 {
                     continue;
+                }
+
+                // Every lazy block trusts its own offset and size, so they have to be inside the file
+                var fileLength = Reader.BaseStream.Length;
+
+                if (offset > fileLength || size > fileLength - offset)
+                {
+                    throw new InvalidDataException(
+                        $"Block {blockType} at offset {offset} with size {size} does not fit in {fileLength} bytes.");
                 }
 
                 // Peek data to detect VKV3
