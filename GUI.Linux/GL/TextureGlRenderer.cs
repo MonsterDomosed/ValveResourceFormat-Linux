@@ -18,11 +18,13 @@ namespace GUI.Linux.GL;
 /// Linux texture viewer renderer. Decodes/upload the texture through the shared material loader and
 /// draws it with the internal <c>texture_decode</c> shader over a checkerboard, with wheel zoom and
 /// drag pan. It is a direct-to-screen viewer and therefore builds on <see cref="ViewportGlRenderer"/>
-/// rather than the scene core. Channel/mip/cube/sprite controls are not ported yet.
+/// rather than the scene core. The inspector session selects the mip, depth slice, cube face,
+/// channel mapping, channel split and sprite frame that are shown.
 /// </summary>
 internal sealed class TextureGlRenderer : ViewportGlRenderer
 {
     private readonly string fileName;
+    private readonly TextureInspectorSession inspector;
 
     private RendererContext? rendererContext;
     private ValveResourceFormat.Resource? resource;
@@ -38,11 +40,15 @@ internal sealed class TextureGlRenderer : ViewportGlRenderer
     private float scaleChangeTime = 10f;
     private bool fitted;
 
-    public TextureGlRenderer(string fileName)
+    public TextureGlRenderer(string fileName, TextureInspectorSession inspector)
         : base("texture")
     {
         this.fileName = fileName;
+        this.inspector = inspector;
     }
+
+    /// <summary>The controls' session, for the self-check.</summary>
+    internal TextureInspectorSession Inspector => inspector;
 
     protected override void InitializeRenderer(GraphicsContext context)
     {
@@ -85,7 +91,19 @@ internal sealed class TextureGlRenderer : ViewportGlRenderer
         var textureType = TextureViewerShader.GetTextureTypeDefine(texture.Target);
         shader = rendererContext.ShaderLoader.LoadShader("texture_decode", (textureType, (byte)1));
 
-        Program.StdOut.WriteLine($"[gl] texture loaded: {originalWidth}x{originalHeight}, {texture.NumMipLevels} mips, target={texture.Target}");
+        // Everything the controls can select has to be resident, so nothing is streamed in later
+        rendererContext.TextureStreaming.Mode = TextureStreamingMode.Immediate;
+
+        var cubeFaces = texture.Target is OpenTK.Graphics.OpenGL.TextureTarget.TextureCubeMap or OpenTK.Graphics.OpenGL.TextureTarget.TextureCubeMapArray ? 6 : 1;
+        var spriteFrames = texture.SpriteSheetData?.Sequences is { Length: > 0 } sequences
+            && sequences[0].Frames is { Length: > 0 } frames
+                ? frames.Length
+                : 0;
+
+        inspector.SetLimits(texture.NumMipLevels, texture.Depth, cubeFaces, spriteFrames);
+
+        Program.StdOut.WriteLine($"[gl] texture loaded: {originalWidth}x{originalHeight}, {texture.NumMipLevels} mips, "
+            + $"depth={texture.Depth}, faces={cubeFaces}, spriteFrames={spriteFrames}, target={texture.Target}");
     }
 
     private static SKBitmap CreateSvgBitmap(Panorama panorama)
@@ -185,21 +203,43 @@ internal sealed class TextureGlRenderer : ViewportGlRenderer
         shader.SetUniform("g_vViewportPosition", positionNow);
         shader.SetUniform("g_flScale", scale);
 
+        var view = inspector.GetState();
+        var spriteFrameUv = GetSpriteFrameUv(view);
+
         shader.SetTexture(0, "g_tInputTexture", texture);
         shader.SetUniform("g_vInputTextureSize", new System.Numerics.Vector4(originalWidth, originalHeight, texture.Depth, texture.NumMipLevels));
-        shader.SetUniform("g_nSelectedMip", 0);
-        shader.SetUniform("g_nSelectedDepth", 0);
-        shader.SetUniform("g_nSelectedCubeFace", 0);
-        shader.SetUniform("g_nSelectedChannels", (int)ChannelMapping.RGBA.PackedValue);
+        shader.SetUniform("g_nSelectedMip", view.Mip);
+        shader.SetUniform("g_nSelectedDepth", view.Depth);
+        shader.SetUniform("g_nSelectedCubeFace", view.CubeFace);
+        shader.SetUniform("g_nSelectedChannels", (int)view.Channels);
         shader.SetUniform("g_bVisualizeTiling", false);
-        shader.SetUniform("g_nChannelSplitMode", 0);
-        shader.SetUniform("g_nCubemapProjectionType", 0);
+        shader.SetUniform("g_nChannelSplitMode", view.SplitMode);
+        shader.SetUniform("g_nCubemapProjectionType", view.Projection);
         shader.SetUniform("g_nDecodeFlags", 0);
-        shader.SetUniform("g_nSpriteSheetMode", 0);
-        shader.SetUniform("g_vSpriteFrameMinMax", new System.Numerics.Vector4(0f, 0f, 1f, 1f));
+        shader.SetUniform("g_nSpriteSheetMode", view.SpriteFrame < 0 ? 0 : view.SpriteCrop ? 2 : 1);
+        shader.SetUniform("g_vSpriteFrameMinMax", spriteFrameUv);
 
         OpenGL.BindVertexArray(rendererContext.MeshBufferCache.EmptyVAO);
         OpenGL.DrawArrays(OpenTK.Graphics.OpenGL.PrimitiveType.Triangles, 0, 3);
+    }
+
+    /// <summary>The UV rectangle of the selected sprite frame, whole texture when none is selected.</summary>
+    private Vector4 GetSpriteFrameUv(TextureInspectorState view)
+    {
+        if (view.SpriteFrame < 0
+            || texture?.SpriteSheetData?.Sequences is not { Length: > 0 } sequences
+            || sequences[0].Frames is not { } frames
+            || view.SpriteFrame >= frames.Length
+            || frames[view.SpriteFrame].Images is not { Length: > 0 } images)
+        {
+            return new Vector4(0f, 0f, 1f, 1f);
+        }
+
+        var image = images[0];
+
+        return view.SpriteCrop
+            ? new Vector4(image.CroppedMin.X, image.CroppedMin.Y, image.CroppedMax.X, image.CroppedMax.Y)
+            : new Vector4(image.UncroppedMin.X, image.UncroppedMin.Y, image.UncroppedMax.X, image.UncroppedMax.Y);
     }
 
     private void FitToViewport()

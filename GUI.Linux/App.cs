@@ -22,6 +22,7 @@ using GUI.Linux.Utils;
 using GUI.Linux.Viewers;
 using ValvePak;
 using ValveResourceFormat;
+using ValveResourceFormat.CompiledShader;
 using ValveResourceFormat.IO;
 using ValveResourceFormat.Renderer.World;
 using ValveResourceFormat.ResourceTypes;
@@ -231,6 +232,7 @@ internal sealed class App : Application
         await RunSelfCheckSectionAsync("model", () => RunModelRenderCheckAsync(window)).ConfigureAwait(true);
         await RunSelfCheckSectionAsync("model", () => RunModelAnimationCheckAsync(window)).ConfigureAwait(true);
         await RunSelfCheckSectionAsync("pointer", () => RunPointerWarpCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("texture", () => RunTextureInspectorCheckAsync(window)).ConfigureAwait(true);
         await RunSelfCheckSectionAsync("keyboard", () => RunKeyboardRoutingCheckAsync(window)).ConfigureAwait(true);
         await RunSelfCheckSectionAsync("material", () => RunMaterialRenderCheckAsync(window)).ConfigureAwait(true);
         await RunSelfCheckSectionAsync("animation", () => RunAnimationRenderCheckAsync(window)).ConfigureAwait(true);
@@ -1308,6 +1310,78 @@ internal sealed class App : Application
         catch (Exception e)
         {
             await Program.StdOut.WriteLineAsync($"[self-check] {label} failed: {e.GetType().Name}: {e.Message}").ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>
+    /// Drives the texture inspector: the channel mapping, the channel split and a mip level have to
+    /// reach the renderer and produce a frame.
+    /// </summary>
+    private static async Task RunTextureInspectorCheckAsync(MainWindow window)
+    {
+        const string texturePath = "Tests/Files/subscriptions_gamerpvp_inhouse_png.vtex_c";
+
+        if (!File.Exists(texturePath))
+        {
+            await Program.StdOut.WriteLineAsync($"[self-check] texture inspector sample missing: {texturePath}").ConfigureAwait(true);
+            return;
+        }
+
+        try
+        {
+            await window.OpenFileAsync(texturePath).ConfigureAwait(true);
+
+            var (viewport, renderer) = await WaitForRendererAsync<TextureGlRenderer>(window, 1, 30000).ConfigureAwait(true);
+
+            if (viewport is null)
+            {
+                await Program.StdOut.WriteLineAsync("[self-check] texture inspector: renderer timed out").ConfigureAwait(true);
+                return;
+            }
+
+            for (var i = 0; i < 60 && renderer.RenderedFrames < 3; i++)
+            {
+                await Task.Delay(50).ConfigureAwait(true);
+            }
+
+            var control = viewport.GetVisualAncestors().OfType<TextureViewerControl>().FirstOrDefault();
+            var session = renderer.Inspector;
+            var initial = session.GetState();
+            var framesBefore = renderer.RenderedFrames;
+
+            session.SetChannels(ChannelMapping.R.PackedValue);
+            session.SetSplitMode(2);
+            await WaitForAsync(() => renderer.RenderedFrames > framesBefore, 20).ConfigureAwait(true);
+
+            var changed = session.GetState();
+            var ok = control is not null
+                && changed.Channels == ChannelMapping.R.PackedValue
+                && changed.SplitMode == 2
+                && renderer.RenderedFrames > framesBefore;
+
+            if (initial.HasMips)
+            {
+                session.SetMip(initial.MipCount - 1);
+                ok &= await WaitForAsync(() => session.GetState().Mip == initial.MipCount - 1, 20).ConfigureAwait(true);
+            }
+
+            await Program.StdOut.WriteLineAsync(
+                $"[self-check] texture inspector: mips={initial.MipCount}, depth={initial.DepthCount}, "
+                + $"faces={initial.CubeFaceCount}, channels=0x{changed.Channels:X8}, split={changed.SplitMode}, "
+                + $"frames+={renderer.RenderedFrames - framesBefore}, control={control is not null}, ok={ok}").ConfigureAwait(true);
+
+            window.CloseTabContaining(viewport);
+
+            for (var i = 0; i < 60 && !renderer.Disposed; i++)
+            {
+                await Task.Delay(50).ConfigureAwait(true);
+            }
+
+            await Program.StdOut.WriteLineAsync($"[self-check] texture inspector closed, renderer disposed={renderer.Disposed}").ConfigureAwait(true);
+        }
+        catch (Exception e)
+        {
+            await Program.StdOut.WriteLineAsync($"[self-check] texture inspector failed: {e.GetType().Name}: {e.Message}").ConfigureAwait(true);
         }
     }
 

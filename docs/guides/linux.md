@@ -103,6 +103,10 @@ meshes, voxel visibility, animation clips, skeletons, smart props, panorama vect
 graphics, color correction LUTs, animation graphs (AG1 and AG2), pulse graphs, entity I/O
 graphs, and sound. The VPK browser, console, and portable data viewers are also available.
 
+Textures open in a viewer with a sidebar for picking the mip level, a depth slice of an array or
+volume, a cubemap face and projection, a channel mapping or channel split, and a sprite-sheet
+frame, with wheel zoom and drag pan.
+
 Resources can be exported and decompiled from the VPK browser and from an open tab. The
 `Export as is` and `Decompile & export` actions are on the file and folder context menus of
 the VPK browser (the file list accepts multi-selection, and folders export their whole
@@ -135,8 +139,10 @@ particles, or a map with moving entities, keeps drawing.
 Known limitations:
 
 - Viewer-specific sidebar controls that still need a viewer-side session are not ported yet:
-  texture mip/channel/cube/sampling controls, particle playback/detail controls, graph search
-  and filters, and the material parameter editor.
+  texture sampling controls (filter and wrap modes), particle playback/detail controls, graph
+  search and filters, and the material parameter editor. The texture viewer does have a sidebar
+  for the mip level, depth slice, cube face and projection, channel mapping, channel split and
+  sprite-sheet frame.
 - Some views are not implemented: the interactive compiled-shader tree, the panorama image
   grid, and the choreography viewer.
 - AAC and WAV ADPCM audio cannot be decoded, because no managed decoder is available.

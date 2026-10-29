@@ -1,7 +1,8 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
-using GUI.Linux.GL;
+using GUI.Linux.Shell;
+using GUI.Linux.Types.GLViewers;
 using GUI.Linux.Types.Viewers;
 
 namespace GUI.Linux.Viewers;
@@ -14,6 +15,7 @@ internal sealed class TextureGlViewer : IViewer
 {
     private readonly string fileName;
     private readonly ResourceDataViewer dataViewer;
+    private readonly TextureInspectorSession session = new();
 
     public TextureGlViewer(IViewerContext context, string fileName, ResourceDataViewer dataViewer)
     {
@@ -27,7 +29,7 @@ internal sealed class TextureGlViewer : IViewer
     {
         List<ViewerTab> tabs =
         [
-            new ViewerTab("TEXTURE", new ViewerContent.GlViewport(() => new TextureGlRenderer(fileName)), Select: true),
+            new ViewerTab("TEXTURE", new ViewerContent.CustomControl(() => new TextureViewerControl(fileName, session)), Select: true),
         ];
 
         if (dataViewer.GetContent() is ViewerContent.Tabs data)
