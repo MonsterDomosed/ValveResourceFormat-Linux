@@ -755,6 +755,8 @@ internal sealed class App : Application
 
                 await Program.StdOut.WriteLineAsync($"[self-check] world scene sound: {worldRenderer.HasSoundPlayer}").ConfigureAwait(true);
 
+                await RunWorldPickingCheckAsync(worldRenderer).ConfigureAwait(true);
+
                 await RunWorldSidebarCheckAsync(worldViewport, worldRenderer).ConfigureAwait(true);
 
                 window.CloseTabContaining(worldViewport);
@@ -776,6 +778,38 @@ internal sealed class App : Application
         {
             await Program.StdOut.WriteLineAsync($"[self-check] world view failed: {e.GetType().Name}: {e.Message}").ConfigureAwait(true);
         }
+    }
+
+    /// <summary>Clicking world geometry has to select the node under the pointer.</summary>
+    private static async Task RunWorldPickingCheckAsync(WorldGlRenderer renderer)
+    {
+        if (renderer.SceneCore is not { } core)
+        {
+            return;
+        }
+
+        var width = renderer.ViewportWidth;
+        var height = renderer.ViewportHeight;
+        var selected = false;
+
+        // Geometry does not cover every point of a framed map, so probe a few of them
+        for (var attempt = 0; attempt < 8 && !selected; attempt++)
+        {
+            var x = width * (0.35f + (attempt % 4) * 0.1f);
+            var y = height * (0.5f + (attempt / 4) * 0.1f);
+
+            renderer.OnPointerDown(x, y, ViewerKey.MouseLeft, 1);
+            renderer.OnPointerUp(x, y, ViewerKey.MouseLeft);
+
+            for (var frames = 0; frames < 8 && !selected; frames++)
+            {
+                await Task.Delay(60).ConfigureAwait(true);
+                selected = core.SelectedNodeRenderer?.HasSelectedNodes == true;
+            }
+        }
+
+        await Program.StdOut.WriteLineAsync(
+            $"[self-check] world picking: selected={selected}, node={core.SelectedNodeRenderer?.HasSelectedNodes}").ConfigureAwait(true);
     }
 
     private static async Task RunWorldSidebarCheckAsync(AvaloniaGlViewport viewport, WorldGlRenderer renderer)

@@ -650,8 +650,20 @@ public abstract class GLSceneViewerCore : IDisposable
 
     protected abstract void LoadScene();
 
+    /// <summary>
+    /// Selects the node under the pointer when a click resolves. Viewers that do more with a pick,
+    /// such as opening a model's mesh reference, override this.
+    /// </summary>
     protected virtual void OnPicked(object? sender, PickingResponse pixelInfo)
     {
+        if (pixelInfo.Intent != PickingIntent.Select || SelectedNodeRenderer is null)
+        {
+            return;
+        }
+
+        SelectedNodeRenderer.SelectNode(pixelInfo.PixelInfo.ObjectId == 0
+            ? null
+            : Scene.Find(pixelInfo.PixelInfo.ObjectId));
     }
 
     /// <summary>Resizes the render targets and cameras to a new viewport size in pixels.</summary>

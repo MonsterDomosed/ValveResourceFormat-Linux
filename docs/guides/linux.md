@@ -129,7 +129,8 @@ drag stops at the edge.
 Scene viewers (world/map/world-node, material, mesh, navmesh, physics, particle, skybox,
 smart prop, voxel visibility and animation) share a collapsible inspector sidebar with view,
 background, render mode, wireframe, world layer, saved camera and debug controls, wired to
-the renderer.
+the renderer. Clicking geometry in a world or map selects the node under the pointer and outlines
+it.
 
 Viewers only redraw when something actually changes. A model on its bind pose, or a static
 mesh or navmesh, stops drawing once its textures have loaded instead of redrawing the same
