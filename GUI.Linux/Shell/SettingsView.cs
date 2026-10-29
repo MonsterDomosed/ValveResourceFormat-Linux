@@ -105,7 +105,7 @@ internal static partial class SettingsView
         gameCombo.SelectionChanged += (_, _) =>
         {
             Settings.Config.SelectedGame = gameCombo.SelectedIndex <= 0 ? string.Empty : games[gameCombo.SelectedIndex - 1].Name;
-            Settings.Save();
+            Settings.SaveSoon();
             LinuxGameContent.Reset();
         };
 
@@ -147,7 +147,7 @@ internal static partial class SettingsView
             }
 
             Settings.Config.GameSearchPaths.Add(path);
-            Settings.Save();
+            Settings.SaveSoon();
             LinuxGameContent.Reset();
             RefreshPaths();
         };
@@ -163,7 +163,7 @@ internal static partial class SettingsView
             }
 
             Settings.Config.GameSearchPaths.Add(path);
-            Settings.Save();
+            Settings.SaveSoon();
             LinuxGameContent.Reset();
             RefreshPaths();
         };
@@ -177,7 +177,7 @@ internal static partial class SettingsView
             }
 
             Settings.Config.GameSearchPaths.Remove(selected);
-            Settings.Save();
+            Settings.SaveSoon();
             LinuxGameContent.Reset();
             RefreshPaths();
         };
@@ -218,7 +218,7 @@ internal static partial class SettingsView
             if (antiAliasing.SelectedIndex >= 0)
             {
                 Settings.Config.AntiAliasingSamples = AntiAliasingSamples[antiAliasing.SelectedIndex];
-                Settings.Save();
+                Settings.SaveSoon();
             }
         };
         Add(section, "Anti-aliasing", antiAliasing);
@@ -247,7 +247,7 @@ internal static partial class SettingsView
             if (shadows.SelectedIndex >= 0)
             {
                 Settings.Config.ShadowResolution = ShadowResolutions[shadows.SelectedIndex];
-                Settings.Save();
+                Settings.SaveSoon();
             }
         };
         Add(section, "Shadow quality", shadows);
@@ -325,7 +325,7 @@ internal static partial class SettingsView
             }
 
             Settings.Config.Theme = theme.SelectedIndex;
-            Settings.Save();
+            Settings.SaveSoon();
             App.ApplyTheme();
         };
         Add(section, "Theme", theme);
@@ -363,7 +363,7 @@ internal static partial class SettingsView
             if (e.Property == RangeBase.ValueProperty)
             {
                 Settings.Config.Volume = (float)(volume.Value / 100.0);
-                Settings.Save();
+                Settings.SaveSoon();
             }
         };
 
@@ -402,7 +402,7 @@ internal static partial class SettingsView
             if (e.Property == NumericUpDown.ValueProperty && number.Value is { } current)
             {
                 onChanged(current);
-                Settings.Save();
+                Settings.SaveSoon();
             }
         };
 
@@ -422,7 +422,7 @@ internal static partial class SettingsView
             if (e.Property == ToggleButton.IsCheckedProperty)
             {
                 onChanged(check.IsChecked == true);
-                Settings.Save();
+                Settings.SaveSoon();
             }
         };
 

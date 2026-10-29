@@ -1,4 +1,5 @@
 using System.IO;
+using System.Threading;
 using GUI.Linux.Platform;
 using ValveKeyValue;
 using ValveResourceFormat.IO;
@@ -131,6 +132,12 @@ namespace GUI.Linux.Utils
         /// <summary>Gets the active application configuration.</summary>
         public static AppConfig Config { get; private set; } = new AppConfig();
 
+        /// <summary>
+        /// A warning to show once the shell is running, when the settings file was written by a newer
+        /// build. Built during <see cref="Load"/>, because it cannot be shown before the dispatcher runs.
+        /// </summary>
+        public static string? DowngradeWarning { get; private set; }
+
         /// <summary>The update channel this build belongs to.</summary>
         public static UpdateChannel BuildChannel => AppInfo.IsReleaseBuild ? UpdateChannel.Stable : UpdateChannel.Dev;
 
@@ -181,20 +188,10 @@ namespace GUI.Linux.Utils
 
             if (currentVersion > SettingsFileCurrentVersion)
             {
-                // Blocking on the task is only safe here because this runs at startup before
-                // the UI exists, when we switch to pangui, this will need to be correctly awaited
-                // to not block the UI thread
-                var continueAnyway = AppMessageDialogs.ConfirmAsync(
-                    $"Your current settings.vdf has a higher version ({currentVersion}) than currently supported ({SettingsFileCurrentVersion}). You likely ran an older version of Source 2 Viewer and your settings may get reset.\n\nDo you want to continue?",
-                    "Source 2 Viewer downgraded",
-                    buttons: ConfirmButtons.YesNo
-                ).GetAwaiter().GetResult();
-
-                if (!continueAnyway)
-                {
-                    Environment.Exit(1);
-                    return;
-                }
+                // Shown once the shell is up: the dialog needs a running dispatcher, which does not
+                // exist yet at this point, and blocking on it here deadlocks the application.
+                DowngradeWarning =
+                    $"Your current settings.vdf has a higher version ({currentVersion}) than currently supported ({SettingsFileCurrentVersion}). You likely ran an older version of Source 2 Viewer and your settings may get reset.\n\nDo you want to continue?";
             }
 
             Config.GameSearchPaths ??= [];
@@ -334,15 +331,69 @@ namespace GUI.Linux.Utils
         /// </summary>
         public static void Save()
         {
-            var tempFile = Path.GetTempFileName();
-
-            using (var stream = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None))
+            // The render thread saves saved cameras, the UI thread saves everything else
+            lock (SaveLock)
             {
-                KVSerializer.Create(KVSerializationFormat.KeyValues1Text).Serialize(stream, Config, nameof(ValveResourceFormat));
+                var tempFile = SettingsFilePath + ".tmp";
+
+                try
+                {
+                    using (var stream = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None))
+                    {
+                        KVSerializer.Create(KVSerializationFormat.KeyValues1Text).Serialize(stream, Config, nameof(ValveResourceFormat));
+                    }
+
+                    File.Move(tempFile, SettingsFilePath, overwrite: true);
+                }
+                catch (Exception e)
+                {
+                    Log.Warn(nameof(Settings), $"Could not save settings: {e.Message}");
+
+                    try
+                    {
+                        File.Delete(tempFile);
+                    }
+                    catch (IOException)
+                    {
+                    }
+                    catch (UnauthorizedAccessException)
+                    {
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Saves shortly, coalescing rapid changes such as dragging a slider or typing in a box.
+        /// Falls back to an immediate save when called from a thread without a dispatcher.
+        /// </summary>
+        public static void SaveSoon()
+        {
+            if (!Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+            {
+                Save();
+                return;
             }
 
-            File.Move(tempFile, SettingsFilePath, overwrite: true);
+            if (saveTimer is null)
+            {
+                saveTimer = new Avalonia.Threading.DispatcherTimer
+                {
+                    Interval = TimeSpan.FromMilliseconds(400),
+                };
+                saveTimer.Tick += (_, _) =>
+                {
+                    saveTimer?.Stop();
+                    Save();
+                };
+            }
+
+            saveTimer.Stop();
+            saveTimer.Start();
         }
+
+        private static readonly Lock SaveLock = new();
+        private static Avalonia.Threading.DispatcherTimer? saveTimer;
 
         /// <summary>
         /// Appends <paramref name="path"/> to the end of the recent files list (most recent last),
