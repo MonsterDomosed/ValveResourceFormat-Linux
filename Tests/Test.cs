@@ -240,7 +240,6 @@ namespace Tests
                     expectedOutput = expectedOutput.Replace("Source 2 Viewer - https://valveresourceformat.github.io", StringToken.VRF_GENERATOR, StringComparison.Ordinal);
                     expectedOutput = SpaceRegex().Replace(expectedOutput, string.Empty);
 
-                    //await Assert.That(actualOutput).IsEqualTo(expectedOutput);
                     if (expectedOutput != actualOutput)
                     {
                         if (RegenerateFixtures)
@@ -252,7 +251,9 @@ namespace Tests
                         }
                         else
                         {
-                            await Console.Error.WriteLineAsync($"File '{file}' has mismatching ToString() in {blockType}");
+                            await Assert.That(actualOutput)
+                                .IsEqualTo(expectedOutput)
+                                .Because($"{resource.FileName}: block {blockType} no longer matches {Path.GetFileName(file)}");
                         }
                     }
                 }

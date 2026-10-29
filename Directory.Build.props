@@ -26,7 +26,7 @@
     <Deterministic>true</Deterministic>
     <DebugSymbols>true</DebugSymbols>
     <DebugType>embedded</DebugType>
-    <PublishReadyToRun>true</PublishReadyToRun>
+    <PublishReadyToRun Condition="'$(RuntimeIdentifier)' != ''">true</PublishReadyToRun>
     <NeutralLanguage>en</NeutralLanguage>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
