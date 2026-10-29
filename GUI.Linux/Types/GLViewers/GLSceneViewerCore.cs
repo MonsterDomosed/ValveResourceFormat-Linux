@@ -139,6 +139,8 @@ public abstract class GLSceneViewerCore : IDisposable
             || Renderer.RendererContext.TextureStreaming.HasPendingWork
             || SceneWantsContinuousFrames;
 
+    private bool sidebarDirty = true;
+
     /// <summary>Why the host is still being asked for frames, for the self-check. Not for UI use.</summary>
     internal string ContinuousFramesReason
     {
@@ -496,6 +498,12 @@ public abstract class GLSceneViewerCore : IDisposable
     {
         var command = Sidebar.ConsumeCommands();
 
+        if (command != default)
+        {
+            // The sidebar only has something new to show when a command changed something
+            sidebarDirty = true;
+        }
+
         if (command.RenderModeChanged && command.RenderMode is { Length: > 0 } mode)
         {
             ApplyRenderMode(mode);
@@ -592,6 +600,13 @@ public abstract class GLSceneViewerCore : IDisposable
     /// <summary>Publishes the scene state for the sidebar. Called on the render thread.</summary>
     private void PublishSidebarState()
     {
+        if (!sidebarDirty)
+        {
+            return;
+        }
+
+        sidebarDirty = false;
+
         if (sidebarRenderModes.Length == 0)
         {
             sidebarRenderModes = [.. GetAvailableRenderModes().Where(static m => !m.IsHeader).Select(static m => m.Name)];
@@ -724,7 +739,11 @@ public abstract class GLSceneViewerCore : IDisposable
     public int PerfDisplayMode
     {
         get => (int)perfDisplay;
-        set => perfDisplay = (PerfDisplay)Math.Clamp(value, 0, 3);
+        set
+        {
+            perfDisplay = (PerfDisplay)Math.Clamp(value, 0, 3);
+            sidebarDirty = true;
+        }
     }
 
     /// <summary>Advances simulation, camera and input for one frame.</summary>
