@@ -748,7 +748,8 @@ internal sealed class App : Application
 
                 await Program.StdOut.WriteLineAsync(
                     $"[self-check] world view: frames={worldRenderer.RenderedFrames}, distinctColors={worldRenderer.ReadbackDistinctColors}, "
-                    + $"nonBackgroundPixels={worldRenderer.ReadbackNonBackgroundPixels}, viewport={worldRenderer.ViewportWidth}x{worldRenderer.ViewportHeight}").ConfigureAwait(true);
+                    + $"nonBackgroundPixels={worldRenderer.ReadbackNonBackgroundPixels}, viewport={worldRenderer.ViewportWidth}x{worldRenderer.ViewportHeight}, "
+                    + $"exposure={worldRenderer.SceneCore?.Renderer.Postprocess.AverageLuminance:0.0000}").ConfigureAwait(true);
                 await Program.StdOut.WriteLineAsync(worldRenderer.ReadbackNonBackgroundPixels > 0 && worldRenderer.ReadbackDistinctColors > 1
                     ? "[self-check] world tab rendered real geometry"
                     : "[self-check] world tab rendered only a flat frame").ConfigureAwait(true);

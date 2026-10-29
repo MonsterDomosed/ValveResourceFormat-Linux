@@ -177,6 +177,10 @@ public class Renderer
     private readonly Shader[] histogramShaders = new Shader[2];
     private readonly StorageBuffer[] histogramBuffers = new StorageBuffer[2];
 
+    // The histogram result is handed back a few frames late so the CPU never waits for the pipeline
+    private ReadbackRing? luminanceReadback;
+    private bool hasAverageLuminance;
+
     // Injected
     /// <summary>
     /// Target framebuffer for the main scene render; must be set before calling <see cref="Render(Scene.RenderContext)"/>.
@@ -1057,9 +1061,23 @@ public class Renderer
 
         GL.MemoryBarrier(MemoryBarrierFlags.ShaderStorageBarrierBit | MemoryBarrierFlags.BufferUpdateBarrierBit);
 
-        var output = Vector4.Zero;
-        histogramBuffers[1].Read(ref output);
-        Postprocess.AverageLuminance = output.X;
+        luminanceReadback ??= new ReadbackRing(4);
+
+        if (!hasAverageLuminance)
+        {
+            // Nothing has been copied yet on the first frames, and exposure needs a value to start from
+            var first = Vector4.Zero;
+            histogramBuffers[1].Read(ref first);
+            Postprocess.AverageLuminance = first.X;
+            hasAverageLuminance = true;
+        }
+        else if (luminanceReadback.TryConsume(out var consumedSlot, out var luminance) && luminance.Length > 0)
+        {
+            Postprocess.AverageLuminance = BitConverter.UInt32BitsToSingle(luminance[0]);
+        }
+
+        // Taking the copy now and reading it once its fence passes costs nothing this frame
+        luminanceReadback.TrySubmit(histogramBuffers[1].Handle, 4, out var submittedSlot);
     }
 
     private void RenderOutlineLayer(Scene.RenderContext renderContext, ReadOnlySpan<SceneView> views)
@@ -1290,6 +1308,9 @@ public class Renderer
         BarnLightShadowBuffer?.Delete();
         histogramBuffers[0]?.Delete();
         histogramBuffers[1]?.Delete();
+
+        luminanceReadback?.Dispose();
+        luminanceReadback = null;
         WaterEffectsBuffer?.Delete();
         Skybox2D?.Delete();
 
