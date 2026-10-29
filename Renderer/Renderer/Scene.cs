@@ -425,6 +425,12 @@ namespace ValveResourceFormat.Renderer
             StaticOctree.Clear();
             DynamicOctree.Clear();
 
+            // A scene without a renderer context exists in tests, and has nothing loaded to release
+            if (RendererContext is null)
+            {
+                return;
+            }
+
             RendererContext.MaterialLoader.Clear();
             RendererContext.MeshBufferCache.Clear();
         }
@@ -2905,6 +2911,9 @@ namespace ValveResourceFormat.Renderer
         {
             if (disposing)
             {
+                // Every node, material and mesh buffer the scene loaded owns GPU memory of its own
+                Clear();
+
                 frustumBuffer?.Dispose();
                 pvsHiddenGpu?.Delete();
                 LightBinner.Dispose();
