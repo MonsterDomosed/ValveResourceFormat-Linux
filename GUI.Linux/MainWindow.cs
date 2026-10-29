@@ -290,11 +290,19 @@ internal sealed class MainWindow : Window
                 e.Handled = true;
                 break;
             case Key.W:
-                CloseCurrentTab();
+                if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+                {
+                    CloseAllTabs();
+                }
+                else
+                {
+                    CloseCurrentTab();
+                }
+
                 e.Handled = true;
                 break;
             case Key.Q:
-                CloseAllTabs();
+                Close();
                 e.Handled = true;
                 break;
             case Key.E:

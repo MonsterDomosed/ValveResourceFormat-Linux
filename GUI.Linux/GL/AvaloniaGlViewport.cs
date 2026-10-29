@@ -506,10 +506,16 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         Input.Keys |= key | MapModifiers(e.KeyModifiers);
 
         // Viewer shortcuts (Tab performance overlay, Delete, Escape) are handled by the core, not by
-        // the held-key input state.
-        if (key != ViewerKey.None && renderer is ViewportGlRenderer viewportRenderer)
+        // the held-key input state. Consuming them keeps Tab from walking focus out of the viewport
+        // while the viewer is being driven with the keyboard.
+        if (key != ViewerKey.None)
         {
-            viewportRenderer.OnKeyDown(key);
+            e.Handled = true;
+
+            if (renderer is ViewportGlRenderer viewportRenderer)
+            {
+                viewportRenderer.OnKeyDown(key);
+            }
         }
 
         RequestNextFrameRendering();
