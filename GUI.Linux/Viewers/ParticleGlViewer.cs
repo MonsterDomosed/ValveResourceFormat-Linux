@@ -18,13 +18,15 @@ namespace GUI.Linux.Viewers;
 internal sealed class ParticleGlViewer : IViewer
 {
     private readonly ResourceDataViewer dataViewer;
-    private readonly Func<IGLViewportRenderer> createRenderer;
+    private readonly Func<ParticleSession, IGLViewportRenderer> createRenderer;
     private readonly string tabName;
+    private readonly ParticleSession session = new();
 
-    public ParticleGlViewer(IViewerContext context, string fileName, ResourceDataViewer dataViewer, Func<IGLViewportRenderer>? createRenderer = null, string tabName = "PARTICLE")
+    public ParticleGlViewer(IViewerContext context, string fileName, ResourceDataViewer dataViewer,
+        Func<ParticleSession, IGLViewportRenderer>? createRenderer = null, string tabName = "PARTICLE")
     {
         this.dataViewer = dataViewer;
-        this.createRenderer = createRenderer ?? (() => new ParticleGlRenderer(fileName));
+        this.createRenderer = createRenderer ?? (session => new ParticleGlRenderer(fileName, session));
         this.tabName = tabName;
     }
 
@@ -34,7 +36,7 @@ internal sealed class ParticleGlViewer : IViewer
     {
         List<ViewerTab> tabs =
         [
-            new ViewerTab(tabName, new ViewerContent.CustomControl(() => new ViewportWithSidebar(createRenderer, new ViewerSidebar())), Select: true),
+            new ViewerTab(tabName, new ViewerContent.CustomControl(() => new ParticleViewerControl(() => createRenderer(session), session)), Select: true),
         ];
 
         if (dataViewer.GetContent() is ViewerContent.Tabs data)

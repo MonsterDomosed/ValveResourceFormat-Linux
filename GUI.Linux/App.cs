@@ -741,8 +741,10 @@ internal sealed class App : Application
 
             if (worldViewport is not null)
             {
-                for (var i = 0; i < 100 && worldRenderer.RenderedFrames < 3; i++)
+                for (var i = 0; i < 120 && worldRenderer.RenderedFrames < 3; i++)
                 {
+                    // Re-ask every time: a request made while the renderer was busy can be dropped
+                    worldViewport.RequestFrame();
                     await Task.Delay(50).ConfigureAwait(true);
                 }
 
@@ -981,8 +983,10 @@ internal sealed class App : Application
                 return;
             }
 
-            for (var i = 0; i < 50 && renderer.RenderedFrames < 3; i++)
+            for (var i = 0; i < 120 && renderer.RenderedFrames < 3; i++)
             {
+                // Re-ask every time: a request made while the renderer was busy can be dropped
+                viewport.RequestFrame();
                 await Task.Delay(50).ConfigureAwait(true);
             }
 
@@ -1159,8 +1163,10 @@ internal sealed class App : Application
                 return;
             }
 
-            for (var i = 0; i < 50 && renderer.RenderedFrames < 3; i++)
+            for (var i = 0; i < 120 && renderer.RenderedFrames < 3; i++)
             {
+                // Re-ask every time: a request made while the renderer was busy can be dropped
+                viewport.RequestFrame();
                 await Task.Delay(50).ConfigureAwait(true);
             }
 
@@ -1228,8 +1234,10 @@ internal sealed class App : Application
                 return;
             }
 
-            for (var i = 0; i < 50 && renderer.RenderedFrames < 3; i++)
+            for (var i = 0; i < 120 && renderer.RenderedFrames < 3; i++)
             {
+                // Re-ask every time: a request made while the renderer was busy can be dropped
+                viewport.RequestFrame();
                 await Task.Delay(50).ConfigureAwait(true);
             }
 
@@ -1240,6 +1248,26 @@ internal sealed class App : Application
             await Program.StdOut.WriteLineAsync(renderer.ReadbackNonBackgroundPixels > 0 && renderer.ReadbackDistinctColors > 1
                 ? "[self-check] particle tab rendered real geometry"
                 : "[self-check] particle tab rendered only a flat frame").ConfigureAwait(true);
+
+            if (renderer.SceneCore is ParticleSceneCore { ParticleNode: { } particleNode } && viewport.GetVisualAncestors().OfType<ParticleViewerControl>().FirstOrDefault() is { } control)
+            {
+                var framesBefore = renderer.RenderedFrames;
+
+                control.Session.SetPlaying(false);
+                var paused = await WaitForAsync(() => particleNode.IsPaused, 30).ConfigureAwait(true);
+
+                control.Session.SetPlaying(true);
+                var resumed = await WaitForAsync(() => !particleNode.IsPaused && renderer.RenderedFrames > framesBefore, 30).ConfigureAwait(true);
+
+                control.Session.Restart();
+                var restarted = await WaitForAsync(() => renderer.RenderedFrames > framesBefore + 1, 30).ConfigureAwait(true);
+
+                control.Session.SetMode(ValveResourceFormat.Renderer.SceneNodes.ParticlePlaybackMode.EndCapOnly);
+                var modeApplied = await WaitForAsync(() => particleNode.PlaybackMode == ValveResourceFormat.Renderer.SceneNodes.ParticlePlaybackMode.EndCapOnly, 30).ConfigureAwait(true);
+
+                await Program.StdOut.WriteLineAsync(
+                    $"[self-check] particle controls: paused={paused}, resumed={resumed}, restarted={restarted}, mode={modeApplied}").ConfigureAwait(true);
+            }
 
             window.CloseTabContaining(viewport);
             for (var i = 0; i < 60 && !renderer.Disposed; i++)
@@ -1277,8 +1305,10 @@ internal sealed class App : Application
                 return;
             }
 
-            for (var i = 0; i < 50 && renderer.RenderedFrames < 3; i++)
+            for (var i = 0; i < 120 && renderer.RenderedFrames < 3; i++)
             {
+                // Re-ask every time: a request made while the renderer was busy can be dropped
+                viewport.RequestFrame();
                 await Task.Delay(50).ConfigureAwait(true);
             }
 
@@ -1325,8 +1355,10 @@ internal sealed class App : Application
                 return;
             }
 
-            for (var i = 0; i < 60 && renderer.RenderedFrames < 3; i++)
+            for (var i = 0; i < 120 && renderer.RenderedFrames < 3; i++)
             {
+                // Re-ask every time: a request made while the renderer was busy can be dropped
+                viewport.RequestFrame();
                 await Task.Delay(50).ConfigureAwait(true);
             }
 
@@ -1374,8 +1406,10 @@ internal sealed class App : Application
                 return;
             }
 
-            for (var i = 0; i < 60 && renderer.RenderedFrames < 3; i++)
+            for (var i = 0; i < 120 && renderer.RenderedFrames < 3; i++)
             {
+                // Re-ask every time: a request made while the renderer was busy can be dropped
+                viewport.RequestFrame();
                 await Task.Delay(50).ConfigureAwait(true);
             }
 
@@ -1540,8 +1574,10 @@ internal sealed class App : Application
                 return;
             }
 
-            for (var i = 0; i < 50 && renderer.RenderedFrames < 3; i++)
+            for (var i = 0; i < 120 && renderer.RenderedFrames < 3; i++)
             {
+                // Re-ask every time: a request made while the renderer was busy can be dropped
+                viewport.RequestFrame();
                 await Task.Delay(50).ConfigureAwait(true);
             }
 
@@ -1697,8 +1733,10 @@ internal sealed class App : Application
                 return false;
             }
 
-            for (var i = 0; i < 60 && renderer.RenderedFrames < 3; i++)
+            for (var i = 0; i < 120 && renderer.RenderedFrames < 3; i++)
             {
+                // Re-ask every time: a request made while the renderer was busy can be dropped
+                viewport.RequestFrame();
                 await Task.Delay(50).ConfigureAwait(true);
             }
 
@@ -2197,8 +2235,10 @@ internal sealed class App : Application
                 return;
             }
 
-            for (var i = 0; i < 50 && renderer.RenderedFrames < 3; i++)
+            for (var i = 0; i < 120 && renderer.RenderedFrames < 3; i++)
             {
+                // Re-ask every time: a request made while the renderer was busy can be dropped
+                viewport.RequestFrame();
                 await Task.Delay(50).ConfigureAwait(true);
             }
 
@@ -2246,8 +2286,10 @@ internal sealed class App : Application
                 return;
             }
 
-            for (var i = 0; i < 50 && renderer.RenderedFrames < 3; i++)
+            for (var i = 0; i < 120 && renderer.RenderedFrames < 3; i++)
             {
+                // Re-ask every time: a request made while the renderer was busy can be dropped
+                viewport.RequestFrame();
                 await Task.Delay(50).ConfigureAwait(true);
             }
 
@@ -2295,8 +2337,10 @@ internal sealed class App : Application
                 return;
             }
 
-            for (var i = 0; i < 50 && renderer.RenderedFrames < 3; i++)
+            for (var i = 0; i < 120 && renderer.RenderedFrames < 3; i++)
             {
+                // Re-ask every time: a request made while the renderer was busy can be dropped
+                viewport.RequestFrame();
                 await Task.Delay(50).ConfigureAwait(true);
             }
 
@@ -2370,8 +2414,10 @@ internal sealed class App : Application
 
             if (viewport is not null)
             {
-                for (var i = 0; i < 100 && renderer.RenderedFrames < 3; i++)
+                for (var i = 0; i < 120 && renderer.RenderedFrames < 3; i++)
                 {
+                    // Re-ask every time: a request made while the renderer was busy can be dropped
+                    viewport.RequestFrame();
                     await Task.Delay(50).ConfigureAwait(true);
                 }
 
@@ -2498,8 +2544,10 @@ internal sealed class App : Application
 
             if (viewport is not null)
             {
-                for (var i = 0; i < 100 && renderer.RenderedFrames < 3; i++)
+                for (var i = 0; i < 120 && renderer.RenderedFrames < 3; i++)
                 {
+                    // Re-ask every time: a request made while the renderer was busy can be dropped
+                    viewport.RequestFrame();
                     await Task.Delay(50).ConfigureAwait(true);
                 }
 
@@ -2758,8 +2806,10 @@ internal sealed class App : Application
 
                     if (worldViewport is not null)
                     {
-                        for (var i = 0; i < 100 && worldRenderer.RenderedFrames < 3; i++)
+                        for (var i = 0; i < 120 && worldRenderer.RenderedFrames < 3; i++)
                         {
+                            // Re-ask every time: a request made while the renderer was busy can be dropped
+                            worldViewport.RequestFrame();
                             await Task.Delay(50).ConfigureAwait(true);
                         }
 

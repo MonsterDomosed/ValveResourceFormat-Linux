@@ -21,6 +21,7 @@ internal sealed class ViewportWithSidebar : UserControl, IDisposable
     private const double MinExpandedWidth = 220;
 
     private readonly ViewerSidebar sidebar;
+    private readonly AvaloniaGlViewport viewport;
     private readonly Grid grid = new();
     private readonly ColumnDefinition sidebarColumn = new();
     private readonly DispatcherTimer attachTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
@@ -32,7 +33,7 @@ internal sealed class ViewportWithSidebar : UserControl, IDisposable
     {
         this.sidebar = sidebar;
 
-        var viewport = new AvaloniaGlViewport
+        viewport = new AvaloniaGlViewport
         {
             RendererFactory = rendererFactory,
         };
@@ -77,6 +78,9 @@ internal sealed class ViewportWithSidebar : UserControl, IDisposable
         attachTimer.Tick += (_, _) => TryAttach(viewport);
         attachTimer.Start();
     }
+
+    /// <summary>The viewport hosted next to the sidebar.</summary>
+    internal AvaloniaGlViewport Viewport => viewport;
 
     private void SetCollapsed(bool value)
     {

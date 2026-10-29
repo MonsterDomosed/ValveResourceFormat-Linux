@@ -14,12 +14,12 @@ namespace GUI.Linux.GL;
 /// </summary>
 internal sealed class ParticleSnapshotGlRenderer : SceneCoreGlRenderer
 {
-    public ParticleSnapshotGlRenderer(string fileName)
-        : base("snapshot", (context, rendererContext, host) => CreateCore(context, rendererContext, host, fileName))
+    public ParticleSnapshotGlRenderer(string fileName, ParticleSession session)
+        : base("snapshot", (context, rendererContext, host) => CreateCore(context, rendererContext, host, fileName, session))
     {
     }
 
-    private static ParticleSceneCore CreateCore(LinuxSceneViewerContext context, ValveResourceFormat.Renderer.RendererContext rendererContext, IGLViewerHost host, string fileName)
+    private static ParticleSceneCore CreateCore(LinuxSceneViewerContext context, ValveResourceFormat.Renderer.RendererContext rendererContext, IGLViewerHost host, string fileName, ParticleSession session)
     {
         var resource = new ValveResourceFormat.Resource
         {
@@ -34,6 +34,6 @@ internal sealed class ParticleSnapshotGlRenderer : SceneCoreGlRenderer
         }
 
         var particleSystem = SnapshotParticleSystem.Create(snapshot);
-        return new ParticleSceneCore(context, rendererContext, host, resource, particleSystem, snapshot);
+        return new ParticleSceneCore(context, rendererContext, host, resource, particleSystem, session, snapshot);
     }
 }

@@ -140,10 +140,10 @@ particles, or a map with moving entities, keeps drawing.
 Known limitations:
 
 - Viewer-specific controls that still need a session are not ported yet: texture sampling
-  controls (filter and wrap modes), particle playback/detail controls, and the material parameter
-  editor. The texture viewer has a sidebar for the mip level, depth slice, cube face and
-  projection, channel mapping, channel split and sprite-sheet frame, and graph viewers have a
-  search box that highlights matching nodes plus a subtitle filter.
+  controls (filter and wrap modes) and the material parameter editor. The texture viewer has a
+  sidebar for the mip level, depth slice, cube face and projection, channel mapping, channel split
+  and sprite-sheet frame, graph viewers have a search box that highlights matching nodes plus a
+  subtitle filter, and particle viewers have play/pause, restart, loop and an endcap playback mode.
 - Some views are not implemented: the interactive compiled-shader tree, the panorama image
   grid, and the choreography viewer.
 - AAC and WAV ADPCM audio cannot be decoded, because no managed decoder is available.

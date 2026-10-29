@@ -191,7 +191,7 @@ internal static class LinuxViewerFactory
 
             if (resourceViewer.ResourceType == ResourceType.ParticleSnapshot)
             {
-                return new ParticleGlViewer(context, fileName, resourceViewer, () => new ParticleSnapshotGlRenderer(fileName), "SNAPSHOT");
+                return new ParticleGlViewer(context, fileName, resourceViewer, session => new ParticleSnapshotGlRenderer(fileName, session), "SNAPSHOT");
             }
 
             if (resourceViewer.ResourceType == ResourceType.PostProcessing)

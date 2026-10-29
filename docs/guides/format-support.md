@@ -307,8 +307,8 @@ maps can run out of memory; dump the block to a file via the CLI instead
 Particle systems round-trip exactly: extraction re-emits the original stored KV3 tree, not
 VRF's upgraded in-memory version, so decompiled `.vpcf` files match the compiled source
 (pre-KV3 NTRO-era files are re-encoded as KV3 text instead). The viewer simulates a large
-subset of particle functions and lists any unsupported functions per system in red instead
-of failing.
+subset of particle functions and skips the ones it has no implementation for, instead of
+failing; the skipped functions are not listed in the viewer yet.
 
 Particle snapshots (`vsnap`) preview and extract. Bone name streams survive, but skinning
 streams are written into the extracted `.vsnap` as empty streams: their values show in the

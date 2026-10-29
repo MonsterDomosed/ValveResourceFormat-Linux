@@ -16,14 +16,25 @@ internal sealed class ParticleSceneCore : GLSceneViewerCore
     private readonly ValveResourceFormat.Resource resource;
     private readonly ParticleSystem particleSystem;
     private readonly ParticleSnapshot? particleSnapshot;
+    private readonly ParticleSession session;
 
-    public ParticleSceneCore(ISceneViewerContext context, RendererContext rendererContext, IGLViewerHost host, ValveResourceFormat.Resource resource, ParticleSystem particleSystem, ParticleSnapshot? particleSnapshot = null)
+    private ParticleSceneNode? particleNode;
+    private int appliedRestartCount;
+    private bool appliedPlaying = true;
+    private bool appliedLooping = true;
+    private ParticlePlaybackMode appliedMode = ParticlePlaybackMode.NormalWithEndCap;
+
+    public ParticleSceneCore(ISceneViewerContext context, RendererContext rendererContext, IGLViewerHost host, ValveResourceFormat.Resource resource, ParticleSystem particleSystem, ParticleSession session, ParticleSnapshot? particleSnapshot = null)
         : base(context, rendererContext, host, Frustum.CreateEmpty())
     {
         this.resource = resource;
         this.particleSystem = particleSystem;
         this.particleSnapshot = particleSnapshot;
+        this.session = session;
     }
+
+    /// <summary>The simulated particle node, for the self-check.</summary>
+    internal ParticleSceneNode? ParticleNode => particleNode;
 
     public override void PreSceneLoad()
     {
@@ -57,10 +68,49 @@ internal sealed class ParticleSceneCore : GLSceneViewerCore
     {
         Scene.LightingInfo.UseSceneBoundsForSunLightFrustum = false;
 
-        Scene.Add(new ParticleSceneNode(Scene, particleSystem, particleSnapshot, true)
+        particleNode = new ParticleSceneNode(Scene, particleSystem, particleSnapshot, true)
         {
             Transform = Matrix4x4.Identity
-        }, true);
+        };
+
+        Scene.Add(particleNode, true);
+    }
+
+    protected override void OnPrePaint(float frameTime)
+    {
+        base.OnPrePaint(frameTime);
+
+        if (particleNode is null)
+        {
+            return;
+        }
+
+        var state = session.GetState();
+
+        if (state.RestartCount != appliedRestartCount)
+        {
+            appliedRestartCount = state.RestartCount;
+            particleNode.Restart();
+            appliedPlaying = true;
+        }
+
+        if (state.Playing != appliedPlaying)
+        {
+            appliedPlaying = state.Playing;
+            particleNode.IsPaused = !state.Playing;
+        }
+
+        if (state.Looping != appliedLooping)
+        {
+            appliedLooping = state.Looping;
+            particleNode.Loop = state.Looping;
+        }
+
+        if (state.Mode != appliedMode)
+        {
+            appliedMode = state.Mode;
+            particleNode.PlaybackMode = state.Mode;
+        }
     }
 
     protected override void Dispose(bool disposing)
