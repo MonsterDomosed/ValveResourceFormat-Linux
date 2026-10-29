@@ -305,7 +305,7 @@ internal sealed class PackageExporter
 
             progress?.SetProgress(fileFullName);
 
-            var outFilePath = Path.Combine(outputPath, fileFullName);
+            var outFilePath = ResolveOutputPath(outputPath, fileFullName);
 
             if (outputFormat is not null)
             {
@@ -320,35 +320,110 @@ internal sealed class PackageExporter
             {
                 // Export as is
                 using var rawStream = stream;
-                using var outStream = new FileStream(outFilePath, new FileStreamOptions
+
+                try
                 {
-                    Mode = FileMode.Create,
-                    Access = FileAccess.Write,
-                    Options = FileOptions.Asynchronous,
-                    PreallocationSize = packageFile.TotalLength >= PreallocationThreshold ? packageFile.TotalLength : 0,
-                });
-                await rawStream.CopyToAsync(outStream, cancellationToken).ConfigureAwait(false);
+                    await WriteStreamAsync(outFilePath, rawStream, packageFile.TotalLength, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception e)
+                {
+                    // One unreadable or unwritable entry must not abandon the rest of the export
+                    filesFailedToExport++;
+                    Log.Error(nameof(PackageExporter), $"Failed to extract '{fileFullName}': {e}");
+                }
 
                 continue;
             }
 
-            using var resource = new Resource
-            {
-                FileName = fileFullName,
-            };
-
             try
             {
-                resource.Read(stream);
+                await ExtractCompiledFileAsync(stream, fileFullName, outFilePath, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception e)
             {
                 filesFailedToExport++;
                 Log.Error(nameof(PackageExporter), $"Failed to extract '{fileFullName}': {e}");
-                continue;
+            }
+        }
+    }
+
+    /// <summary>Parses one compiled file and extracts it, owning the resource for that lifetime.</summary>
+    private async Task ExtractCompiledFileAsync(Stream stream, string fileFullName, string outFilePath, CancellationToken cancellationToken)
+    {
+        using var resource = new Resource
+        {
+            FileName = fileFullName,
+        };
+
+        resource.Read(stream);
+        await ExtractFileAsync(resource, fileFullName, outFilePath, false, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Resolves a package-relative name inside the export folder and refuses anything that would land
+    /// outside it, which a corrupt or hostile archive can otherwise do with ".." segments.
+    /// </summary>
+    private static string ResolveOutputPath(string outputPath, string relativePath)
+    {
+        var root = Path.GetFullPath(outputPath);
+        var combined = Path.GetFullPath(Path.Combine(root, relativePath));
+        var prefix = root.EndsWith(Path.DirectorySeparatorChar) ? root : root + Path.DirectorySeparatorChar;
+
+        if (!combined.StartsWith(prefix, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"Refusing to write '{relativePath}' outside the export folder.");
+        }
+
+        return combined;
+    }
+
+    /// <summary>Writes a file through a temporary name, so a cancel cannot leave a half-written result.</summary>
+    private static async Task WriteStreamAsync(string outFilePath, Stream source, long expectedLength, CancellationToken cancellationToken)
+    {
+        var temporary = outFilePath + ".tmp";
+
+        try
+        {
+            using (var outStream = new FileStream(temporary, new FileStreamOptions
+            {
+                Mode = FileMode.Create,
+                Access = FileAccess.Write,
+                Options = FileOptions.Asynchronous,
+                PreallocationSize = expectedLength >= PreallocationThreshold ? expectedLength : 0,
+            }))
+            {
+                await source.CopyToAsync(outStream, cancellationToken).ConfigureAwait(false);
             }
 
-            await ExtractFileAsync(resource, fileFullName, outFilePath, false, cancellationToken).ConfigureAwait(false);
+            File.Move(temporary, outFilePath, overwrite: true);
+        }
+        catch
+        {
+            TryDelete(temporary);
+            throw;
+        }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (IOException)
+        {
+            // Best effort: the temp file is only an artifact of a failed write
+        }
+        catch (UnauthorizedAccessException)
+        {
         }
     }
 
@@ -498,10 +573,12 @@ internal sealed class PackageExporter
         return WriteFileAsync(CombineAssetFolder(OutputPath, assetName), data, cancellationToken);
     }
 
-    private Task WriteFileAsync(string outFilePath, byte[] data, CancellationToken cancellationToken)
+    private async Task WriteFileAsync(string outFilePath, byte[] data, CancellationToken cancellationToken)
     {
-        EnsureDirectoryExists(outFilePath);
-        return File.WriteAllBytesAsync(outFilePath, data, cancellationToken);
+        var resolved = ResolveOutputPath(OutputPath, Path.GetRelativePath(OutputPath, outFilePath));
+        EnsureDirectoryExists(resolved);
+
+        await WriteStreamAsync(resolved, new MemoryStream(data, writable: false), data.Length, cancellationToken).ConfigureAwait(false);
     }
 
     private void EnsureDirectoryExists(string outFilePath)
