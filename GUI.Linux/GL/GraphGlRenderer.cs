@@ -21,6 +21,7 @@ namespace GUI.Linux.GL;
 internal sealed class GraphGlRenderer : ViewportGlRenderer
 {
     private readonly Func<GraphView, IDisposable?> build;
+    private readonly GraphInspectorSession inspector;
 
     private IDisposable? builder;
     private GraphView? view;
@@ -39,11 +40,20 @@ internal sealed class GraphGlRenderer : ViewportGlRenderer
 
     private bool previousLeft;
 
-    public GraphGlRenderer(Func<GraphView, IDisposable?> build)
+    public GraphGlRenderer(Func<GraphView, IDisposable?> build, GraphInspectorSession inspector)
         : base("graph")
     {
         this.build = build;
+        this.inspector = inspector;
     }
+
+    /// <summary>The search session, for the self-check.</summary>
+    internal GraphInspectorSession Inspector => inspector;
+
+    /// <summary>The search text the presenter is currently highlighting, for the self-check.</summary>
+    internal string AppliedSearch { get; private set; } = string.Empty;
+
+    private int appliedInspectorVersion = -1;
 
     /// <summary>Nodes in the presented graph, for diagnostics.</summary>
     public int NodeCount => view?.NodeCount ?? 0;
@@ -67,6 +77,8 @@ internal sealed class GraphGlRenderer : ViewportGlRenderer
             "texture_decode",
             (TextureViewerShader.GetTextureTypeDefine(OpenTK.Graphics.OpenGL.TextureTarget.Texture2D), (byte)1));
 
+        inspector.Publish(view.NodeCount, [.. view.GetDistinctSubtitles()]);
+
         Program.StdOut.WriteLine($"[gl] graph loaded: {view.NodeCount} nodes, {view.WireCount} wires");
     }
 
@@ -76,6 +88,8 @@ internal sealed class GraphGlRenderer : ViewportGlRenderer
         {
             return;
         }
+
+        ApplyInspectorRequest();
 
         if (needsFit)
         {
@@ -217,6 +231,31 @@ internal sealed class GraphGlRenderer : ViewportGlRenderer
         }
 
         previousLeft = input.Left;
+    }
+
+    /// <summary>Applies a new search or subtitle filter once, when the controls report a change.</summary>
+    private void ApplyInspectorRequest()
+    {
+        if (view is null || appliedInspectorVersion == inspector.Version)
+        {
+            return;
+        }
+
+        appliedInspectorVersion = inspector.Version;
+
+        var (search, filter) = inspector.GetRequest();
+        AppliedSearch = search;
+
+        view.SetSearchHighlight(search);
+
+        if (filter.Length == 0)
+        {
+            view.ShowAllNodes();
+        }
+        else
+        {
+            view.SetSubtitleFilter(filter);
+        }
     }
 
     private static GraphModifiers CurrentModifiers(ViewerInputState input)

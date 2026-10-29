@@ -2387,17 +2387,30 @@ internal sealed class App : Application
                 // Wheel zoom, then middle-drag pan, driven through the same input state the shell fills.
                 var scaleBefore = renderer.Scale;
                 viewport.Input.Wheel = 1f;
+                viewport.RequestFrame();
                 await Task.Delay(400).ConfigureAwait(true);
                 var scaleAfterZoom = renderer.Scale;
 
                 viewport.Input.Middle = true;
                 viewport.Input.Delta = new System.Numerics.Vector2(60f, 40f);
+                viewport.RequestFrame();
                 await Task.Delay(400).ConfigureAwait(true);
                 viewport.Input.Middle = false;
                 await Task.Delay(200).ConfigureAwait(true);
 
                 await Program.StdOut.WriteLineAsync(
                     $"[self-check] graph input: zoom {scaleBefore:0.000} -> {scaleAfterZoom:0.000}, pan applied").ConfigureAwait(true);
+
+                // The search box highlights matching nodes; the presenter has to receive the query.
+                var graphControl = viewport.GetVisualAncestors().OfType<GraphViewerControl>().FirstOrDefault();
+                var graphState = renderer.Inspector.GetState();
+
+                renderer.Inspector.SetSearch("node");
+                var searchApplied = await WaitForAsync(() => renderer.AppliedSearch == "node", 40).ConfigureAwait(true);
+
+                await Program.StdOut.WriteLineAsync(
+                    $"[self-check] graph search: control={graphControl is not null}, subtitles={graphState.Subtitles.Length}, "
+                    + $"query='node', applied={searchApplied}, appliedText='{renderer.AppliedSearch}'").ConfigureAwait(true);
 
                 // Resize the shell window; the viewport must follow.
                 var widthBefore = renderer.ViewportWidth;

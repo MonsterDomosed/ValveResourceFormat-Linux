@@ -145,13 +145,16 @@ internal sealed class WorldGlViewer : IViewer
             if (mapData.Entities.Any(static entity => entity.Connections is { Count: > 0 }))
             {
                 var entities = mapData.Entities;
+                var entitySession = new GraphInspectorSession();
                 tabs.Add(new ViewerTab(
                     "ENTITY I/O",
-                    new ViewerContent.GlViewport(() => new GraphGlRenderer(view =>
-                    {
-                        EntityIOGraphBuilder.Build(view.Document, entities.ToList());
-                        return null;
-                    }))));
+                    new ViewerContent.CustomControl(() => new GraphViewerControl(
+                        view =>
+                        {
+                            EntityIOGraphBuilder.Build(view.Document, entities.ToList());
+                            return null;
+                        },
+                        entitySession))));
             }
 
             foreach (var (name, definition) in mapData.PulseGraphs)
@@ -159,13 +162,16 @@ internal sealed class WorldGlViewer : IViewer
                 var tabName = mapData.PulseGraphs.Count > 1
                     ? $"PULSE GRAPH ({Path.GetFileNameWithoutExtension(name)})"
                     : "PULSE GRAPH";
+                var pulseSession = new GraphInspectorSession();
                 tabs.Add(new ViewerTab(
                     tabName,
-                    new ViewerContent.GlViewport(() => new GraphGlRenderer(view =>
-                    {
-                        new PulseGraphBuilder(definition).Build(view.Document);
-                        return null;
-                    }))));
+                    new ViewerContent.CustomControl(() => new GraphViewerControl(
+                        view =>
+                        {
+                            new PulseGraphBuilder(definition).Build(view.Document);
+                            return null;
+                        },
+                        pulseSession))));
             }
         }
 

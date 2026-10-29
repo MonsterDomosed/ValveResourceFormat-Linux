@@ -2,7 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
-using GUI.Linux.GL;
+using GUI.Linux.Shell;
+using GUI.Linux.Types.GLViewers;
 using GUI.Linux.Types.Graphs.Core;
 using GUI.Linux.Types.Viewers;
 
@@ -18,6 +19,7 @@ internal sealed class GraphGlViewer : IViewer
     private readonly ResourceDataViewer dataViewer;
     private readonly Func<GraphView, IDisposable?>? build;
     private readonly string tabName;
+    private readonly GraphInspectorSession session = new();
 
     public GraphGlViewer(ResourceDataViewer dataViewer, Func<GraphView, IDisposable?>? build, string tabName)
     {
@@ -34,7 +36,7 @@ internal sealed class GraphGlViewer : IViewer
 
         if (build is not null)
         {
-            tabs.Add(new ViewerTab(tabName, new ViewerContent.GlViewport(() => new GraphGlRenderer(build)), Select: true));
+            tabs.Add(new ViewerTab(tabName, new ViewerContent.CustomControl(() => new GraphViewerControl(build, session)), Select: true));
         }
 
         if (dataViewer.GetContent() is ViewerContent.Tabs data)
