@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading;
 using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using SkiaSharp;
 using Svg.Skia;
 using ValvePak;
@@ -226,38 +228,28 @@ internal static class PackageThumbnails
         var width = Math.Max(1, (int)(source.Width * scale));
         var height = Math.Max(1, (int)(source.Height * scale));
 
-        SKBitmap? scaled = null;
-        var target = source;
+        // Draw into one known format instead of encoding a PNG and decoding it again in Avalonia
+        using var converted = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
 
-        if (width != source.Width || height != source.Height)
+        using (var canvas = new SKCanvas(converted))
         {
-            scaled = source.Resize(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul), new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear));
+            canvas.DrawBitmap(source, new SKRect(0f, 0f, width, height), new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear));
+        }
 
-            if (scaled is not null)
+        var bitmap = new WriteableBitmap(new Avalonia.PixelSize(width, height), new Avalonia.Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Premul);
+        var pixels = new byte[converted.RowBytes * height];
+
+        Marshal.Copy(converted.GetPixels(), pixels, 0, pixels.Length);
+
+        using (var locked = bitmap.Lock())
+        {
+            // Row by row, because the destination stride is not guaranteed to match Skia's
+            for (var y = 0; y < height; y++)
             {
-                target = scaled;
+                Marshal.Copy(pixels, y * converted.RowBytes, locked.Address + (y * locked.RowBytes), converted.RowBytes);
             }
         }
 
-        try
-        {
-            using var image = SKImage.FromBitmap(target);
-            using var data = image.Encode(SKEncodedImageFormat.Png, 90);
-
-            if (data is null)
-            {
-                return null;
-            }
-
-            using var encoded = new MemoryStream();
-            data.SaveTo(encoded);
-            encoded.Position = 0;
-
-            return new Bitmap(encoded);
-        }
-        finally
-        {
-            scaled?.Dispose();
-        }
+        return bitmap;
     }
 }

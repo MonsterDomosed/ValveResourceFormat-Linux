@@ -143,7 +143,20 @@ internal sealed class PackageExporter
 
         path = selectedPath;
 
-        await RunInDialogAsync(owner, ExtractQueuedFilesAsync, null).ConfigureAwait(true);
+        // Only ask about glTF contents when something in the batch is going to become glTF
+        GltfExportOptions? gltfOptions = null;
+
+        if (decompile && fileTypesToExtract.Values.Any(static type => type.OutputFormat is ".gltf" or ".glb"))
+        {
+            gltfOptions = await GltfExportOptionsDialog.ShowAsync(owner).ConfigureAwait(true);
+
+            if (gltfOptions is null)
+            {
+                return;
+            }
+        }
+
+        await RunInDialogAsync(owner, ExtractQueuedFilesAsync, null, gltfOptions).ConfigureAwait(true);
     }
 
     /// <summary>

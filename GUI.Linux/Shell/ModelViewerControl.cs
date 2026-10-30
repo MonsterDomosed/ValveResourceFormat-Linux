@@ -40,6 +40,8 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
     private readonly Button resetViewButton = new() { Content = "Reset view", HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly ComboBox lodSelector = new() { HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly StackPanel lodGroup = new() { Spacing = 6 };
+    private readonly ComboBox materialGroupSelector = new() { HorizontalAlignment = HorizontalAlignment.Stretch };
+    private readonly StackPanel materialGroupGroup = new() { Spacing = 6 };
     private readonly StackPanel meshGroupGroup = new() { Spacing = 6 };
     private readonly StackPanel meshGroupPanel = new() { Spacing = 2 };
     private readonly Slider trackBar = new() { Minimum = 0, Maximum = 1 };
@@ -75,6 +77,7 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
     private bool attachmentsPopulated;
     private int[] populatedLods = [];
     private string[] populatedMeshGroups = [];
+    private string[] populatedMaterialGroups = [];
 
     public ModelViewerControl(string fileName, ModelAnimationSession session, Action<string>? openResource = null)
     {
@@ -131,6 +134,19 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
         meshGroupGroup.Children.Add(new TextBlock { Text = "Mesh groups", Classes = { "hint" } });
         meshGroupGroup.Children.Add(meshGroupPanel);
         panel.Children.Add(meshGroupGroup);
+
+        materialGroupGroup.Children.Add(new TextBlock { Text = "Skin", Classes = { "hint" } });
+        materialGroupSelector.SelectionChanged += (_, _) =>
+        {
+            if (updatingFromSnapshot || materialGroupSelector.SelectedIndex < 0)
+            {
+                return;
+            }
+
+            session.SetMaterialGroup(populatedMaterialGroups[materialGroupSelector.SelectedIndex]);
+        };
+        materialGroupGroup.Children.Add(materialGroupSelector);
+        panel.Children.Add(materialGroupGroup);
 
         animationGroup.Children.Add(new TextBlock { Text = "Animation", FontWeight = FontWeight.SemiBold });
 
@@ -337,6 +353,23 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
 
         lodGroup.IsVisible = snapshot.HasMultipleLods;
         meshGroupGroup.IsVisible = snapshot.HasMeshGroups;
+        materialGroupGroup.IsVisible = snapshot.HasMaterialGroups;
+
+        if (snapshot.HasMaterialGroups)
+        {
+            if (!populatedMaterialGroups.SequenceEqual(snapshot.MaterialGroups))
+            {
+                populatedMaterialGroups = snapshot.MaterialGroups;
+                materialGroupSelector.ItemsSource = populatedMaterialGroups;
+            }
+
+            var groupIndex = Array.IndexOf(populatedMaterialGroups, snapshot.ActiveMaterialGroup);
+
+            if (groupIndex >= 0 && materialGroupSelector.SelectedIndex != groupIndex)
+            {
+                materialGroupSelector.SelectedIndex = groupIndex;
+            }
+        }
 
         if (snapshot.HasMultipleLods && !populatedLods.SequenceEqual(snapshot.LodLevels))
         {

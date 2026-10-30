@@ -29,7 +29,9 @@ internal readonly record struct ModelAnimationCommand(
     bool LodChanged,
     int LodOverride,
     bool MeshGroupsChanged,
-    string[]? MeshGroups);
+    string[]? MeshGroups,
+    bool MaterialGroupChanged,
+    string? MaterialGroupName);
 
 /// <summary>
 /// A consistent copy of the model viewer's animation state, safe to read from the UI thread.
@@ -56,7 +58,9 @@ internal readonly record struct ModelAnimationSnapshot(
     int ActiveLod,
     bool AutoLod,
     string[] MeshGroups,
-    string[] ActiveMeshGroups)
+    string[] ActiveMeshGroups,
+    string[] MaterialGroups,
+    string ActiveMaterialGroup)
 {
     /// <summary>Whether the model exposes at least one playable animation.</summary>
     public bool HasAnimations => Animations.Length > 0;
@@ -72,6 +76,9 @@ internal readonly record struct ModelAnimationSnapshot(
 
     /// <summary>Whether the model defines mesh groups that can be toggled.</summary>
     public bool HasMeshGroups => MeshGroups.Length > 0;
+
+    /// <summary>Whether the model defines material groups (skins) to choose from.</summary>
+    public bool HasMaterialGroups => MaterialGroups.Length > 0;
 }
 
 /// <summary>
@@ -145,6 +152,10 @@ internal sealed class ModelAnimationSession
     private bool autoLod = true;
     private string[] meshGroups = [];
     private string[] activeMeshGroups = [];
+    private bool materialGroupChanged;
+    private string? pendingMaterialGroup;
+    private string[] materialGroups = [];
+    private string activeMaterialGroup = string.Empty;
 
     /// <summary>Selects an animation by name, or the bind pose when <paramref name="name"/> is null.</summary>
     public void SelectAnimation(string? name)
@@ -312,6 +323,18 @@ internal sealed class ModelAnimationSession
         Wake();
     }
 
+    /// <summary>Selects a material group (skin) by name.</summary>
+    public void SetMaterialGroup(string name)
+    {
+        lock (sync)
+        {
+            materialGroupChanged = true;
+            pendingMaterialGroup = name;
+        }
+
+        Wake();
+    }
+
     /// <summary>Takes the pending commands and clears them. Called on the render thread each frame.</summary>
     public ModelAnimationCommand ConsumeCommands()
     {
@@ -329,7 +352,8 @@ internal sealed class ModelAnimationSession
                 attachmentsChanged, pendingShowAttachments, pendingAttachments,
                 rootMotionChanged, pendingWalkWithRootMotion,
                 lodChanged, pendingLodOverride,
-                meshGroupsChanged, pendingMeshGroups);
+                meshGroupsChanged, pendingMeshGroups,
+                materialGroupChanged, pendingMaterialGroup);
 
             animationChanged = false;
             pendingAnimation = null;
@@ -348,6 +372,8 @@ internal sealed class ModelAnimationSession
             lodChanged = false;
             meshGroupsChanged = false;
             pendingMeshGroups = null;
+            materialGroupChanged = false;
+            pendingMaterialGroup = null;
 
             return command;
         }
@@ -376,7 +402,9 @@ internal sealed class ModelAnimationSession
         int currentLod,
         bool isAutoLod,
         string[] meshGroupNames,
-        string[] activeGroups)
+        string[] activeGroups,
+        string[] materialGroupNames,
+        string currentMaterialGroup)
     {
         lock (sync)
         {
@@ -402,6 +430,8 @@ internal sealed class ModelAnimationSession
             autoLod = isAutoLod;
             meshGroups = meshGroupNames;
             activeMeshGroups = activeGroups;
+            materialGroups = materialGroupNames;
+            activeMaterialGroup = currentMaterialGroup;
         }
     }
 
@@ -411,7 +441,7 @@ internal sealed class ModelAnimationSession
         lock (sync)
         {
             return new(ready, animations, activeAnimation, playing, looping, speed, frame, frameCount, time, duration, fps, hitboxSets, activeHitboxSet, attachments, hasBones, hasRootMotion,
-                lodCount, lodLevels, activeLod, autoLod, meshGroups, activeMeshGroups);
+                lodCount, lodLevels, activeLod, autoLod, meshGroups, activeMeshGroups, materialGroups, activeMaterialGroup);
         }
     }
 }

@@ -118,7 +118,7 @@ namespace Tests
         public async Task HitboxSelectionIsDeliveredOnceAndCanBeCleared()
         {
             var session = new ModelAnimationSession();
-            session.Publish(true, [], null, false, true, 1f, 0, 0, 0f, 0f, 0f, ["head", "body"], null, [], true, false, 1, [], 0, true, [], []);
+            session.Publish(true, [], null, false, true, 1f, 0, 0, 0f, 0f, 0f, ["head", "body"], null, [], true, false, 1, [], 0, true, [], [], [], string.Empty);
 
             using (Assert.Multiple())
             {
@@ -148,7 +148,7 @@ namespace Tests
         public async Task SkeletonAndAttachmentTogglesAreDeliveredOnce()
         {
             var session = new ModelAnimationSession();
-            session.Publish(true, [], null, false, true, 1f, 0, 0, 0f, 0f, 0f, [], null, ["muzzle", "eject"], true, false, 1, [], 0, true, [], []);
+            session.Publish(true, [], null, false, true, 1f, 0, 0, 0f, 0f, 0f, [], null, ["muzzle", "eject"], true, false, 1, [], 0, true, [], [], [], string.Empty);
 
             using (Assert.Multiple())
             {
@@ -183,7 +183,7 @@ namespace Tests
         public async Task RootMotionToggleIsDeliveredOnceAndGatedOnTheAnimation()
         {
             var session = new ModelAnimationSession();
-            session.Publish(true, ["walk"], "walk", true, true, 1f, 0, 25, 0f, 0.8f, 30f, [], null, [], true, true, 1, [], 0, true, [], []);
+            session.Publish(true, ["walk"], "walk", true, true, 1f, 0, 25, 0f, 0.8f, 30f, [], null, [], true, true, 1, [], 0, true, [], [], [], string.Empty);
 
             // Only an animation that carries movement can be walked.
             await Assert.That(session.GetSnapshot().HasRootMotion).IsTrue();
@@ -198,7 +198,7 @@ namespace Tests
                 await Assert.That(session.ConsumeCommands().RootMotionChanged).IsFalse();
             }
 
-            session.Publish(true, ["walk"], "walk", true, true, 1f, 0, 25, 0f, 0.8f, 30f, [], null, [], true, false, 1, [], 0, true, [], []);
+            session.Publish(true, ["walk"], "walk", true, true, 1f, 0, 25, 0f, 0.8f, 30f, [], null, [], true, false, 1, [], 0, true, [], [], [], string.Empty);
             await Assert.That(session.GetSnapshot().HasRootMotion).IsFalse();
         }
 
@@ -229,7 +229,9 @@ namespace Tests
                 currentLod: 1,
                 isAutoLod: false,
                 meshGroupNames: ["body", "head"],
-                activeGroups: ["body"]);
+                activeGroups: ["body"],
+                materialGroupNames: ["skin_1", "skin_2"],
+                currentMaterialGroup: "skin_1");
 
             var snapshot = session.GetSnapshot();
 
@@ -259,6 +261,9 @@ namespace Tests
                 await Assert.That(snapshot.LodLevels.Length).IsEqualTo(3);
                 await Assert.That(snapshot.HasMeshGroups).IsTrue();
                 await Assert.That(snapshot.ActiveMeshGroups.Length).IsEqualTo(1);
+                await Assert.That(snapshot.HasMaterialGroups).IsTrue();
+                await Assert.That(snapshot.MaterialGroups.Length).IsEqualTo(2);
+                await Assert.That(snapshot.ActiveMaterialGroup).IsEqualTo("skin_1");
                 await Assert.That(snapshot.Attachments[0]).IsEqualTo("muzzle");
                 await Assert.That(snapshot.HasBones).IsTrue();
                 await Assert.That(snapshot.HasRootMotion).IsTrue();
@@ -266,11 +271,46 @@ namespace Tests
         }
 
         [Test]
+        public async Task DetailCommandsAreDeliveredOnce()
+        {
+            var session = new ModelAnimationSession();
+
+            session.SetLod(3);
+            session.SetMeshGroups(["body"]);
+            session.SetMaterialGroup("skin_2");
+
+            var command = session.ConsumeCommands();
+
+            await Assert.That(command.LodChanged).IsTrue();
+            await Assert.That(command.LodOverride).IsEqualTo(3);
+            await Assert.That(command.MeshGroupsChanged).IsTrue();
+            await Assert.That(command.MeshGroups).IsEquivalentTo(["body"]);
+            await Assert.That(command.MaterialGroupChanged).IsTrue();
+            await Assert.That(command.MaterialGroupName).IsEqualTo("skin_2");
+
+            var empty = session.ConsumeCommands();
+
+            await Assert.That(empty.LodChanged).IsFalse();
+            await Assert.That(empty.MeshGroupsChanged).IsFalse();
+            await Assert.That(empty.MaterialGroupChanged).IsFalse();
+        }
+
+        [Test]
+        public async Task AutoLodIsSentAsMinusOne()
+        {
+            var session = new ModelAnimationSession();
+
+            session.SetLod(null);
+
+            await Assert.That(session.ConsumeCommands().LodOverride).IsEqualTo(-1);
+        }
+
+        [Test]
         public async Task ReportsModelsWithoutAnimations()
         {
             var session = new ModelAnimationSession();
 
-            session.Publish(true, [], null, false, true, 1f, 0, 0, 0f, 0f, 0f, [], null, [], false, false, 0, [], 0, true, [], []);
+            session.Publish(true, [], null, false, true, 1f, 0, 0, 0f, 0f, 0f, [], null, [], false, false, 0, [], 0, true, [], [], [], string.Empty);
             var snapshot = session.GetSnapshot();
 
             using (Assert.Multiple())

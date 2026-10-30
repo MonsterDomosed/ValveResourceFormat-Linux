@@ -2136,9 +2136,25 @@ internal sealed class App : Application
             meshGroupOk &= await WaitForAsync(() => core.ActiveMeshGroups.Length == snapshot.MeshGroups.Length, 40).ConfigureAwait(true);
         }
 
+        var skinOk = true;
+
+        if (snapshot.HasMaterialGroups)
+        {
+            var target = snapshot.MaterialGroups[^1];
+
+            session.SetMaterialGroup(target);
+            skinOk = await WaitForAsync(() => string.Equals(core.ActiveMaterialGroup, target, StringComparison.Ordinal), 40).ConfigureAwait(true);
+
+            session.SetMaterialGroup(snapshot.MaterialGroups[0]);
+            skinOk &= await WaitForAsync(
+                () => string.Equals(core.ActiveMaterialGroup, snapshot.MaterialGroups[0], StringComparison.Ordinal),
+                40).ConfigureAwait(true);
+        }
+
         await Program.StdOut.WriteLineAsync(
             $"[self-check] {label} model detail: lodLevels={snapshot.LodLevels.Length}, lod={lodOk}, "
-            + $"meshGroups={snapshot.MeshGroups.Length}, groups={meshGroupOk}").ConfigureAwait(true);
+            + $"meshGroups={snapshot.MeshGroups.Length}, groups={meshGroupOk}, "
+            + $"skins={snapshot.MaterialGroups.Length}, skin={skinOk}").ConfigureAwait(true);
     }
 
     private static async Task ExerciseModelSkeletonControlsAsync(ModelViewerControl control, string label)

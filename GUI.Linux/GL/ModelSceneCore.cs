@@ -64,6 +64,9 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
     /// <summary>The mesh groups currently drawn, for the self-check.</summary>
     internal string[] ActiveMeshGroups => modelSceneNode is null ? [] : [.. modelSceneNode.GetActiveMeshGroups()];
 
+    /// <summary>The material group (skin) being drawn, for the self-check.</summary>
+    internal string ActiveMaterialGroup => modelSceneNode?.ActiveMaterialGroup ?? string.Empty;
+
     /// <summary>The model viewer rotates a little faster than the shared default.</summary>
     protected override float CameraSensitivityScale => 1.75f;
 
@@ -312,6 +315,11 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
             modelSceneNode.SetActiveMeshGroups(meshGroups);
         }
 
+        if (command.MaterialGroupChanged && command.MaterialGroupName is { Length: > 0 } materialGroup)
+        {
+            modelSceneNode.SetMaterialGroup(materialGroup);
+        }
+
         if (command.SeekRequested && controller.ActiveAnimation is { CycleFrames: > 0 } animation)
         {
             controller.Frame = (int)MathF.Round(command.SeekFraction * animation.CycleFrames);
@@ -359,7 +367,7 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
         if (modelSceneNode is null)
         {
             session.Publish(false, animations, null, false, true, 1f, 0, 0, 0f, 0f, 0f, hitboxSets, activeHitboxSet, attachmentNames,
-                model.Skeleton.Bones.Length > 0, false, 0, [], 0, true, [], []);
+                model.Skeleton.Bones.Length > 0, false, 0, [], 0, true, [], [], [], string.Empty);
             return;
         }
 
@@ -396,7 +404,9 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
             modelSceneNode!.ActiveLod,
             modelSceneNode.IsAutoLod,
             [.. modelSceneNode.GetMeshGroups()],
-            [.. modelSceneNode.GetActiveMeshGroups()]);
+            [.. modelSceneNode.GetActiveMeshGroups()],
+            [.. modelSceneNode.GetMaterialGroups()],
+            modelSceneNode.ActiveMaterialGroup);
     }
 
     protected override void OnPicked(object? sender, PickingResponse pickingResponse)
