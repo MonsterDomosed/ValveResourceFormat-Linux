@@ -615,6 +615,22 @@ namespace ValveResourceFormat.Renderer.Materials
         public static bool IsReservedTexture(string uniformName) => ReservedTextureSlotByName.ContainsKey(uniformName);
 
         /// <summary>
+        /// Whether a sampler a material does not bind should default to the neutral white mask.
+        /// </summary>
+        /// <remarks>
+        /// Mask textures multiply the material: ambient occlusion scales indirect light, tint and self-illum
+        /// masks scale their own term. A missing one therefore has to read as "no occlusion, no mask", so
+        /// they fall back to white. The error checker is a 4x4 pattern whose channels are not 1.0, which would
+        /// darken half of every surface in a checker instead of revealing the missing texture.
+        /// </remarks>
+        /// <param name="samplerName">Sampler uniform name declared by the shader.</param>
+        /// <returns><see langword="true"/> for samplers that should default to white.</returns>
+        public static bool DefaultsToNeutralMask(string samplerName)
+            => samplerName.Contains("occlusion", StringComparison.OrdinalIgnoreCase)
+                || samplerName.Contains("ambient", StringComparison.OrdinalIgnoreCase)
+                || samplerName.Contains("mask", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
         /// Material invariant textures, requested by shaders. They become scene-wide textures.
         /// </summary>
         public static readonly List<(ReservedTextureSlots Slot, string Name, string Path)> ShaderTextures =
