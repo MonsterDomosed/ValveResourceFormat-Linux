@@ -410,7 +410,7 @@ namespace ValveResourceFormat.Renderer.Shaders
                         ActiveUniformType.Sampler3D => MaterialLoader.GetDefaultVolume(),
                         _ when name.Contains("color", StringComparison.OrdinalIgnoreCase) => MaterialLoader.GetErrorTexture(),
                         _ when name.Contains("normal", StringComparison.OrdinalIgnoreCase) => MaterialLoader.GetDefaultNormal(),
-                        _ when name.Contains("mask", StringComparison.OrdinalIgnoreCase) => MaterialLoader.GetDefaultMask(),
+                        _ when MaterialLoader.DefaultsToNeutralMask(name) => MaterialLoader.GetDefaultMask(),
                         _ => MaterialLoader.GetErrorTexture(),
                     };
                 }
