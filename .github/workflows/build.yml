@@ -34,11 +34,13 @@ env:
 jobs:
   build:
     name: ${{ matrix.os }}
+    timeout-minutes: 30
 
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-latest]
+        # The fork targets Linux only; the Windows and macOS entries only tested the shared libraries.
+        os: [ubuntu-latest, ubuntu-24.04-arm]
         include:
         - os: ubuntu-latest
           coverage: --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
@@ -50,7 +52,7 @@ jobs:
     - uses: ./.github/actions/setup-dotnet-cache
 
     - name: Run tests
-      run: dotnet test --project ./Tests/Tests.csproj --configuration Release --minimum-expected-tests 400 ${{ env.SKIP_ANALYSIS }} ${{ matrix.coverage }}
+      run: dotnet test --project ./Tests/Tests.csproj --configuration Release --minimum-expected-tests 1300 ${{ env.SKIP_ANALYSIS }} ${{ matrix.coverage }}
 
 #    - name: Check formatting
 #      if: matrix.os == 'ubuntu-latest'
@@ -170,6 +172,7 @@ jobs:
   source2viewer-linux:
     name: Source2Viewer (linux-x64)
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     permissions:
       contents: read
@@ -192,15 +195,33 @@ jobs:
       continue-on-error: true
       run: xvfb-run -a -s "-screen 0 1280x720x24" glxinfo -B
 
-    - name: Smoke test (Xvfb + llvmpipe)
-      env:
+    # The archive is what users download, so test the archive rather than the staging folder the
+    # packaging script happened to leave behind.
+    - name: Unpack the release tarball
+      run: |
+        set -eux
+        mkdir -p "$RUNNER_TEMP/s2v-package"
+        tar -xzf artifacts/source2viewer-linux-x64-*.tar.gz -C "$RUNNER_TEMP/s2v-package"
+        test -x "$RUNNER_TEMP/s2v-package/Source2Viewer/Source2Viewer"
+        test -f "$RUNNER_TEMP/s2v-package/Source2Viewer/source2viewer.desktop"
+        test -f "$RUNNER_TEMP/s2v-package/Source2Viewer/source2viewer.png"
+        test -f "$RUNNER_TEMP/s2v-package/Source2Viewer/README.md"
+        test -f "$RUNNER_TEMP/s2v-package/Source2Viewer/LICENSE"
+
+    - name: Smoke test the packaged tarball (Xvfb + llvmpipe)
+      env: &software-gl
         MESA_GLSL_VERSION_OVERRIDE: '460'
         MESA_GL_VERSION_OVERRIDE: '4.6'
         GALLIUM_DRIVER: 'llvmpipe'
-        # Avalonia blacklists the llvmpipe software renderer for GLX by default; the smoke test
-        # intentionally runs on llvmpipe, so opt out of the blacklist.
+        # Avalonia blacklists the llvmpipe software renderer for GLX by default; these checks
+        # intentionally run on llvmpipe, so opt out of the blacklist.
         AVALONIA_GLX_IGNORE_RENDERER_BLACKLIST: '1'
-      run: xvfb-run -a -s "-screen 0 1280x720x24" ./artifacts/Source2Viewer/Source2Viewer --self-check=smoke --x11
+      run: xvfb-run -a -s "-screen 0 1280x720x24" "$RUNNER_TEMP/s2v-package/Source2Viewer/Source2Viewer" --self-check=smoke --x11
+
+    # Goes past "it started": open fixture viewers and assert they rendered real content.
+    - name: Viewer render checks (Xvfb + llvmpipe)
+      env: *software-gl
+      run: xvfb-run -a -s "-screen 0 1280x720x24" "$RUNNER_TEMP/s2v-package/Source2Viewer/Source2Viewer" --self-check --self-check-section=pointer,gl,fixtures,model --x11
 
     - name: Attest build provenance
       if: github.event_name != 'pull_request'
@@ -217,7 +238,7 @@ jobs:
 
   analyze:
     name: Run all analyzers
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v7
@@ -292,6 +313,8 @@ jobs:
        mv artifacts/source2viewer-linux-x64/*.tar.gz release/
        mv artifacts/nupkg/ValveResourceFormat.*.nupkg release/ValveResourceFormat.nupkg
        mv artifacts/renderer-nupkg/ValveResourceFormat.Renderer.*.nupkg release/ValveResourceFormat.Renderer.nupkg
+       mv artifacts/nupkg/ValveResourceFormat.*.snupkg release/ValveResourceFormat.snupkg
+       mv artifacts/renderer-nupkg/ValveResourceFormat.Renderer.*.snupkg release/ValveResourceFormat.Renderer.snupkg
 
     - name: Display structure of archived files
       run: ls -Rl
@@ -319,7 +342,13 @@ jobs:
         user: ${{ secrets.NUGET_USER }}
 
     - name: Publish to NuGet Gallery
-      run: dotnet nuget push release/ValveResourceFormat.nupkg --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source "https://api.nuget.org/v3/index.json"
+      run: dotnet nuget push release/ValveResourceFormat.nupkg --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source "https://api.nuget.org/v3/index.json" --skip-duplicate
+
+    - name: Publish symbols to NuGet Gallery
+      run: dotnet nuget push release/ValveResourceFormat.snupkg --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source "https://api.nuget.org/v3/index.json" --skip-duplicate
 
     - name: Publish renderer to NuGet Gallery
-      run: dotnet nuget push release/ValveResourceFormat.Renderer.nupkg --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source "https://api.nuget.org/v3/index.json"
+      run: dotnet nuget push release/ValveResourceFormat.Renderer.nupkg --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source "https://api.nuget.org/v3/index.json" --skip-duplicate
+
+    - name: Publish renderer symbols to NuGet Gallery
+      run: dotnet nuget push release/ValveResourceFormat.Renderer.snupkg --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source "https://api.nuget.org/v3/index.json" --skip-duplicate
