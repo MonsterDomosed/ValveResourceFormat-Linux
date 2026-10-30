@@ -150,12 +150,12 @@ internal sealed class PackageExporter
     /// Extracts a single already-read resource to <paramref name="outFilePath"/>, including any additional and
     /// sub files. Completes once the work really stopped, which cancelling makes later than the window closing.
     /// </summary>
-    public async Task ExecuteSingleFileExtractAsync(Window owner, Resource resource, string inFilePath, string outFilePath, string initialText)
+    public async Task ExecuteSingleFileExtractAsync(Window owner, Resource resource, string inFilePath, string outFilePath, string initialText, GltfExportOptions? gltfOptions = null)
     {
-        await RunInDialogAsync(owner, cancellationToken => ExtractFileAsync(resource, inFilePath, outFilePath, true, cancellationToken), initialText).ConfigureAwait(true);
+        await RunInDialogAsync(owner, cancellationToken => ExtractFileAsync(resource, inFilePath, outFilePath, true, cancellationToken), initialText, gltfOptions).ConfigureAwait(true);
     }
 
-    private async Task RunInDialogAsync(Window owner, Func<CancellationToken, Task> work, string? initialText)
+    private async Task RunInDialogAsync(Window owner, Func<CancellationToken, Task> work, string? initialText, GltfExportOptions? gltfOptions = null)
     {
         var dialog = new ExportProgressDialog { StayOpenOnCompletion = true };
         progress = dialog;
@@ -171,6 +171,9 @@ internal sealed class PackageExporter
             gltfExporter = new GltfModelExporter(new TrackingFileLoader(LinuxGameContent.FileLoader))
             {
                 ProgressReporter = dialog,
+                ExportAnimations = gltfOptions?.Animations ?? true,
+                ExportMaterials = gltfOptions?.Materials ?? true,
+                AdaptTextures = gltfOptions?.ConvertTextures ?? true,
             };
         }
 

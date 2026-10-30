@@ -1796,6 +1796,11 @@ internal sealed class App : Application
                 await ExerciseModelSkeletonControlsAsync(control, label).ConfigureAwait(true);
             }
 
+            if (renderer.SceneCore is ModelSceneCore modelCore)
+            {
+                await ExerciseModelLodAndGroupsAsync(session, modelCore, label).ConfigureAwait(true);
+            }
+
             window.CloseTabContaining(viewport);
             await WaitForRendererDisposalAsync(renderer).ConfigureAwait(true);
 
@@ -2100,6 +2105,40 @@ internal sealed class App : Application
 
         await Program.StdOut.WriteLineAsync(
             $"[self-check] {label} hitboxes: sets={control.HitboxSelector.Items.Count - 1}, select={selected}, clear={cleared}").ConfigureAwait(true);
+    }
+
+    /// <summary>Forces a level of detail and toggles a mesh group, then restores both.</summary>
+    private static async Task ExerciseModelLodAndGroupsAsync(ModelAnimationSession session, ModelSceneCore core, string label)
+    {
+        var snapshot = session.GetSnapshot();
+        var lodOk = true;
+        var meshGroupOk = true;
+
+        if (snapshot.HasMultipleLods)
+        {
+            var target = snapshot.LodLevels[^1];
+
+            session.SetLod(target);
+            lodOk = await WaitForAsync(() => !core.IsAutoLod && core.ActiveLod == target, 40).ConfigureAwait(true);
+
+            session.SetLod(null);
+            lodOk &= await WaitForAsync(() => core.IsAutoLod, 40).ConfigureAwait(true);
+        }
+
+        if (snapshot.HasMeshGroups)
+        {
+            var first = snapshot.MeshGroups[0];
+
+            session.SetMeshGroups([first]);
+            meshGroupOk = await WaitForAsync(() => Array.IndexOf(core.ActiveMeshGroups, first) >= 0, 40).ConfigureAwait(true);
+
+            session.SetMeshGroups(snapshot.MeshGroups);
+            meshGroupOk &= await WaitForAsync(() => core.ActiveMeshGroups.Length == snapshot.MeshGroups.Length, 40).ConfigureAwait(true);
+        }
+
+        await Program.StdOut.WriteLineAsync(
+            $"[self-check] {label} model detail: lodLevels={snapshot.LodLevels.Length}, lod={lodOk}, "
+            + $"meshGroups={snapshot.MeshGroups.Length}, groups={meshGroupOk}").ConfigureAwait(true);
     }
 
     private static async Task ExerciseModelSkeletonControlsAsync(ModelViewerControl control, string label)

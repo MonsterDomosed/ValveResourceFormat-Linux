@@ -118,7 +118,7 @@ namespace Tests
         public async Task HitboxSelectionIsDeliveredOnceAndCanBeCleared()
         {
             var session = new ModelAnimationSession();
-            session.Publish(true, [], null, false, true, 1f, 0, 0, 0f, 0f, 0f, ["head", "body"], null, [], true, false);
+            session.Publish(true, [], null, false, true, 1f, 0, 0, 0f, 0f, 0f, ["head", "body"], null, [], true, false, 1, [], 0, true, [], []);
 
             using (Assert.Multiple())
             {
@@ -148,7 +148,7 @@ namespace Tests
         public async Task SkeletonAndAttachmentTogglesAreDeliveredOnce()
         {
             var session = new ModelAnimationSession();
-            session.Publish(true, [], null, false, true, 1f, 0, 0, 0f, 0f, 0f, [], null, ["muzzle", "eject"], true, false);
+            session.Publish(true, [], null, false, true, 1f, 0, 0, 0f, 0f, 0f, [], null, ["muzzle", "eject"], true, false, 1, [], 0, true, [], []);
 
             using (Assert.Multiple())
             {
@@ -183,7 +183,7 @@ namespace Tests
         public async Task RootMotionToggleIsDeliveredOnceAndGatedOnTheAnimation()
         {
             var session = new ModelAnimationSession();
-            session.Publish(true, ["walk"], "walk", true, true, 1f, 0, 25, 0f, 0.8f, 30f, [], null, [], true, true);
+            session.Publish(true, ["walk"], "walk", true, true, 1f, 0, 25, 0f, 0.8f, 30f, [], null, [], true, true, 1, [], 0, true, [], []);
 
             // Only an animation that carries movement can be walked.
             await Assert.That(session.GetSnapshot().HasRootMotion).IsTrue();
@@ -198,7 +198,7 @@ namespace Tests
                 await Assert.That(session.ConsumeCommands().RootMotionChanged).IsFalse();
             }
 
-            session.Publish(true, ["walk"], "walk", true, true, 1f, 0, 25, 0f, 0.8f, 30f, [], null, [], true, false);
+            session.Publish(true, ["walk"], "walk", true, true, 1f, 0, 25, 0f, 0.8f, 30f, [], null, [], true, false, 1, [], 0, true, [], []);
             await Assert.That(session.GetSnapshot().HasRootMotion).IsFalse();
         }
 
@@ -223,7 +223,13 @@ namespace Tests
                 activeSet: null,
                 attachmentNames: ["muzzle"],
                 modelHasBones: true,
-                activeAnimationHasRootMotion: true);
+                activeAnimationHasRootMotion: true,
+                totalLods: 4,
+                availableLods: [0, 1, 3],
+                currentLod: 1,
+                isAutoLod: false,
+                meshGroupNames: ["body", "head"],
+                activeGroups: ["body"]);
 
             var snapshot = session.GetSnapshot();
 
@@ -247,6 +253,12 @@ namespace Tests
                 await Assert.That(snapshot.HitboxSets[0]).IsEqualTo("head");
                 await Assert.That(snapshot.ActiveHitboxSet).IsNull();
                 await Assert.That(snapshot.HasAttachments).IsTrue();
+                await Assert.That(snapshot.HasMultipleLods).IsTrue();
+                await Assert.That(snapshot.ActiveLod).IsEqualTo(1);
+                await Assert.That(snapshot.AutoLod).IsFalse();
+                await Assert.That(snapshot.LodLevels.Length).IsEqualTo(3);
+                await Assert.That(snapshot.HasMeshGroups).IsTrue();
+                await Assert.That(snapshot.ActiveMeshGroups.Length).IsEqualTo(1);
                 await Assert.That(snapshot.Attachments[0]).IsEqualTo("muzzle");
                 await Assert.That(snapshot.HasBones).IsTrue();
                 await Assert.That(snapshot.HasRootMotion).IsTrue();
@@ -258,7 +270,7 @@ namespace Tests
         {
             var session = new ModelAnimationSession();
 
-            session.Publish(true, [], null, false, true, 1f, 0, 0, 0f, 0f, 0f, [], null, [], false, false);
+            session.Publish(true, [], null, false, true, 1f, 0, 0, 0f, 0f, 0f, [], null, [], false, false, 0, [], 0, true, [], []);
             var snapshot = session.GetSnapshot();
 
             using (Assert.Multiple())

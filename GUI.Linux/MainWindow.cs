@@ -245,6 +245,9 @@ internal sealed class MainWindow : Window
     {
         SaveWindowGeometry();
         Settings.Save();
+
+        // The thumbnail renderer owns an offscreen GL context that lives on this thread
+        GUI.Linux.Types.Browser.ModelThumbnailRenderer.Instance.Dispose();
     }
 
     private static void OnDragOver(object? sender, DragEventArgs e)

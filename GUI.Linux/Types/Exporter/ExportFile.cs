@@ -1,6 +1,7 @@
 using System.IO;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using GUI.Linux.Shell;
 using GUI.Linux.Types.Browser;
 using GUI.Linux.Utils;
 using ValvePak;
@@ -120,6 +121,21 @@ internal static class ExportFile
             return;
         }
 
+        GltfExportOptions? gltfOptions = null;
+        var isGltf = pickedFileName.EndsWith(".gltf", StringComparison.OrdinalIgnoreCase)
+            || pickedFileName.EndsWith(".glb", StringComparison.OrdinalIgnoreCase);
+
+        if (isGltf && GltfModelExporter.CanExport(resource))
+        {
+            gltfOptions = await GltfExportOptionsDialog.ShowAsync(owner).ConfigureAwait(true);
+
+            if (gltfOptions is null)
+            {
+                await stream.DisposeAsync().ConfigureAwait(true);
+                return;
+            }
+        }
+
         var exporter = new PackageExporter(null, Path.GetDirectoryName(pickedFileName) ?? string.Empty, true);
 
         // Cancelling closes the window while the extract is still winding down, so wait for it to stop
@@ -129,7 +145,8 @@ internal static class ExportFile
             resource,
             fileName,
             pickedFileName,
-            $"Extracting {fileName} to \"{Path.GetFileName(pickedFileName)}\"").ConfigureAwait(true);
+            $"Extracting {fileName} to \"{Path.GetFileName(pickedFileName)}\"",
+            gltfOptions).ConfigureAwait(true);
 
         await stream.DisposeAsync().ConfigureAwait(true);
     }

@@ -112,15 +112,17 @@ Resources can be exported and decompiled from the VPK browser and from an open t
 the VPK browser (the file list accepts multi-selection, and folders export their whole
 subtree) and on the tab context menu for files opened from disk. Decompiling a single file
 asks where to save it and offers glTF (`.gltf`) and glTF Binary (`.glb`) for models, meshes,
-maps, worlds, world nodes and animation clips. Decompiling several files or a folder first
+maps, worlds, world nodes and animation clips; choosing one of those asks whether animations and
+materials are included and whether textures are converted to image files. Decompiling several files or a folder first
 shows a per-type output picker, where every compiled type can be written as its native
 extension, as images for textures, as sound for sounds, as glTF, or skipped entirely, and
 then a progress window reports each file as it is written.
 
 The model viewer includes an interactive inspection camera (left-drag orbit, right-drag pan in
 both screen axes, wheel zoom, reset view) and a native animation sidebar (animation selection,
-play/pause, timeline scrubbing, playback speed, looping and restart). Models open on their bind
-pose; an animation starts when one is picked. Orbiting keeps turning over the top and bottom
+play/pause, timeline scrubbing, playback speed, looping and restart), plus a level-of-detail
+selector (automatic or a forced level) and mesh group checkboxes when the model defines them.
+Models open on their bind pose; an animation starts when one is picked. Orbiting keeps turning over the top and bottom
 instead of stopping at straight up or down. When a drag reaches the edge of the window the pointer
 is put back in the middle of the viewport, so a drag continues across the whole desk instead of
 stopping where the cursor stops. That pointer move needs the X11 backend; on native Wayland the

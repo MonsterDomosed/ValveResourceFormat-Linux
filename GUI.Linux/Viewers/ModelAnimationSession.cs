@@ -25,7 +25,11 @@ internal readonly record struct ModelAnimationCommand(
     bool ShowAttachments,
     string[]? SelectedAttachments,
     bool RootMotionChanged,
-    bool WalkWithRootMotion);
+    bool WalkWithRootMotion,
+    bool LodChanged,
+    int LodOverride,
+    bool MeshGroupsChanged,
+    string[]? MeshGroups);
 
 /// <summary>
 /// A consistent copy of the model viewer's animation state, safe to read from the UI thread.
@@ -46,7 +50,13 @@ internal readonly record struct ModelAnimationSnapshot(
     string? ActiveHitboxSet,
     string[] Attachments,
     bool HasBones,
-    bool HasRootMotion)
+    bool HasRootMotion,
+    int LodCount,
+    int[] LodLevels,
+    int ActiveLod,
+    bool AutoLod,
+    string[] MeshGroups,
+    string[] ActiveMeshGroups)
 {
     /// <summary>Whether the model exposes at least one playable animation.</summary>
     public bool HasAnimations => Animations.Length > 0;
@@ -56,6 +66,12 @@ internal readonly record struct ModelAnimationSnapshot(
 
     /// <summary>Whether the model exposes any attachment points to draw.</summary>
     public bool HasAttachments => Attachments.Length > 0;
+
+    /// <summary>Whether the model has more than one populated level of detail to choose from.</summary>
+    public bool HasMultipleLods => LodLevels.Length > 1;
+
+    /// <summary>Whether the model defines mesh groups that can be toggled.</summary>
+    public bool HasMeshGroups => MeshGroups.Length > 0;
 }
 
 /// <summary>
@@ -119,6 +135,16 @@ internal sealed class ModelAnimationSession
     private bool rootMotionChanged;
     private bool pendingWalkWithRootMotion;
     private bool hasRootMotion;
+    private bool lodChanged;
+    private int pendingLodOverride = -1;
+    private bool meshGroupsChanged;
+    private string[]? pendingMeshGroups;
+    private int lodCount;
+    private int[] lodLevels = [];
+    private int activeLod;
+    private bool autoLod = true;
+    private string[] meshGroups = [];
+    private string[] activeMeshGroups = [];
 
     /// <summary>Selects an animation by name, or the bind pose when <paramref name="name"/> is null.</summary>
     public void SelectAnimation(string? name)
@@ -262,6 +288,30 @@ internal sealed class ModelAnimationSession
         Wake();
     }
 
+    /// <summary>Forces a level of detail, or returns to automatic selection when <paramref name="level"/> is null.</summary>
+    public void SetLod(int? level)
+    {
+        lock (sync)
+        {
+            lodChanged = true;
+            pendingLodOverride = level ?? -1;
+        }
+
+        Wake();
+    }
+
+    /// <summary>Sets which mesh groups are drawn.</summary>
+    public void SetMeshGroups(string[] groups)
+    {
+        lock (sync)
+        {
+            meshGroupsChanged = true;
+            pendingMeshGroups = groups;
+        }
+
+        Wake();
+    }
+
     /// <summary>Takes the pending commands and clears them. Called on the render thread each frame.</summary>
     public ModelAnimationCommand ConsumeCommands()
     {
@@ -277,7 +327,9 @@ internal sealed class ModelAnimationSession
                 hitboxSetChanged, pendingHitboxSet,
                 skeletonChanged, pendingShowBones,
                 attachmentsChanged, pendingShowAttachments, pendingAttachments,
-                rootMotionChanged, pendingWalkWithRootMotion);
+                rootMotionChanged, pendingWalkWithRootMotion,
+                lodChanged, pendingLodOverride,
+                meshGroupsChanged, pendingMeshGroups);
 
             animationChanged = false;
             pendingAnimation = null;
@@ -293,6 +345,9 @@ internal sealed class ModelAnimationSession
             attachmentsChanged = false;
             pendingAttachments = null;
             rootMotionChanged = false;
+            lodChanged = false;
+            meshGroupsChanged = false;
+            pendingMeshGroups = null;
 
             return command;
         }
@@ -315,7 +370,13 @@ internal sealed class ModelAnimationSession
         string? activeSet,
         string[] attachmentNames,
         bool modelHasBones,
-        bool activeAnimationHasRootMotion)
+        bool activeAnimationHasRootMotion,
+        int totalLods,
+        int[] availableLods,
+        int currentLod,
+        bool isAutoLod,
+        string[] meshGroupNames,
+        string[] activeGroups)
     {
         lock (sync)
         {
@@ -335,6 +396,12 @@ internal sealed class ModelAnimationSession
             attachments = attachmentNames;
             hasBones = modelHasBones;
             hasRootMotion = activeAnimationHasRootMotion;
+            lodCount = totalLods;
+            lodLevels = availableLods;
+            activeLod = currentLod;
+            autoLod = isAutoLod;
+            meshGroups = meshGroupNames;
+            activeMeshGroups = activeGroups;
         }
     }
 
@@ -343,7 +410,8 @@ internal sealed class ModelAnimationSession
     {
         lock (sync)
         {
-            return new(ready, animations, activeAnimation, playing, looping, speed, frame, frameCount, time, duration, fps, hitboxSets, activeHitboxSet, attachments, hasBones, hasRootMotion);
+            return new(ready, animations, activeAnimation, playing, looping, speed, frame, frameCount, time, duration, fps, hitboxSets, activeHitboxSet, attachments, hasBones, hasRootMotion,
+                lodCount, lodLevels, activeLod, autoLod, meshGroups, activeMeshGroups);
         }
     }
 }

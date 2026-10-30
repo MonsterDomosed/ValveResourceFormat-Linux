@@ -55,6 +55,15 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
     /// <summary>Current world bounds of the rendered model, used by the self-check.</summary>
     internal ValveResourceFormat.Utils.AABB ModelBounds => modelSceneNode?.BoundingBox ?? default;
 
+    /// <summary>The level of detail being drawn, for the self-check.</summary>
+    internal int ActiveLod => modelSceneNode?.ActiveLod ?? 0;
+
+    /// <summary>Whether the level of detail is chosen automatically, for the self-check.</summary>
+    internal bool IsAutoLod => modelSceneNode?.IsAutoLod ?? true;
+
+    /// <summary>The mesh groups currently drawn, for the self-check.</summary>
+    internal string[] ActiveMeshGroups => modelSceneNode is null ? [] : [.. modelSceneNode.GetActiveMeshGroups()];
+
     /// <summary>The model viewer rotates a little faster than the shared default.</summary>
     protected override float CameraSensitivityScale => 1.75f;
 
@@ -293,6 +302,16 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
             }
         }
 
+        if (command.LodChanged)
+        {
+            modelSceneNode.SetOverrideLod(command.LodOverride < 0 ? null : command.LodOverride);
+        }
+
+        if (command.MeshGroupsChanged && command.MeshGroups is { } meshGroups)
+        {
+            modelSceneNode.SetActiveMeshGroups(meshGroups);
+        }
+
         if (command.SeekRequested && controller.ActiveAnimation is { CycleFrames: > 0 } animation)
         {
             controller.Frame = (int)MathF.Round(command.SeekFraction * animation.CycleFrames);
@@ -339,7 +358,8 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
     {
         if (modelSceneNode is null)
         {
-            session.Publish(false, animations, null, false, true, 1f, 0, 0, 0f, 0f, 0f, hitboxSets, activeHitboxSet, attachmentNames, model.Skeleton.Bones.Length > 0, false);
+            session.Publish(false, animations, null, false, true, 1f, 0, 0, 0f, 0f, 0f, hitboxSets, activeHitboxSet, attachmentNames,
+                model.Skeleton.Bones.Length > 0, false, 0, [], 0, true, [], []);
             return;
         }
 
@@ -370,7 +390,13 @@ internal sealed class ModelSceneCore : GLSceneViewerCore
             activeHitboxSet,
             attachmentNames,
             model.Skeleton.Bones.Length > 0,
-            modelSceneNode?.AnimationController.ActiveAnimation?.HasMovementData() ?? false);
+            modelSceneNode?.AnimationController.ActiveAnimation?.HasMovementData() ?? false,
+            model.LodInfo.LevelCount,
+            [.. model.LodInfo.AvailableLevels],
+            modelSceneNode!.ActiveLod,
+            modelSceneNode.IsAutoLod,
+            [.. modelSceneNode.GetMeshGroups()],
+            [.. modelSceneNode.GetActiveMeshGroups()]);
     }
 
     protected override void OnPicked(object? sender, PickingResponse pickingResponse)

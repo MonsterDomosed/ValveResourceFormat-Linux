@@ -50,9 +50,12 @@ internal sealed class ModelThumbnailRenderer : IDisposable
     private Renderer? renderer;
     private TextRenderer? textRenderer;
     private Framebuffer? framebuffer;
+    private const int MaxInitializationFailures = 3;
+
     private bool initialized;
     private bool unavailable;
     private bool disposed;
+    private int initializationFailures;
 
     /// <summary>The shared renderer.</summary>
     public static ModelThumbnailRenderer Instance => InstanceHolder.Value;
@@ -86,12 +89,20 @@ internal sealed class ModelThumbnailRenderer : IDisposable
         }
 
         Bitmap? result = null;
-        Dispatcher.UIThread.Invoke(() => result = RenderGuarded(package, entry));
+
+        // Background priority keeps pointer and keyboard input ahead of a thumbnail render, which
+        // runs on this thread because the GLFW context lives here.
+        Dispatcher.UIThread.Invoke(() => result = RenderGuarded(package, entry), DispatcherPriority.Background);
         return result;
     }
 
     private Bitmap? RenderGuarded(Package package, PackageEntry entry)
     {
+        if (disposed)
+        {
+            return null;
+        }
+
         lock (renderLock)
         {
             try
@@ -106,7 +117,16 @@ internal sealed class ModelThumbnailRenderer : IDisposable
 
                 if (!initialized)
                 {
-                    unavailable = true;
+                    // A first failure is often a transient GL problem; only give up after a few, and
+                    // drop the half-built context so the next attempt starts clean.
+                    initializationFailures++;
+
+                    if (initializationFailures >= MaxInitializationFailures)
+                    {
+                        unavailable = true;
+                    }
+
+                    ReleaseContext();
                 }
 
                 return null;
@@ -302,6 +322,43 @@ internal sealed class ModelThumbnailRenderer : IDisposable
         public void End() => glContext.MakeNoneCurrent();
     }
 
+    /// <summary>Releases the offscreen context and everything created with it. Safe to call twice.</summary>
+    private void ReleaseContext()
+    {
+        if (context is not null)
+        {
+            context.Begin();
+
+            try
+            {
+                renderer?.Dispose();
+                framebuffer?.Delete();
+                textRenderer?.Delete();
+            }
+            catch (Exception e)
+            {
+                Log.Warn(nameof(ModelThumbnailRenderer), $"Releasing the thumbnail context failed: {e.Message}");
+            }
+            finally
+            {
+                context.End();
+            }
+        }
+
+        renderer = null;
+        framebuffer = null;
+        textRenderer = null;
+        context = null;
+
+        rendererContext?.Dispose();
+        rendererContext = null;
+
+        window?.Dispose();
+        window = null;
+
+        initialized = false;
+    }
+
     public void Dispose()
     {
         if (disposed)
@@ -310,16 +367,7 @@ internal sealed class ModelThumbnailRenderer : IDisposable
         }
 
         disposed = true;
-
-        if (context is not null)
-        {
-            context.Begin();
-            renderer?.Dispose();
-            context.End();
-        }
-
-        rendererContext?.Dispose();
-        window?.Dispose();
+        ReleaseContext();
         GC.SuppressFinalize(this);
     }
 }

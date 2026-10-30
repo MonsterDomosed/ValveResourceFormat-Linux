@@ -38,6 +38,10 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
     private readonly Button playPauseButton = new() { Content = "Pause", Width = 84 };
     private readonly Button restartButton = new() { Content = "Restart", Width = 84 };
     private readonly Button resetViewButton = new() { Content = "Reset view", HorizontalAlignment = HorizontalAlignment.Stretch };
+    private readonly ComboBox lodSelector = new() { HorizontalAlignment = HorizontalAlignment.Stretch };
+    private readonly StackPanel lodGroup = new() { Spacing = 6 };
+    private readonly StackPanel meshGroupGroup = new() { Spacing = 6 };
+    private readonly StackPanel meshGroupPanel = new() { Spacing = 2 };
     private readonly Slider trackBar = new() { Minimum = 0, Maximum = 1 };
     private readonly TextBlock timeLabel = new() { FontFamily = new FontFamily("monospace") };
     private readonly Slider speedBar = new()
@@ -69,6 +73,8 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
     private bool hitboxSetsPopulated;
     private string[] populatedAttachments = [];
     private bool attachmentsPopulated;
+    private int[] populatedLods = [];
+    private string[] populatedMeshGroups = [];
 
     public ModelViewerControl(string fileName, ModelAnimationSession session, Action<string>? openResource = null)
     {
@@ -116,6 +122,15 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
 
         resetViewButton.Click += (_, _) => session.ResetView();
         panel.Children.Add(resetViewButton);
+
+        lodGroup.Children.Add(new TextBlock { Text = "Level of detail", Classes = { "hint" } });
+        lodSelector.SelectionChanged += (_, _) => SetLodFromSelection();
+        lodGroup.Children.Add(lodSelector);
+        panel.Children.Add(lodGroup);
+
+        meshGroupGroup.Children.Add(new TextBlock { Text = "Mesh groups", Classes = { "hint" } });
+        meshGroupGroup.Children.Add(meshGroupPanel);
+        panel.Children.Add(meshGroupGroup);
 
         animationGroup.Children.Add(new TextBlock { Text = "Animation", FontWeight = FontWeight.SemiBold });
 
@@ -191,6 +206,18 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
             Content = panel,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         };
+    }
+
+    private void SetLodFromSelection()
+    {
+        if (updatingFromSnapshot || lodSelector.SelectedIndex < 0)
+        {
+            return;
+        }
+
+        // Index 0 is automatic, the rest map to the model's populated levels
+        var index = lodSelector.SelectedIndex - 1;
+        session.SetLod(index >= 0 && index < populatedLods.Length ? populatedLods[index] : null);
     }
 
     private void SetLooping(bool value)
@@ -306,6 +333,75 @@ internal sealed class ModelViewerControl : UserControl, IDisposable
         if (snapshot.HasAnimations && !NamesEqual(populatedAnimations, snapshot.Animations))
         {
             PopulateAnimations(snapshot.Animations);
+        }
+
+        lodGroup.IsVisible = snapshot.HasMultipleLods;
+        meshGroupGroup.IsVisible = snapshot.HasMeshGroups;
+
+        if (snapshot.HasMultipleLods && !populatedLods.SequenceEqual(snapshot.LodLevels))
+        {
+            populatedLods = snapshot.LodLevels;
+
+            var items = new string[populatedLods.Length + 1];
+            items[0] = "Auto";
+
+            for (var i = 0; i < populatedLods.Length; i++)
+            {
+                items[i + 1] = $"LOD {populatedLods[i]}";
+            }
+
+            lodSelector.ItemsSource = items;
+        }
+
+        if (snapshot.HasMultipleLods)
+        {
+            var lodIndex = snapshot.AutoLod ? 0 : Array.IndexOf(populatedLods, snapshot.ActiveLod) + 1;
+
+            if (lodIndex > 0 && lodSelector.SelectedIndex != lodIndex)
+            {
+                lodSelector.SelectedIndex = lodIndex;
+            }
+        }
+
+        if (snapshot.HasMeshGroups && !NamesEqual(populatedMeshGroups, snapshot.MeshGroups))
+        {
+            populatedMeshGroups = snapshot.MeshGroups;
+            meshGroupPanel.Children.Clear();
+
+            foreach (var name in populatedMeshGroups)
+            {
+                var check = new CheckBox
+                {
+                    Content = name,
+                    IsChecked = snapshot.ActiveMeshGroups.Contains(name),
+                };
+
+                check.IsCheckedChanged += (_, _) =>
+                {
+                    if (updatingFromSnapshot)
+                    {
+                        return;
+                    }
+
+                    session.SetMeshGroups([.. meshGroupPanel.Children.OfType<CheckBox>()
+                        .Where(static box => box.IsChecked == true)
+                        .Select(static box => (string)box.Content!)]);
+                };
+
+                meshGroupPanel.Children.Add(check);
+            }
+        }
+        else if (snapshot.HasMeshGroups)
+        {
+            foreach (var check in meshGroupPanel.Children.OfType<CheckBox>())
+            {
+                var active = snapshot.ActiveMeshGroups.Contains((string)check.Content!);
+
+                if (check.IsChecked != active)
+                {
+                    check.IsChecked = active;
+                }
+            }
         }
 
         if (snapshot.HasHitboxSets && (!hitboxSetsPopulated || !NamesEqual(populatedHitboxSets, snapshot.HitboxSets)))
