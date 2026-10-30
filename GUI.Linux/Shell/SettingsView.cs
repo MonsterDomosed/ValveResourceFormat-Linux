@@ -17,6 +17,7 @@ namespace GUI.Linux.Shell;
 internal static partial class SettingsView
 {
     private static readonly int[] AntiAliasingSamples = [0, 2, 4, 8, 16];
+    private static readonly int[] FrameRateLimitOptions = [0, 30, 60, 120];
     private static readonly int[] ShadowResolutions = [512, 1024, 2048, 4096];
     private static readonly string[] ShadowNames = ["Low", "Medium", "High", "Very High"];
 
@@ -104,7 +105,7 @@ internal static partial class SettingsView
         gameCombo.SelectionChanged += (_, _) =>
         {
             Settings.Config.SelectedGame = gameCombo.SelectedIndex <= 0 ? string.Empty : games[gameCombo.SelectedIndex - 1].Name;
-            Settings.Save();
+            Settings.SaveSoon();
             LinuxGameContent.Reset();
         };
 
@@ -146,7 +147,7 @@ internal static partial class SettingsView
             }
 
             Settings.Config.GameSearchPaths.Add(path);
-            Settings.Save();
+            Settings.SaveSoon();
             LinuxGameContent.Reset();
             RefreshPaths();
         };
@@ -162,7 +163,7 @@ internal static partial class SettingsView
             }
 
             Settings.Config.GameSearchPaths.Add(path);
-            Settings.Save();
+            Settings.SaveSoon();
             LinuxGameContent.Reset();
             RefreshPaths();
         };
@@ -176,7 +177,7 @@ internal static partial class SettingsView
             }
 
             Settings.Config.GameSearchPaths.Remove(selected);
-            Settings.Save();
+            Settings.SaveSoon();
             LinuxGameContent.Reset();
             RefreshPaths();
         };
@@ -217,7 +218,7 @@ internal static partial class SettingsView
             if (antiAliasing.SelectedIndex >= 0)
             {
                 Settings.Config.AntiAliasingSamples = AntiAliasingSamples[antiAliasing.SelectedIndex];
-                Settings.Save();
+                Settings.SaveSoon();
             }
         };
         Add(section, "Anti-aliasing", antiAliasing);
@@ -246,7 +247,7 @@ internal static partial class SettingsView
             if (shadows.SelectedIndex >= 0)
             {
                 Settings.Config.ShadowResolution = ShadowResolutions[shadows.SelectedIndex];
-                Settings.Save();
+                Settings.SaveSoon();
             }
         };
         Add(section, "Shadow quality", shadows);
@@ -276,6 +277,26 @@ internal static partial class SettingsView
             Settings.Config.Vsync = value ? 1 : 0;
         }));
 
+        var frameRateLimit = new ComboBox { HorizontalAlignment = HorizontalAlignment.Left, MinWidth = 160 };
+
+        foreach (var value in FrameRateLimitOptions)
+        {
+            frameRateLimit.Items.Add(value == 0 ? "Off" : value.ToString(CultureInfo.InvariantCulture));
+        }
+
+        var selectedOption = Math.Max(0, Array.IndexOf(FrameRateLimitOptions, Settings.Config.FrameRateLimit));
+        frameRateLimit.SelectedIndex = selectedOption;
+        frameRateLimit.SelectionChanged += (_, _) =>
+        {
+            if (frameRateLimit.SelectedIndex < 0)
+            {
+                return;
+            }
+
+            Settings.Config.FrameRateLimit = FrameRateLimitOptions[frameRateLimit.SelectedIndex];
+        };
+        Add(section, "Limit frame rate", frameRateLimit);
+
         Add(section, "Display FPS", CreateCheck(Settings.Config.DisplayFps != 0, value =>
         {
             Settings.Config.DisplayFps = value ? 1 : 0;
@@ -304,7 +325,7 @@ internal static partial class SettingsView
             }
 
             Settings.Config.Theme = theme.SelectedIndex;
-            Settings.Save();
+            Settings.SaveSoon();
             App.ApplyTheme();
         };
         Add(section, "Theme", theme);
@@ -342,7 +363,7 @@ internal static partial class SettingsView
             if (e.Property == RangeBase.ValueProperty)
             {
                 Settings.Config.Volume = (float)(volume.Value / 100.0);
-                Settings.Save();
+                Settings.SaveSoon();
             }
         };
 
@@ -381,7 +402,7 @@ internal static partial class SettingsView
             if (e.Property == NumericUpDown.ValueProperty && number.Value is { } current)
             {
                 onChanged(current);
-                Settings.Save();
+                Settings.SaveSoon();
             }
         };
 
@@ -401,7 +422,7 @@ internal static partial class SettingsView
             if (e.Property == ToggleButton.IsCheckedProperty)
             {
                 onChanged(check.IsChecked == true);
-                Settings.Save();
+                Settings.SaveSoon();
             }
         };
 

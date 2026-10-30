@@ -65,6 +65,14 @@ internal sealed class SceneSidebarSession
 {
     private readonly object sync = new();
 
+    /// <summary>
+    /// Called after a command is queued so the host can wake an idle render loop. Without it a viewer
+    /// that only draws on demand would not show the command until the pointer moved.
+    /// </summary>
+    public Action? RequestFrame { get; set; }
+
+    private void Wake() => RequestFrame?.Invoke();
+
     private bool ready;
     private string[] renderModes = [];
     private string currentRenderMode = string.Empty;
@@ -125,11 +133,11 @@ internal sealed class SceneSidebarSession
     public void SetPhysicsTraces(bool value) => Set(ref physicsTracesChanged, ref pendingPhysicsTraces, value);
     public void SetShowSpeed(bool value) => Set(ref showSpeedChanged, ref pendingShowSpeed, value);
     public void SetPerfMode(int value) => Set(ref perfModeChanged, ref pendingPerfMode, value);
-    public void SetLayers(string[] layers) { lock (sync) { layersChanged = true; pendingLayers = layers; } }
-    public void ResetCamera() { lock (sync) { resetCameraRequested = true; } }
-    public void SaveCamera(string name) { lock (sync) { saveCameraRequested = true; pendingCameraName = name; } }
-    public void ApplyCamera(string name) { lock (sync) { applyCameraRequested = true; pendingApplyCamera = name; } }
-    public void DeleteCamera(string name) { lock (sync) { deleteCameraRequested = true; pendingDeleteCamera = name; } }
+    public void SetLayers(string[] layers) { lock (sync) { layersChanged = true; pendingLayers = layers; } Wake(); }
+    public void ResetCamera() { lock (sync) { resetCameraRequested = true; } Wake(); }
+    public void SaveCamera(string name) { lock (sync) { saveCameraRequested = true; pendingCameraName = name; } Wake(); }
+    public void ApplyCamera(string name) { lock (sync) { applyCameraRequested = true; pendingApplyCamera = name; } Wake(); }
+    public void DeleteCamera(string name) { lock (sync) { deleteCameraRequested = true; pendingDeleteCamera = name; } Wake(); }
 
     private void Set<T>(ref bool changed, ref T pending, T value)
     {
@@ -138,6 +146,8 @@ internal sealed class SceneSidebarSession
             changed = true;
             pending = value;
         }
+
+        Wake();
     }
 
     /// <summary>Takes the pending commands and clears them. Called on the render thread each frame.</summary>

@@ -7,11 +7,45 @@ using ValveResourceFormat.Serialization.KeyValues;
 
 namespace ValveResourceFormat.Blocks
 {
+    /// <summary>World visibility query.</summary>
+    public interface IWorldVisibility
+    {
+        /// <summary>Gets whether this holds visibility that can be queried.</summary>
+        bool HasVisibilityData { get; }
+
+        /// <summary>Gets the minimum bounds of the visibility volume.</summary>
+        Vector3 MinBounds { get; }
+
+        /// <summary>Gets the maximum bounds of the visibility volume.</summary>
+        Vector3 MaxBounds { get; }
+
+        /// <summary>Gets the number of clusters.</summary>
+        int ClusterCount { get; }
+
+        /// <summary>Gets how many 32-bit words a cluster bitfield needs.</summary>
+        int ClusterBitfieldWordCount { get; }
+
+        /// <summary>Gets the visibility row listing the clusters sunlight reaches.</summary>
+        ReadOnlyMemory<byte> SunVisibility { get; }
+
+        /// <summary>Gets the cluster containing a point, or a negative value when there is none.</summary>
+        int GetClusterForPosition(Vector3 position);
+
+        /// <summary>Gets the visibility row seen from a point.</summary>
+        ReadOnlyMemory<byte> GetVisibilityRowForPoint(Vector3 point);
+
+        /// <summary>Fills a bitfield with the clusters a box overlaps.</summary>
+        void GetVisClustersForBox(Vector3 min, Vector3 max, Span<uint> clusterBits);
+
+        /// <summary>Builds the boxes making up each cluster.</summary>
+        Dictionary<ushort, List<(Vector3 Min, Vector3 Max)>> BuildClusterChildBounds();
+    }
+
     /// <summary>
     /// "VXVS" block.
     /// </summary>
     /// <seealso href="https://s2v.app/SchemaExplorer/cs2/worldrenderer/CVoxelVisibility">CVoxelVisibility</seealso>
-    public class VoxelVisibility : Block
+    public class VoxelVisibility : Block, IWorldVisibility
     {
         /// <inheritdoc/>
         public override BlockType Type => BlockType.VXVS;
@@ -143,6 +177,46 @@ namespace ValveResourceFormat.Blocks
         public byte[] VisBlocks { get; private set; } = [];
 
         private byte[]? pvsBuffer;
+        private byte[]? allVisibleRow;
+
+        /// <summary>The maximum number of clusters a query can represent.</summary>
+        public const int MaxClusters = 4096;
+
+        /// <summary>The number of 32-bit words in a cluster bitfield.</summary>
+        public const int ClusterBitfieldWords = MaxClusters / 32;
+
+        private const int BitsPerWord = 32;
+        private const float QueryEpsilon = 1f / 32f;
+        private const float LargeBoxExtent = 1024f;
+
+        /// <inheritdoc/>
+        public bool HasVisibilityData => BaseClusterCount > 0 && PVSBytesPerCluster > 0 && Nodes.Length > 0;
+
+        /// <summary>Gets the legacy region-box tree when this resource uses that layout.</summary>
+        public RegionBoxVoxelVisibility? RegionBoxTree { get; private set; }
+
+        /// <inheritdoc/>
+        public int ClusterCount => (int)BaseClusterCount;
+
+        /// <inheritdoc/>
+        public int ClusterBitfieldWordCount => (Math.Max(ClusterCount, 1) + BitsPerWord - 1) / BitsPerWord;
+
+        /// <inheritdoc/>
+        public ReadOnlyMemory<byte> SunVisibility => GetVisibilityRow(SunVisibilityCluster);
+
+        /// <inheritdoc/>
+        public ReadOnlyMemory<byte> GetVisibilityRowForPoint(Vector3 point)
+        {
+            var row = GetPVSForPoint(point);
+            if (row != null || !HasVisibilityData)
+            {
+                return row;
+            }
+
+            allVisibleRow ??= new byte[PVSBytesPerCluster];
+            allVisibleRow.AsSpan().Fill(0xFF);
+            return allVisibleRow;
+        }
 
         private static ReadOnlySpan<byte> SubGridLevel1 => [0, 2, 8, 10, 32, 34, 40, 42];
         private static ReadOnlySpan<byte> SubGridLevel2 => [0, 1, 4, 5, 16, 17, 20, 21];
@@ -162,7 +236,9 @@ namespace ValveResourceFormat.Blocks
 
             if (data.ContainsKey("m_clusters"))
             {
-                return; // Older type of file
+                RegionBoxTree = new RegionBoxVoxelVisibility();
+                RegionBoxTree.Read(data, reader, Offset);
+                return;
             }
 
             BaseClusterCount = data.GetUInt32Property("m_nBaseClusterCount");
@@ -226,13 +302,55 @@ namespace ValveResourceFormat.Blocks
         }
 
         /// <summary>
-        /// Gets the cluster id for a given world-space position.
+        /// Gets the queryable world visibility in a resource.
+        /// </summary>
+        public static IWorldVisibility? GetWorldVisibility(Resource resource)
+        {
+            ArgumentNullException.ThrowIfNull(resource);
+
+            if (resource.GetBlockByType(BlockType.VXVS) is VoxelVisibility block)
+            {
+                if (block.HasVisibilityData)
+                {
+                    return block.BaseClusterCount > 2 ? block : null;
+                }
+
+                if (block.RegionBoxTree is { HasVisibilityData: true } regionBoxTree)
+                {
+                    return regionBoxTree;
+                }
+            }
+
+            var data = resource.DataBlock?.AsKeyValueCollection();
+            if (data is null || !data.ContainsKey("m_visDataDwords"))
+            {
+                return null;
+            }
+
+            var bsp = new BspVoxelVisibility();
+            bsp.Read(data);
+            return bsp.HasVisibilityData ? bsp : null;
+        }
+
+        private ReadOnlyMemory<byte> GetVisibilityRow(uint cluster)
+        {
+            var offset = (long)cluster * PVSBytesPerCluster;
+            if (PVSBytesPerCluster == 0 || offset + PVSBytesPerCluster > VisBlocks.Length)
+            {
+                return default;
+            }
+
+            return VisBlocks.AsMemory((int)offset, (int)PVSBytesPerCluster);
+        }
+
+        /// <summary>
+        /// Gets the cluster id for a given world-space position, or -1 when no cluster claims it.
         /// </summary>
         public int GetClusterForPosition(Vector3 position)
         {
             if (Nodes.Length == 0)
             {
-                return 0;
+                return -1;
             }
 
             var min = MinBounds;
@@ -256,7 +374,7 @@ namespace ValveResourceFormat.Blocks
                         }
 
                         var region = Regions[regionIndex];
-                        if ((spatialMask & Masks[region.MaskIndex]) != 0)
+                        if (region.MaskIndex < Masks.Length && (spatialMask & Masks[region.MaskIndex]) != 0)
                         {
                             return region.ClusterId;
                         }
@@ -264,24 +382,21 @@ namespace ValveResourceFormat.Blocks
                 }
             }
 
-            var halfGrid = GridSize * 0.5f + 0.03125f;
-            var boxMin = position - new Vector3(halfGrid);
-            var boxMax = position + new Vector3(halfGrid);
+            var halfGrid = new Vector3(GridSize * 0.5f);
+            Span<uint> clusterBits = stackalloc uint[ClusterBitfieldWords];
+            clusterBits = clusterBits[..ClusterBitfieldWordCount];
+            GetVisClustersForBox(position - halfGrid, position + halfGrid, clusterBits);
 
-            Span<uint> bitfield = stackalloc uint[128];
-            bitfield.Clear();
-            QueryOctreeBox(0, MinBounds, MaxBounds, boxMin, boxMax, bitfield, halfGrid * 2f >= 1024f);
-
-            for (var i = 0; i < 128; i++)
+            for (var i = 0; i < clusterBits.Length; i++)
             {
-                var word = bitfield[i];
+                var word = clusterBits[i];
                 if (word != 0)
                 {
                     return BitOperations.TrailingZeroCount(word) + 32 * i;
                 }
             }
 
-            return 0;
+            return -1;
         }
 
         /// <summary>
@@ -312,12 +427,18 @@ namespace ValveResourceFormat.Blocks
             var found = false;
             foreach (var region in Regions.AsSpan((int)node.Offset, (int)regionCount))
             {
-                if ((spatialMask & Masks[region.MaskIndex]) == 0 || region.ClusterId >= BaseClusterCount)
+                if (region.MaskIndex >= Masks.Length || (spatialMask & Masks[region.MaskIndex]) == 0 || region.ClusterId >= BaseClusterCount)
                 {
                     continue;
                 }
 
-                var row = VisBlocks.AsSpan((int)(region.ClusterId * PVSBytesPerCluster), (int)PVSBytesPerCluster);
+                var rowOffset = (long)region.ClusterId * PVSBytesPerCluster;
+                if (rowOffset < 0 || rowOffset + PVSBytesPerCluster > VisBlocks.Length)
+                {
+                    continue;
+                }
+
+                var row = VisBlocks.AsSpan((int)rowOffset, (int)PVSBytesPerCluster);
 
                 if (!found)
                 {
@@ -336,6 +457,79 @@ namespace ValveResourceFormat.Blocks
             return found ? pvsBuffer : null;
         }
 
+        void IWorldVisibility.GetVisClustersForBox(Vector3 min, Vector3 max, Span<uint> clusterBits)
+            => GetVisClustersForBox(min, max, clusterBits);
+
+        /// <summary>
+        /// Fills a bitfield with every cluster the given box overlaps.
+        /// </summary>
+        public void GetVisClustersForBox(Vector3 min, Vector3 max, Span<uint> clusterBits)
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThan(clusterBits.Length, ClusterBitfieldWordCount);
+            clusterBits = clusterBits[..ClusterBitfieldWordCount];
+            clusterBits.Clear();
+
+            if (Nodes.Length == 0)
+            {
+                clusterBits[0] = 1;
+                return;
+            }
+
+            var queryMin = Vector3.Min(min, max) - new Vector3(QueryEpsilon);
+            var queryMax = Vector3.Max(min, max) + new Vector3(QueryEpsilon);
+
+            if (new AABB(queryMin, queryMax).Contains(new AABB(MinBounds, MaxBounds)))
+            {
+                clusterBits[0] = 1;
+                return;
+            }
+
+            var size = queryMax - queryMin;
+            var largeAxes = (size.X >= LargeBoxExtent ? 1 : 0)
+                + (size.Y >= LargeBoxExtent ? 1 : 0)
+                + (size.Z >= LargeBoxExtent ? 1 : 0);
+
+            QueryOctreeBox(0, MinBounds, MaxBounds, queryMin, queryMax, clusterBits, largeAxes > 1);
+        }
+
+        /// <summary>
+        /// Gets the ids of every cluster the given box overlaps.
+        /// </summary>
+        public int GetVisClusterList(Vector3 min, Vector3 max, Span<ushort> clusters)
+        {
+            Span<uint> clusterBits = stackalloc uint[ClusterBitfieldWords];
+            clusterBits = clusterBits[..ClusterBitfieldWordCount];
+            GetVisClustersForBox(min, max, clusterBits);
+
+            var count = 0;
+            for (var i = 0; i < clusterBits.Length; i++)
+            {
+                var word = clusterBits[i];
+                while (word != 0)
+                {
+                    if (count < clusters.Length)
+                    {
+                        clusters[count] = (ushort)(i * 32 + BitOperations.TrailingZeroCount(word));
+                    }
+
+                    count++;
+                    word &= word - 1;
+                }
+            }
+
+            if (count > clusters.Length)
+            {
+                if (clusters.Length > 0)
+                {
+                    clusters[0] = 0;
+                }
+
+                return 1;
+            }
+
+            return count;
+        }
+
         private void QueryOctreeBox(uint nodeIndex, Vector3 nodeMin, Vector3 nodeMax,
             Vector3 boxMin, Vector3 boxMax, Span<uint> bitfield, bool useEnclosedShortcut)
         {
@@ -344,15 +538,35 @@ namespace ValveResourceFormat.Blocks
                 return;
             }
 
+            if (!new AABB(nodeMin, nodeMax).Intersects(new AABB(boxMin, boxMax)))
+            {
+                return;
+            }
+
             var node = Nodes[nodeIndex];
+            var capacity = bitfield.Length * BitsPerWord;
 
             if (useEnclosedShortcut && node.IsEnclosedCluster)
             {
+                if (node.EnclosedListIndex >= EnclosedClusterList.Length)
+                {
+                    return;
+                }
+
                 var (offset, count) = EnclosedClusterList[node.EnclosedListIndex];
                 for (var i = 0; i < count; i++)
                 {
-                    var clusterId = (uint)EnclosedClusters[offset + i];
-                    bitfield[(int)(clusterId >> 5)] |= 1u << (int)(clusterId & 0x1F);
+                    var index = offset + i;
+                    if (index < 0 || index >= EnclosedClusters.Length)
+                    {
+                        continue;
+                    }
+
+                    var clusterId = (int)EnclosedClusters[index];
+                    if (clusterId < capacity)
+                    {
+                        bitfield[clusterId / BitsPerWord] |= 1u << (clusterId % BitsPerWord);
+                    }
                 }
 
                 return;
@@ -376,13 +590,15 @@ namespace ValveResourceFormat.Blocks
                     }
 
                     var region = Regions[regionIndex];
-                    if ((boxSpatialMask & Masks[region.MaskIndex]) == 0)
+                    if (region.MaskIndex >= Masks.Length || (boxSpatialMask & Masks[region.MaskIndex]) == 0)
                     {
                         continue;
                     }
 
-                    var clusterId = (uint)region.ClusterId;
-                    bitfield[(int)(clusterId >> 5)] |= 1u << (int)(clusterId & 0x1F);
+                    if (region.ClusterId < capacity)
+                    {
+                        bitfield[region.ClusterId / BitsPerWord] |= 1u << (region.ClusterId % BitsPerWord);
+                    }
                 }
 
                 return;
@@ -393,12 +609,12 @@ namespace ValveResourceFormat.Blocks
             var midY = (nodeMin.Y + nodeMax.Y) * 0.5f;
             var midZ = (nodeMin.Z + nodeMax.Z) * 0.5f;
 
-            var xLow = boxMin.X <= midX;
-            var xHigh = boxMax.X >= midX;
-            var yLow = boxMin.Y <= midY;
-            var yHigh = boxMax.Y >= midY;
-            var zLow = boxMin.Z <= midZ;
-            var zHigh = boxMax.Z >= midZ;
+            var xLow = nodeMin.X <= boxMax.X && boxMin.X <= midX;
+            var xHigh = boxMin.X <= nodeMax.X && midX <= boxMax.X;
+            var yLow = nodeMin.Y <= boxMax.Y && boxMin.Y <= midY;
+            var yHigh = boxMin.Y <= nodeMax.Y && midY <= boxMax.Y;
+            var zLow = nodeMin.Z <= boxMax.Z && boxMin.Z <= midZ;
+            var zHigh = boxMin.Z <= nodeMax.Z && midZ <= boxMax.Z;
 
             for (uint octant = 0; octant < 8; octant++)
             {

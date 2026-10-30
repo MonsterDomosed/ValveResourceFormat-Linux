@@ -19,5 +19,8 @@ internal sealed class NavMeshSceneCore : GLSceneViewerCore
         this.navMeshFile = navMeshFile;
     }
 
+    /// <summary>A navmesh is a still picture, so it only redraws when asked.</summary>
+    protected override bool SceneWantsContinuousFrames => false;
+
     protected override void LoadScene() => NavMeshSceneNode.AddNavNodesToScene(navMeshFile, Scene);
 }

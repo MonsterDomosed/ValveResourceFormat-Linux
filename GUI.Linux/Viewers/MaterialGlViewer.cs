@@ -3,8 +3,8 @@ using System.IO;
 using System.Threading.Tasks;
 using GUI.Linux.GL;
 using GUI.Linux.Shell;
+using GUI.Linux.Types.GLViewers;
 using GUI.Linux.Types.Viewers;
-using GUI.Linux.UI;
 
 namespace GUI.Linux.Viewers;
 
@@ -16,6 +16,7 @@ internal sealed class MaterialGlViewer : IViewer
 {
     private readonly string fileName;
     private readonly ResourceDataViewer dataViewer;
+    private readonly MaterialInspectorSession session = new();
 
     public MaterialGlViewer(IViewerContext context, string fileName, ResourceDataViewer dataViewer)
     {
@@ -29,7 +30,7 @@ internal sealed class MaterialGlViewer : IViewer
     {
         List<ViewerTab> tabs =
         [
-            new ViewerTab("MATERIAL", new ViewerContent.CustomControl(() => new ViewportWithSidebar(() => new MaterialGlRenderer(fileName), new ViewerSidebar())), Select: true),
+            new ViewerTab("MATERIAL", new ViewerContent.CustomControl(() => new MaterialViewerControl(() => new MaterialGlRenderer(fileName, session), session)), Select: true),
         ];
 
         if (dataViewer.GetContent() is ViewerContent.Tabs data)

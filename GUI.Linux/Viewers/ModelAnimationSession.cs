@@ -16,7 +16,22 @@ internal readonly record struct ModelAnimationCommand(
     bool SeekRequested,
     float SeekFraction,
     bool RestartRequested,
-    bool ResetViewRequested);
+    bool ResetViewRequested,
+    bool HitboxSetChanged,
+    string? HitboxSetName,
+    bool SkeletonChanged,
+    bool ShowBones,
+    bool AttachmentsChanged,
+    bool ShowAttachments,
+    string[]? SelectedAttachments,
+    bool RootMotionChanged,
+    bool WalkWithRootMotion,
+    bool LodChanged,
+    int LodOverride,
+    bool MeshGroupsChanged,
+    string[]? MeshGroups,
+    bool MaterialGroupChanged,
+    string? MaterialGroupName);
 
 /// <summary>
 /// A consistent copy of the model viewer's animation state, safe to read from the UI thread.
@@ -32,10 +47,38 @@ internal readonly record struct ModelAnimationSnapshot(
     int FrameCount,
     float Time,
     float Duration,
-    float Fps)
+    float Fps,
+    string[] HitboxSets,
+    string? ActiveHitboxSet,
+    string[] Attachments,
+    bool HasBones,
+    bool HasRootMotion,
+    int LodCount,
+    int[] LodLevels,
+    int ActiveLod,
+    bool AutoLod,
+    string[] MeshGroups,
+    string[] ActiveMeshGroups,
+    string[] MaterialGroups,
+    string ActiveMaterialGroup)
 {
     /// <summary>Whether the model exposes at least one playable animation.</summary>
     public bool HasAnimations => Animations.Length > 0;
+
+    /// <summary>Whether the model exposes any hitbox sets to draw.</summary>
+    public bool HasHitboxSets => HitboxSets.Length > 0;
+
+    /// <summary>Whether the model exposes any attachment points to draw.</summary>
+    public bool HasAttachments => Attachments.Length > 0;
+
+    /// <summary>Whether the model has more than one populated level of detail to choose from.</summary>
+    public bool HasMultipleLods => LodLevels.Length > 1;
+
+    /// <summary>Whether the model defines mesh groups that can be toggled.</summary>
+    public bool HasMeshGroups => MeshGroups.Length > 0;
+
+    /// <summary>Whether the model defines material groups (skins) to choose from.</summary>
+    public bool HasMaterialGroups => MaterialGroups.Length > 0;
 }
 
 /// <summary>
@@ -52,6 +95,14 @@ internal sealed class ModelAnimationSession
     public const float MaxSpeed = 3f;
 
     private readonly object sync = new();
+
+    /// <summary>
+    /// Called after a command is queued so the host can wake an idle render loop. Without it a viewer
+    /// that only draws on demand would not show the command until the pointer moved.
+    /// </summary>
+    public Action? RequestFrame { get; set; }
+
+    private void Wake() => RequestFrame?.Invoke();
 
     private string[] animations = [];
     private bool ready;
@@ -77,6 +128,34 @@ internal sealed class ModelAnimationSession
     private float pendingSeek;
     private bool restartRequested;
     private bool resetViewRequested;
+    private bool hitboxSetChanged;
+    private string? pendingHitboxSet;
+    private string[] hitboxSets = [];
+    private string? activeHitboxSet;
+    private bool skeletonChanged;
+    private bool pendingShowBones;
+    private bool attachmentsChanged;
+    private bool pendingShowAttachments;
+    private string[]? pendingAttachments;
+    private string[] attachments = [];
+    private bool hasBones;
+    private bool rootMotionChanged;
+    private bool pendingWalkWithRootMotion;
+    private bool hasRootMotion;
+    private bool lodChanged;
+    private int pendingLodOverride = -1;
+    private bool meshGroupsChanged;
+    private string[]? pendingMeshGroups;
+    private int lodCount;
+    private int[] lodLevels = [];
+    private int activeLod;
+    private bool autoLod = true;
+    private string[] meshGroups = [];
+    private string[] activeMeshGroups = [];
+    private bool materialGroupChanged;
+    private string? pendingMaterialGroup;
+    private string[] materialGroups = [];
+    private string activeMaterialGroup = string.Empty;
 
     /// <summary>Selects an animation by name, or the bind pose when <paramref name="name"/> is null.</summary>
     public void SelectAnimation(string? name)
@@ -86,6 +165,8 @@ internal sealed class ModelAnimationSession
             animationChanged = true;
             pendingAnimation = name;
         }
+
+        Wake();
     }
 
     /// <summary>Requests that playback pause or resume.</summary>
@@ -96,6 +177,8 @@ internal sealed class ModelAnimationSession
             playingChanged = true;
             pendingPlaying = value;
         }
+
+        Wake();
     }
 
     /// <summary>Requests looping on or off.</summary>
@@ -106,6 +189,8 @@ internal sealed class ModelAnimationSession
             loopingChanged = true;
             pendingLooping = value;
         }
+
+        Wake();
     }
 
     /// <summary>Requests a playback speed, clamped to the supported range.</summary>
@@ -116,6 +201,8 @@ internal sealed class ModelAnimationSession
             speedChanged = true;
             pendingSpeed = Math.Clamp(value, MinSpeed, MaxSpeed);
         }
+
+        Wake();
     }
 
     /// <summary>Requests a seek to a fraction of the animation cycle, clamped to [0, 1].</summary>
@@ -126,6 +213,8 @@ internal sealed class ModelAnimationSession
             seekRequested = true;
             pendingSeek = Math.Clamp(fraction, 0f, 1f);
         }
+
+        Wake();
     }
 
     /// <summary>Requests that the active animation restart from its beginning.</summary>
@@ -135,6 +224,8 @@ internal sealed class ModelAnimationSession
         {
             restartRequested = true;
         }
+
+        Wake();
     }
 
     /// <summary>Requests that the camera reframe the model.</summary>
@@ -144,6 +235,104 @@ internal sealed class ModelAnimationSession
         {
             resetViewRequested = true;
         }
+
+        Wake();
+    }
+
+    /// <summary>Selects a hitbox set to draw, or draws none when <paramref name="name"/> is null.</summary>
+    public void SelectHitboxSet(string? name)
+    {
+        lock (sync)
+        {
+            hitboxSetChanged = true;
+            pendingHitboxSet = name;
+        }
+
+        Wake();
+    }
+
+    /// <summary>Requests that the bone hierarchy be drawn or hidden.</summary>
+    public void SetShowBones(bool value)
+    {
+        lock (sync)
+        {
+            skeletonChanged = true;
+            pendingShowBones = value;
+        }
+
+        Wake();
+    }
+
+    /// <summary>Requests that the attachment markers be drawn or hidden.</summary>
+    public void SetShowAttachments(bool value)
+    {
+        lock (sync)
+        {
+            attachmentsChanged = true;
+            pendingShowAttachments = value;
+        }
+
+        Wake();
+    }
+
+    /// <summary>Requests that only the named attachments are drawn.</summary>
+    public void SelectAttachments(string[] names)
+    {
+        lock (sync)
+        {
+            attachmentsChanged = true;
+            pendingAttachments = names;
+        }
+
+        Wake();
+    }
+
+    /// <summary>Requests that the model and camera walk along the animation's root motion.</summary>
+    public void SetWalkWithRootMotion(bool value)
+    {
+        lock (sync)
+        {
+            rootMotionChanged = true;
+            pendingWalkWithRootMotion = value;
+        }
+
+        Wake();
+    }
+
+    /// <summary>Forces a level of detail, or returns to automatic selection when <paramref name="level"/> is null.</summary>
+    public void SetLod(int? level)
+    {
+        lock (sync)
+        {
+            lodChanged = true;
+            pendingLodOverride = level ?? -1;
+        }
+
+        Wake();
+    }
+
+    /// <summary>Sets which mesh groups are drawn.</summary>
+    public void SetMeshGroups(string[] groups)
+    {
+        lock (sync)
+        {
+            meshGroupsChanged = true;
+            pendingMeshGroups = groups;
+        }
+
+        Wake();
+    }
+
+    /// <summary>Selects a material group (skin) by name.</summary>
+    public void SetMaterialGroup(string name)
+    {
+        lock (sync)
+        {
+            materialGroupChanged = true;
+            pendingMaterialGroup = name;
+        }
+
+        Wake();
     }
 
     /// <summary>Takes the pending commands and clears them. Called on the render thread each frame.</summary>
@@ -157,7 +346,14 @@ internal sealed class ModelAnimationSession
                 loopingChanged, pendingLooping,
                 speedChanged, pendingSpeed,
                 seekRequested, pendingSeek,
-                restartRequested, resetViewRequested);
+                restartRequested, resetViewRequested,
+                hitboxSetChanged, pendingHitboxSet,
+                skeletonChanged, pendingShowBones,
+                attachmentsChanged, pendingShowAttachments, pendingAttachments,
+                rootMotionChanged, pendingWalkWithRootMotion,
+                lodChanged, pendingLodOverride,
+                meshGroupsChanged, pendingMeshGroups,
+                materialGroupChanged, pendingMaterialGroup);
 
             animationChanged = false;
             pendingAnimation = null;
@@ -167,6 +363,17 @@ internal sealed class ModelAnimationSession
             seekRequested = false;
             restartRequested = false;
             resetViewRequested = false;
+            hitboxSetChanged = false;
+            pendingHitboxSet = null;
+            skeletonChanged = false;
+            attachmentsChanged = false;
+            pendingAttachments = null;
+            rootMotionChanged = false;
+            lodChanged = false;
+            meshGroupsChanged = false;
+            pendingMeshGroups = null;
+            materialGroupChanged = false;
+            pendingMaterialGroup = null;
 
             return command;
         }
@@ -184,7 +391,20 @@ internal sealed class ModelAnimationSession
         int totalFrames,
         float currentTime,
         float totalDuration,
-        float framesPerSecond)
+        float framesPerSecond,
+        string[] hitboxSetNames,
+        string? activeSet,
+        string[] attachmentNames,
+        bool modelHasBones,
+        bool activeAnimationHasRootMotion,
+        int totalLods,
+        int[] availableLods,
+        int currentLod,
+        bool isAutoLod,
+        string[] meshGroupNames,
+        string[] activeGroups,
+        string[] materialGroupNames,
+        string currentMaterialGroup)
     {
         lock (sync)
         {
@@ -199,6 +419,19 @@ internal sealed class ModelAnimationSession
             time = currentTime;
             duration = totalDuration;
             fps = framesPerSecond;
+            hitboxSets = hitboxSetNames;
+            activeHitboxSet = activeSet;
+            attachments = attachmentNames;
+            hasBones = modelHasBones;
+            hasRootMotion = activeAnimationHasRootMotion;
+            lodCount = totalLods;
+            lodLevels = availableLods;
+            activeLod = currentLod;
+            autoLod = isAutoLod;
+            meshGroups = meshGroupNames;
+            activeMeshGroups = activeGroups;
+            materialGroups = materialGroupNames;
+            activeMaterialGroup = currentMaterialGroup;
         }
     }
 
@@ -207,7 +440,8 @@ internal sealed class ModelAnimationSession
     {
         lock (sync)
         {
-            return new(ready, animations, activeAnimation, playing, looping, speed, frame, frameCount, time, duration, fps);
+            return new(ready, animations, activeAnimation, playing, looping, speed, frame, frameCount, time, duration, fps, hitboxSets, activeHitboxSet, attachments, hasBones, hasRootMotion,
+                lodCount, lodLevels, activeLod, autoLod, meshGroups, activeMeshGroups, materialGroups, activeMaterialGroup);
         }
     }
 }

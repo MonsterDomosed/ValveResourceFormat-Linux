@@ -334,7 +334,15 @@ public class UserInput
         var viewPunchPitch = float.DegreesToRadians(PlayerMovement.ViewPunchPitchDegrees);
 
         renderCamera.SetLocationPitchYaw(finalCamera.Location, finalCamera.Pitch + viewPunchPitch, finalCamera.Yaw);
-        renderCamera.ClampRotation();
+
+        if (OrbitMode)
+        {
+            renderCamera.WrapRotation();
+        }
+        else
+        {
+            renderCamera.ClampRotation();
+        }
 
         renderCamera.Roll = Camera.Roll;
     }
@@ -486,18 +494,27 @@ public class UserInput
 
         if ((keyboardState & TrackedKeys.MouseRight) != 0)
         {
-            var speed = deltaTime * OrbitDistance / 2;
-            var panOffset = Camera.Right * speed * -MouseDelta2D.X;
+            // Pan the target in the plane of the screen, so the view follows the pointer in both axes
+            // instead of sliding sideways only. The distance follows the pointer delta and the orbit
+            // distance only: scaling by the frame time made the same drag travel further the slower the
+            // frames were, and a drag right after an idle pause carried a whole second of frame time.
+            const float PanDistancePerPixel = 1f / 600f;
+            var panOffset = ((Camera.Right * -MouseDelta2D.X) + (Camera.Up * MouseDelta2D.Y)) * OrbitDistance * PanDistancePerPixel;
 
-            OrbitTarget += panOffset;
+            // Move the camera first: assigning the target recomputes the orbit distance from where the
+            // camera currently is, and a pan is a rigid translation that must not change it.
             Camera.Location += panOffset;
+            OrbitTarget += panOffset;
         }
 
         if ((keyboardState & TrackedKeys.MouseLeft) != 0 || walking)
         {
             Camera.Yaw -= MouseDeltaPitchYaw.Y;
             Camera.Pitch += MouseDeltaPitchYaw.X;
-            Camera.ClampRotation();
+
+            // Orbiting goes over the poles and keeps going, the way a turntable does; the direction
+            // vectors flip with the pitch instead of the view stopping at straight up or down.
+            Camera.WrapRotation();
         }
 
         if ((keyboardState & TrackedKeys.W) != 0)

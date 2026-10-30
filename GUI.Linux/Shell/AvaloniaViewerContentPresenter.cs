@@ -28,6 +28,7 @@ internal static class AvaloniaViewerContentPresenter
         {
             ViewerContent.Text text => CreateText(text.Content, text.Language),
             ViewerContent.LazyText lazy => CreateLazyText(lazy),
+            ViewerContent.LazyContent lazy => CreateLazyContent(lazy),
             ViewerContent.HexDump hex => CreateText(FormatHexDump(hex.Bytes), HighlightLanguage.None),
             ViewerContent.EncodedImage image => CreateImage(image.Bytes),
             ViewerContent.Grid grid => CreateGrid(grid),
@@ -47,14 +48,68 @@ internal static class AvaloniaViewerContentPresenter
         var item = new TabItem
         {
             Header = tab.Name,
-            Content = Present(tab.Content),
         };
 
-        tabControl.Items.Add(item);
-
-        if (tab.Select)
+        if (tab.Content is ViewerContent.LazyContent lazy)
         {
-            tabControl.SelectedItem = item;
+            var host = new ContentControl
+            {
+                Content = new TextBlock { Text = "Loading..." },
+            };
+
+            item.Content = host;
+            var loaded = false;
+
+            void Load()
+            {
+                if (loaded)
+                {
+                    return;
+                }
+
+                loaded = true;
+                tabControl.SelectionChanged -= OnSelectionChanged;
+
+                try
+                {
+                    host.Content = Present(lazy.GetContent());
+                }
+                catch (Exception e)
+                {
+                    host.Content = CreateText(e.ToString(), HighlightLanguage.None);
+                }
+            }
+
+            void OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
+            {
+                if (ReferenceEquals(tabControl.SelectedItem, item))
+                {
+                    Load();
+                }
+            }
+
+            tabControl.SelectionChanged += OnSelectionChanged;
+            tabControl.Items.Add(item);
+
+            if (tab.Select)
+            {
+                tabControl.SelectedItem = item;
+            }
+
+            if (ReferenceEquals(tabControl.SelectedItem, item))
+            {
+                Load();
+            }
+        }
+        else
+        {
+            item.Content = Present(tab.Content);
+            tabControl.Items.Add(item);
+
+            if (tab.Select)
+            {
+                tabControl.SelectedItem = item;
+            }
         }
 
         return item;
@@ -74,6 +129,18 @@ internal static class AvaloniaViewerContentPresenter
         }
 
         return CreateText(producedText, lazy.Language);
+    }
+
+    private static Control CreateLazyContent(ViewerContent.LazyContent lazy)
+    {
+        try
+        {
+            return Present(lazy.GetContent());
+        }
+        catch (Exception e)
+        {
+            return CreateText(e.ToString(), HighlightLanguage.None);
+        }
     }
 
     private static ScrollViewer CreateText(string text, HighlightLanguage language)

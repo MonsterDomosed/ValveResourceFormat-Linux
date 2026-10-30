@@ -1,4 +1,5 @@
 using System;
+using GUI.Linux.Types.GLViewers;
 using ValveResourceFormat.ResourceTypes;
 
 namespace GUI.Linux.GL;
@@ -9,12 +10,12 @@ namespace GUI.Linux.GL;
 /// </summary>
 internal sealed class MaterialGlRenderer : SceneCoreGlRenderer
 {
-    public MaterialGlRenderer(string fileName)
-        : base("material", (context, rendererContext, host) => CreateCore(context, rendererContext, host, fileName))
+    public MaterialGlRenderer(string fileName, MaterialInspectorSession session)
+        : base("material", (context, rendererContext, host) => CreateCore(context, rendererContext, host, fileName, session))
     {
     }
 
-    private static MaterialSceneCore CreateCore(LinuxSceneViewerContext context, ValveResourceFormat.Renderer.RendererContext rendererContext, GUI.Linux.Types.GLViewers.IGLViewerHost host, string fileName)
+    private static MaterialSceneCore CreateCore(LinuxSceneViewerContext context, ValveResourceFormat.Renderer.RendererContext rendererContext, IGLViewerHost host, string fileName, MaterialInspectorSession session)
     {
         var resource = new ValveResourceFormat.Resource
         {
@@ -28,6 +29,6 @@ internal sealed class MaterialGlRenderer : SceneCoreGlRenderer
             throw new InvalidOperationException($"Resource is not a material: {fileName}");
         }
 
-        return new MaterialSceneCore(context, rendererContext, host, resource);
+        return new MaterialSceneCore(context, rendererContext, host, resource, session);
     }
 }

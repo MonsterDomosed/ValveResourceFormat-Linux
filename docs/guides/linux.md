@@ -35,7 +35,7 @@ update-desktop-database ~/.local/share/applications
 | 64-bit Linux (`linux-x64`) | `linux-arm64` is not built yet. |
 | OpenGL 4.6 | AMD (Mesa `radeonsi`), Intel, and NVIDIA driver stacks work. The bundled shaders and viewports require a 4.6 core profile. |
 | Software rendering | `llvmpipe` works for lightweight views and is enough for the smoke test, but world and particle rendering are slow. |
-| Wayland or X11 | The shell prefers Wayland and falls back to X11/XWayland automatically. |
+| Wayland or X11 | The shell runs as an X11 client on a Wayland desktop (through Xwayland), which is what lets a drag move the pointer. Native Wayland is available with `--wayland`. |
 | PulseAudio or PipeWire-Pulse | Required for audio playback and scene sound events. Without a running sound server the app still starts, silently. |
 | fontconfig, ICU | Provided by essentially every desktop distribution; the app uses them through Skia and Avalonia. |
 
@@ -45,10 +45,13 @@ Skia, HarfBuzz, and the other rendering natives are bundled in the tarball.
 
 The shell selects a backend at startup:
 
-- `--wayland` forces the Wayland backend.
-- `--x11` forces X11 (useful under XWayland or a plain X session).
+- `--wayland` forces the native Wayland backend.
+- `--x11` forces X11 (the default when an X server is reachable).
 
-Without either flag it uses Wayland when a compositor is available and otherwise X11.
+Without either flag it uses X11 when an X server is reachable and otherwise Wayland. X11 on a
+Wayland desktop means Xwayland, which is what other 3D applications use as well: a Wayland client
+is not allowed to move the pointer, so dragging a model would stop at the edge of the screen
+instead of continuing. On native Wayland that is still the case and long drags stop at the edge.
 
 ## Configuration
 
@@ -100,21 +103,52 @@ meshes, voxel visibility, animation clips, skeletons, smart props, panorama vect
 graphics, color correction LUTs, animation graphs (AG1 and AG2), pulse graphs, entity I/O
 graphs, and sound. The VPK browser, console, and portable data viewers are also available.
 
-The model viewer includes an interactive inspection camera (left-drag orbit, right-drag pan,
-wheel zoom, reset view) and a native animation sidebar (animation selection, play/pause,
-timeline scrubbing, playback speed, looping and restart), with models that have animations
-autoplaying their first sequence.
+Textures open in a viewer with a sidebar for picking the mip level, a depth slice of an array or
+volume, a cubemap face and projection, a channel mapping or channel split, and a sprite-sheet
+frame, with wheel zoom and drag pan.
+
+Resources can be exported and decompiled from the VPK browser and from an open tab. The
+`Export as is` and `Decompile & export` actions are on the file and folder context menus of
+the VPK browser (the file list accepts multi-selection, and folders export their whole
+subtree) and on the tab context menu for files opened from disk. Decompiling a single file
+asks where to save it and offers glTF (`.gltf`) and glTF Binary (`.glb`) for models, meshes,
+maps, worlds, world nodes and animation clips; choosing one of those asks whether animations and
+materials are included and whether textures are converted to image files. A folder export asks
+the same when any of its types is set to glTF. Decompiling several files or a folder first
+shows a per-type output picker, where every compiled type can be written as its native
+extension, as images for textures, as sound for sounds, as glTF, or skipped entirely, and
+then a progress window reports each file as it is written.
+
+The model viewer includes an interactive inspection camera (left-drag orbit, right-drag pan in
+both screen axes, wheel zoom, reset view) and a native animation sidebar (animation selection,
+play/pause, timeline scrubbing, playback speed, looping and restart), plus a level-of-detail
+selector (automatic or a forced level), mesh group checkboxes and a skin (material group) selector
+when the model defines them. Models open on their bind pose; an animation starts when one is
+picked. Orbiting keeps turning over the top and bottom
+instead of stopping at straight up or down. When a drag reaches the edge of the window the pointer
+is put back in the middle of the viewport, so a drag continues across the whole desk instead of
+stopping where the cursor stops. That pointer move needs the X11 backend; on native Wayland the
+drag stops at the edge.
 
 Scene viewers (world/map/world-node, material, mesh, navmesh, physics, particle, skybox,
 smart prop, voxel visibility and animation) share a collapsible inspector sidebar with view,
 background, render mode, wireframe, world layer, saved camera and debug controls, wired to
-the renderer.
+the renderer. Clicking geometry in a world or map selects the node under the pointer and outlines
+it.
+
+Viewers only redraw when something actually changes. A model on its bind pose, or a static
+mesh or navmesh, stops drawing once its textures have loaded instead of redrawing the same
+frame at the display rate. Anything that animates on its own, such as a playing animation,
+particles, or a map with moving entities, keeps drawing.
 
 Known limitations:
 
-- Viewer-specific sidebar controls that still need a viewer-side session are not ported yet:
-  texture mip/channel/cube/sampling controls, particle playback/detail controls, graph search
-  and filters, and the material parameter editor.
+- Viewer-specific controls that still need a session are not ported yet: texture sampling
+  controls (filter and wrap modes). The texture viewer has a sidebar for the mip level, depth
+  slice, cube face and projection, channel mapping, channel split and sprite-sheet frame, graph
+  viewers have a search box that highlights matching nodes plus a subtitle filter, particle
+  viewers have play/pause, restart, loop and an endcap playback mode, and the material viewer
+  edits the material's float, int and vector parameters live.
 - Some views are not implemented: the interactive compiled-shader tree, the panorama image
   grid, and the choreography viewer.
 - AAC and WAV ADPCM audio cannot be decoded, because no managed decoder is available.

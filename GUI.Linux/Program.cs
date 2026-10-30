@@ -30,6 +30,16 @@ internal static class Program
     /// <summary>How much of the non-interactive startup and platform-service check to run.</summary>
     internal static SelfCheckMode SelfCheck { get; private set; }
 
+    /// <summary>
+    /// Sections of the full self-check to run, from <c>--self-check-section</c>. Empty runs all of
+    /// them, which takes minutes; naming one or two keeps the loop around a single change short.
+    /// </summary>
+    internal static HashSet<string> SelfCheckSections { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Whether a named section of the full self-check should run.</summary>
+    internal static bool WantsSelfCheckSection(string name)
+        => SelfCheckSections.Count == 0 || SelfCheckSections.Contains(name);
+
     /// <summary>Command line arguments passed to the shell.</summary>
     internal static string[] Args { get; private set; } = [];
 
@@ -49,6 +59,20 @@ internal static class Program
         CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 
         SelfCheck = ParseSelfCheck(args);
+
+        foreach (var arg in args)
+        {
+            const string Prefix = "--self-check-section=";
+
+            if (arg.StartsWith(Prefix, StringComparison.Ordinal))
+            {
+                foreach (var section in arg[Prefix.Length..].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    SelfCheckSections.Add(section);
+                }
+            }
+        }
+
         Args = args;
         FileArgs = [.. args.Where(static arg => !arg.StartsWith("--", StringComparison.Ordinal))];
 
@@ -94,17 +118,14 @@ internal static class Program
             .UsePlatformDetect()
             .LogToTrace(LogEventLevel.Information);
 
-        if (OperatingSystem.IsLinux())
+        if (OperatingSystem.IsLinux() && args.Contains("--wayland", StringComparer.Ordinal))
         {
-            if (args.Contains("--wayland", StringComparer.Ordinal))
-            {
-                builder = builder.UseWayland();
-            }
-            else if (!args.Contains("--x11", StringComparer.Ordinal))
-            {
-                // Use Wayland when a compositor is available, otherwise the X11 backend selected above.
-                builder = builder.UseWaylandWithFallback();
-            }
+            // Native Wayland is available on request, but it is not the default: a Wayland client cannot
+            // move the pointer, so dragging a model stops where the pointer stops. The X11 backend runs
+            // through Xwayland on a Wayland desktop, where the pointer warp that keeps a drag going is
+            // emulated, which is also what other 3D applications rely on. UsePlatformDetect already
+            // prefers X11 when an X server is reachable and falls back to Wayland when there is none.
+            builder = builder.UseWayland();
         }
 
         return builder;

@@ -85,6 +85,9 @@ namespace ValveResourceFormat.Renderer.SceneNodes
 
             Simulation = NodeSimulation.Parallel;
 
+            // Stop standard shaders from transforming the vertices again
+            AdditionalFlags |= SceneNodeFlags.PreTransformedVertices;
+
             if (preview)
             {
                 Preview = true;
@@ -256,17 +259,17 @@ namespace ValveResourceFormat.Renderer.SceneNodes
         public void Restart() => pendingRestart = true;
 
         /// <summary>Whether the system is switched on. A stopped system neither simulates nor draws.</summary>
-        public bool IsPlaying => LayerEnabled;
+        public bool IsPlaying { get; private set; } = true;
 
         /// <summary>Switches the system on and replays it from its current transform.</summary>
         public void Play()
         {
-            LayerEnabled = true;
+            IsPlaying = true;
             Restart();
         }
 
         /// <summary>Switches the system off, dropping whatever it had alive.</summary>
-        public void Stop() => LayerEnabled = false;
+        public void Stop() => IsPlaying = false;
 
         private bool pendingRestart;
 
@@ -514,7 +517,7 @@ namespace ValveResourceFormat.Renderer.SceneNodes
         public override void Update(Scene.UpdateContext context)
         {
             // Visible too: a layer toggle re-enabling a sleeping effect must not have it simulate unseen
-            if (!LayerEnabled || !Visible)
+            if (!IsPlaying || !LayerEnabled || !Visible)
             {
                 return;
             }
@@ -684,7 +687,7 @@ namespace ValveResourceFormat.Renderer.SceneNodes
         /// <inheritdoc/>
         public override void UpdateBuffers(Camera camera)
         {
-            if (LayerEnabled)
+            if (IsPlaying && LayerEnabled)
             {
                 particleRenderer.UpdateBuffers(camera);
             }
@@ -693,8 +696,14 @@ namespace ValveResourceFormat.Renderer.SceneNodes
         /// <inheritdoc/>
         public override void Render(Scene.RenderContext context)
         {
-            if (context.ReplacementShader is not null)
+            if (!IsPlaying)
             {
+                return;
+            }
+
+            if (context.ReplacementShader is { } replacement)
+            {
+                RenderReplacement(context, replacement);
                 return;
             }
 
@@ -704,6 +713,29 @@ namespace ValveResourceFormat.Renderer.SceneNodes
             }
 
             particleRenderer.Render(context.Camera, context.RenderPass, context.Layer == RenderLayer.WaterEffects);
+        }
+
+        /// <summary>Draws with a pass replacement shader, for picking and the selection outline.</summary>
+        private void RenderReplacement(Scene.RenderContext context, Shader replacement)
+        {
+            if (!particleRenderer.CanRenderReplacement
+                || context.Layer == RenderLayer.WaterEffects
+                || context.RenderPass is not (RenderPass.Opaque or RenderPass.Translucent or RenderPass.Outline))
+            {
+                return;
+            }
+
+            replacement.Use();
+
+            // No object transform is set, unlike for a mesh: the geometry is world space, and
+            // PreTransformedVertices points this node's instance transform at the identity the pass reads.
+            // There is no mesh behind the draw either, so it identifies as none.
+            replacement.SetUniform1("meshId", 0u);
+
+            // A tube or a card can turn either face toward the camera.
+            using var _ = GraphicsContext.RenderState.Scope(cullMode: RsCullMode.None);
+
+            particleRenderer.RenderReplacement(replacement, Id, context.RenderPass, context.Camera);
         }
 
         /// <inheritdoc/>

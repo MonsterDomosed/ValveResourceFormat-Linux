@@ -171,6 +171,67 @@ public sealed partial class MapExtract
     }
 
     /// <summary>
+    /// Vertex streams a material reads as foliage animation. A Hammer mesh has no stream for them.
+    /// </summary>
+    private static readonly string[] FoliageAnimationStreams = ["PivotPaint", "FoliageAnimation"];
+
+    /// <summary>
+    /// The draw calls of every mesh embedded in a model, each paired with the mesh it belongs to.
+    /// </summary>
+    private static IEnumerable<(Mesh Mesh, KVObject DrawCall)> EnumerateDrawCalls(Model model)
+    {
+        foreach (var embedded in model.GetEmbeddedMeshes())
+        {
+            foreach (var meshSceneObject in embedded.Mesh.Data.GetArray("m_sceneObjects"))
+            {
+                foreach (var drawCall in meshSceneObject.GetArray("m_drawCalls"))
+                {
+                    yield return (embedded.Mesh, drawCall);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether a draw call of the model carries a vertex stream its material reads as foliage animation.
+    /// </summary>
+    private bool HasFoliageAnimationStreams(Model model)
+    {
+        var inputSignatures = new Dictionary<string, Material.VsInputSignature>();
+
+        foreach (var (mesh, drawCall) in EnumerateDrawCalls(model))
+        {
+            var materialName = Mesh.GetMaterialName(drawCall);
+
+            if (materialName is null)
+            {
+                continue;
+            }
+
+            if (!inputSignatures.TryGetValue(materialName, out var inputSignature))
+            {
+                inputSignature = Material.LoadInputSignature(FileLoader, materialName);
+                inputSignatures.Add(materialName, inputSignature);
+            }
+
+            foreach (var vertexBuffer in drawCall.GetArray("m_vertexBuffers"))
+            {
+                foreach (var attribute in mesh.VBIB.VertexBuffers[vertexBuffer.GetInt32Property("m_hBuffer")].InputLayoutFields)
+                {
+                    var element = Material.FindD3DInputSignatureElement(inputSignature, attribute.SemanticName, attribute.SemanticIndex);
+
+                    if (FoliageAnimationStreams.Contains(element.Semantic))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Extract a map from a resource. Accepted types include <see cref="ResourceType.Map"/>, <see cref="ResourceType.World"/>. TODO: <see cref="ResourceType.WorldNode"/> and <see cref="ResourceType.EntityLump"/>.
     /// </summary>
     public MapExtract(Resource resource, IFileLoader? fileLoader)
@@ -549,7 +610,7 @@ public sealed partial class MapExtract
 
         if (phys != null)
         {
-            foreach (var hammermesh in PhysToHammerMeshes(phys))
+            foreach (var hammermesh in PhysToHammerMeshes(phys, Matrix4x4.Identity))
             {
                 MapDocument.World.Children.Add(hammermesh);
             }
@@ -1489,15 +1550,16 @@ public sealed partial class MapExtract
     }
 
     /// <summary>
-    /// Tint of a draw call in gamma space, 0-255, with its alpha in W.
+    /// Tint of a draw call in gamma space, 0-255, with its alpha in W. The compiler stores it as (tint / 255) to the
+    /// power of 2.2.
     /// </summary>
-    private static Vector4 GetDrawCallTint(KVObject drawCall)
+    internal static Vector4 GetDrawCallTint(KVObject drawCall)
     {
         var tint = Vector3.One * 255f;
 
         if (drawCall.ContainsKey("m_vTintColor"))
         {
-            tint *= ColorSpace.SrgbLinearToGamma(drawCall.GetSubCollection("m_vTintColor").ToVector3());
+            tint *= ColorSpace.LinearToGamma22(drawCall.GetSubCollection("m_vTintColor").ToVector3());
         }
 
         var alpha = 255f * drawCall.GetFloatProperty("m_flAlpha", 1f);
@@ -1505,7 +1567,45 @@ public sealed partial class MapExtract
         return new Vector4(tint, alpha);
     }
 
-    internal List<CMapMesh> PhysToHammerMeshes(PhysAggregateData phys, Vector3 positionOffset = new Vector3(), string? entityClassname = null)
+    /// <summary>
+    /// The tint every draw call of a model shares, or <see langword="null"/> when they differ.
+    /// </summary>
+    private static Vector4? GetUniformDrawCallTint(Model model)
+    {
+        Vector4? uniformTint = null;
+
+        foreach (var (_, drawCall) in EnumerateDrawCalls(model))
+        {
+            var tint = GetDrawCallTint(drawCall);
+
+            if (uniformTint is { } seenTint && seenTint != tint)
+            {
+                return null;
+            }
+
+            uniformTint = tint;
+        }
+
+        return uniformTint;
+    }
+
+    /// <summary>
+    /// Tint of an aggregate fragment in gamma space, 0-255, with its alpha in W. The compiler stores the authored
+    /// color as is, and appends the render alpha to it when the fragment is not opaque.
+    /// </summary>
+    internal static Vector4 GetFragmentTint(KVObject fragment)
+    {
+        if (!fragment.ContainsKey("m_vTintColor"))
+        {
+            return new Vector4(255f);
+        }
+
+        KVObject tint = fragment.GetSubCollection("m_vTintColor");
+
+        return tint.Count > 3 ? tint.ToVector4() : new Vector4(tint.ToVector3(), 255f);
+    }
+
+    internal List<CMapMesh> PhysToHammerMeshes(PhysAggregateData phys, Matrix4x4 transform, string? entityClassname = null)
     {
         var cMapMeshesToReturn = new List<CMapMesh>();
 
@@ -1540,7 +1640,7 @@ public sealed partial class MapExtract
             foreach (var hull in shape.Hulls)
             {
                 var hammerMeshBuilder = new HammerMeshBuilder { Untriangulate = true, TextureSizeProvider = GetMaterialTextureSize };
-                hammerMeshBuilder.AddPhysHull(hull, phys, GetAndExportAutoPhysicsMaterialName, positionOffset, materialOverride);
+                hammerMeshBuilder.AddPhysHull(hull, phys, GetAndExportAutoPhysicsMaterialName, transform, materialOverride);
                 var meshData = hammerMeshBuilder.GenerateMesh();
 
                 if (meshData.FaceEdgeIndices.Count == 0)
@@ -1569,7 +1669,7 @@ public sealed partial class MapExtract
             foreach (var mesh in shape.Meshes)
             {
                 var deletedTriangles = PhysTriangleMatcher?.PhysicsMeshes.FirstOrDefault(physicsMesh => physicsMesh.Mesh == mesh)?.DeletedTriangles;
-                physicsMeshBuilder.AddPhysMesh(mesh, phys, GetAndExportAutoPhysicsMaterialName, deletedTriangles, positionOffset, materialOverride);
+                physicsMeshBuilder.AddPhysMesh(mesh, phys, GetAndExportAutoPhysicsMaterialName, deletedTriangles, transform, materialOverride);
             }
 
             if (shape.Meshes.Length > 0)
@@ -1618,9 +1718,10 @@ public sealed partial class MapExtract
         return cMapMeshesToReturn;
     }
 
-    static Datamodel.Color ConvertToColor32(Vector4 tint)
+    internal static Datamodel.Color ConvertToColor32(Vector4 tint)
     {
-        var color32 = unchecked(stackalloc byte[] { (byte)tint.X, (byte)tint.Y, (byte)tint.Z, (byte)tint.W });
+        var rounded = Vector4.Clamp(Vector4.Round(tint), Vector4.Zero, new Vector4(255f));
+        Span<byte> color32 = stackalloc byte[] { (byte)rounded.X, (byte)rounded.Y, (byte)rounded.Z, (byte)rounded.W };
         return Datamodel.Color.FromBytes(color32);
     }
 
@@ -1729,6 +1830,7 @@ public sealed partial class MapExtract
             FolderExtractFilter.Add(modelName ?? meshName);
 
             var objectTransform = sceneObject.GetArray("m_vTransform").ToMatrix4x4();
+            Vector4? drawCallTint = null;
 
             if (SceneObjectShouldConvertToHammerMesh(modelName))
             {
@@ -1765,19 +1867,22 @@ public sealed partial class MapExtract
                     scaleTransform = Matrix4x4.CreateScale(scales);
                 }
 
-                foreach (var hammermesh in RenderMeshToHammerMesh(model, mesh, transform: scaleTransform))
+                if (!HasFoliageAnimationStreams(model))
                 {
-                    hammermesh.Origin = meshOrigin;
-                    hammermesh.Angles = meshAngles;
-                    MapDocument.World.Children.Add(hammermesh);
+                    foreach (var hammermesh in RenderMeshToHammerMesh(model, mesh, transform: scaleTransform))
+                    {
+                        hammermesh.Origin = meshOrigin;
+                        hammermesh.Angles = meshAngles;
+                        MapDocument.World.Children.Add(hammermesh);
+                    }
+                    return;
                 }
-                return;
-            }
-            else
-            {
-                SceneObjectsToExtract.Add(modelName!);
+
+                // the compiler bakes the tint of the prop into the draw calls of its model
+                drawCallTint = GetUniformDrawCallTint(model);
             }
 
+            SceneObjectsToExtract.Add(modelName!);
             AssetReferences.Add(modelName!);
 
             var propStatic = new CMapEntity()
@@ -1809,6 +1914,10 @@ public sealed partial class MapExtract
             {
                 SetTintAlpha(propStatic, tintColor * 255f);
             }
+            else if (drawCallTint is { } bakedTint && bakedTint != new Vector4(255f))
+            {
+                SetTintAlpha(propStatic, bakedTint);
+            }
 
             /* // TODO: check for values being 0
             if (!sceneObject.ContainsKey("m_nLightProbeVolumePrecomputedHandshake") || !sceneObject.ContainsKey("m_nCubeMapPrecomputedHandshake"))
@@ -1834,7 +1943,7 @@ public sealed partial class MapExtract
 
             if (Path.GetFileName(modelName!).Contains("nomerge", StringComparison.Ordinal))
             {
-                propStatic.EntityProperties["disablemeshmerging"] = StringBool(true);
+                propStatic.EntityProperties["disablemerging"] = StringBool(true);
             }
 
             StaticPropFinalize(propStatic, layerIndex, layerNodes, isEmbeddedModel);
@@ -1910,22 +2019,22 @@ public sealed partial class MapExtract
                 }
 
                 // the fragment tint multiplies the draw call tint, one fragment per draw call is expected here
-                var fragmentTints = new Dictionary<int, Vector3>();
+                var fragmentTints = new Dictionary<int, Vector4>();
                 foreach (var fragment in aggregateMeshes)
                 {
                     if (fragment.ContainsKey("m_vTintColor"))
                     {
-                        fragmentTints.TryAdd(fragment.GetInt32Property("m_nDrawCallIndex"), fragment.GetSubCollection("m_vTintColor").ToVector3());
+                        fragmentTints.TryAdd(fragment.GetInt32Property("m_nDrawCallIndex"), GetFragmentTint(fragment));
                     }
                 }
 
                 Vector4 HammerMeshTint(int drawCallIndex)
                 {
-                    var tint = GetDrawCallTint(drawCalls[drawCallIndex]);
+                    Vector4 tint = GetDrawCallTint(drawCalls[drawCallIndex]);
 
                     if (fragmentTints.TryGetValue(drawCallIndex, out var fragmentTint))
                     {
-                        tint = new Vector4(fragmentTint * new Vector3(tint.X, tint.Y, tint.Z) / 255f, tint.W);
+                        tint = fragmentTint * tint / 255f;
                     }
 
                     return tint;
@@ -1945,19 +2054,11 @@ public sealed partial class MapExtract
                 var i = fragment.GetInt32Property("m_nDrawCallIndex");
                 var fragmentFlags = fragment.GetEnumValue<ObjectTypeFlags>("m_objectFlags", normalize: true);
 
-                var tint = Vector3.One * 255f;
-                var alpha = 255f;
+                Vector4 fragmentTint = GetFragmentTint(fragment);
+                Vector4 drawCallTint = GetDrawCallTint(drawCalls[i]) / 255f;
 
-                var drawCall = drawCalls[i];
-
-                if (fragment.ContainsKey("m_vTintColor"))
-                {
-                    tint = fragment.GetSubCollection("m_vTintColor").ToVector3();
-                }
-
-                var drawCallTint = drawCall.GetSubCollection("m_vTintColor").ToVector3();
-                tint *= ColorSpace.SrgbLinearToGamma(drawCallTint);
-                alpha *= drawCall.GetFloatProperty("m_flAlpha");
+                Vector3 tint = fragmentTint.AsVector3() * drawCallTint.AsVector3();
+                float alpha = fragmentTint.W * drawCallTint.W;
 
                 var fragmentModelName = ModelExtract.GetFragmentModelName(modelName, i);
                 AssetReferences.Add(fragmentModelName);
@@ -2268,7 +2369,7 @@ public sealed partial class MapExtract
                         $"model = {modelName} {className} != {otherClass}");
                 }
 
-                ExtractEntityModel(mapEntity, modelName, worldTransform.Translation);
+                ExtractEntityModel(mapEntity, modelName, worldTransform);
 
                 ReadOnlySpan<char> entityIdFull = Path.GetFileNameWithoutExtension(modelName);
                 var nameCutoff = entityIdFull.Length;
@@ -2323,7 +2424,7 @@ public sealed partial class MapExtract
         return !TemplateChildEntities.Add(hammerUniqueId);
     }
 
-    private void ExtractEntityModel(CMapEntity mapEntity, string modelName, Vector3 offset)
+    private void ExtractEntityModel(CMapEntity mapEntity, string modelName, Matrix4x4 worldTransform)
     {
         using var model = FileLoader.LoadFileCompiled(modelName);
         if (model is null || model.DataBlock is null)
@@ -2347,7 +2448,7 @@ public sealed partial class MapExtract
                 var phys = data.GetEmbeddedPhys();
                 if (phys != null)
                 {
-                    foreach (var hammermesh in PhysToHammerMeshes(phys, offset, associatedEntityClass))
+                    foreach (var hammermesh in PhysToHammerMeshes(phys, worldTransform, associatedEntityClass))
                     {
                         mapEntity.Children.Add(hammermesh);
                     }
@@ -2355,7 +2456,7 @@ public sealed partial class MapExtract
             }
             else
             {
-                foreach (var hammermesh in RenderMeshToHammerMesh(data, model, associatedEntityClass, Matrix4x4.CreateTranslation(offset)))
+                foreach (var hammermesh in RenderMeshToHammerMesh(data, model, associatedEntityClass, worldTransform))
                 {
                     mapEntity.Children.Add(hammermesh);
                 }
@@ -2415,6 +2516,11 @@ public sealed partial class MapExtract
                     Delay = connection.Delay,
                     TimesToFire = connection.TimesToFire,
                 };
+
+                if (connection.ParamMap != null)
+                {
+                    dmeConnection.Add("paramMap", ToDmeKeyValues3(connection.ParamMap, "paramMap"));
+                }
 
                 mapEntity.ConnectionsData.Add(dmeConnection);
             }
@@ -2488,6 +2594,160 @@ public sealed partial class MapExtract
 
     static string StringBool(bool value)
         => value ? "1" : "0";
+
+    private static object? ToDmeKeyValues3(KVObject value, string name)
+    {
+        switch (value.ValueType)
+        {
+            case KVValueType.Collection:
+                var element = new Datamodel.Element { Name = name, ClassName = "DmElement" };
+
+                foreach (var (key, child) in value.Children)
+                {
+                    var converted = ToDmeKeyValues3(child, key);
+
+                    if (converted != null)
+                    {
+                        element.Add(key == "name" ? "__dmekv3_attribute_will_be_name__" : key, converted);
+                    }
+                }
+
+                return element;
+
+            case KVValueType.Array:
+                var items = (IReadOnlyList<KVObject>)value.Values;
+
+                if (ToDmeTypedArray(items) is { } typedArray)
+                {
+                    return typedArray;
+                }
+
+                var elements = new Datamodel.ElementArray(items.Count);
+
+                for (var i = 0; i < items.Count; i++)
+                {
+                    var wrapper = new Datamodel.Element { Name = $"array_{i}", ClassName = "DmElement" };
+                    var converted = ToDmeKeyValues3(items[i], "value");
+
+                    if (converted != null)
+                    {
+                        wrapper.Add("value", converted);
+                    }
+
+                    elements.Add(wrapper);
+                }
+
+                return elements;
+
+            case KVValueType.Boolean:
+                return (bool)value;
+
+            case KVValueType.String:
+                var text = RemoveTargetnamePrefix((string)value);
+                var specificType = value.Flag switch
+                {
+                    KVFlag.Resource => "resource",
+                    KVFlag.ResourceName => "resource_name",
+                    KVFlag.Panorama => "panorama",
+                    KVFlag.SoundEvent => "soundevent",
+                    KVFlag.SubClass => "subclass",
+                    KVFlag.EntityName => "entity_name",
+                    _ => null,
+                };
+
+                if (specificType == null)
+                {
+                    return text;
+                }
+
+                var typed = new Datamodel.Element { Name = "value_with_specific_type", ClassName = "DmElement" };
+                typed.Add("specific_type", specificType);
+                typed.Add("value", text);
+                return typed;
+
+            case var type when IsKeyValues3Unsigned(type):
+                return Convert.ToUInt64(value, CultureInfo.InvariantCulture);
+
+            case var type when IsKeyValues3Float(type):
+                return Convert.ToSingle(value, CultureInfo.InvariantCulture);
+
+            case var type when IsKeyValues3Signed(type):
+                var integer = Convert.ToInt64(value, CultureInfo.InvariantCulture);
+                return integer is >= int.MinValue and <= int.MaxValue ? (int)integer : 0;
+
+            default:
+                return null;
+        }
+    }
+
+    private static object? ToDmeTypedArray(IReadOnlyList<KVObject> items)
+    {
+        if (items.Count == 0)
+        {
+            return null;
+        }
+
+        var first = items[0];
+
+        if (first.ValueType == KVValueType.Array)
+        {
+            return ToDmeVectorArray(items);
+        }
+
+        if (first.Flag != KVFlag.None || items.Any(item => item.ValueType != first.ValueType || item.Flag != KVFlag.None))
+        {
+            return null;
+        }
+
+        return first.ValueType switch
+        {
+            KVValueType.Boolean => new Datamodel.BoolArray(items.Select(static item => (bool)item)),
+            KVValueType.String => new Datamodel.StringArray(items.Select(static item => RemoveTargetnamePrefix((string)item))),
+            var type when IsKeyValues3Unsigned(type) => new Datamodel.UInt64Array(items.Select(static item => Convert.ToUInt64(item, CultureInfo.InvariantCulture))),
+            var type when IsKeyValues3Float(type) => new Datamodel.FloatArray(items.Select(static item => Convert.ToSingle(item, CultureInfo.InvariantCulture))),
+            var type when IsKeyValues3Signed(type) => new Datamodel.IntArray(items.Select(static item => unchecked((int)Convert.ToInt64(item, CultureInfo.InvariantCulture)))),
+            _ => null,
+        };
+    }
+
+    private static object? ToDmeVectorArray(IReadOnlyList<KVObject> items)
+    {
+        var vectors = new List<float[]>(items.Count);
+
+        foreach (var item in items)
+        {
+            if (item.ValueType != KVValueType.Array)
+            {
+                return null;
+            }
+
+            var components = (IReadOnlyList<KVObject>)item.Values;
+
+            if ((vectors.Count > 0 && components.Count != vectors[0].Length) || !components.All(static component => IsKeyValues3Float(component.ValueType)))
+            {
+                return null;
+            }
+
+            vectors.Add([.. components.Select(static component => Convert.ToSingle(component, CultureInfo.InvariantCulture))]);
+        }
+
+        return vectors[0].Length switch
+        {
+            2 => new Datamodel.Vector2Array(vectors.Select(static v => new Vector2(v[0], v[1]))),
+            3 => new Datamodel.Vector3Array(vectors.Select(static v => new Vector3(v[0], v[1], v[2]))),
+            4 => new Datamodel.Vector4Array(vectors.Select(static v => new Vector4(v[0], v[1], v[2], v[3]))),
+            _ => null,
+        };
+    }
+
+    private static bool IsKeyValues3Float(KVValueType type)
+        => type is KVValueType.FloatingPoint or KVValueType.FloatingPoint64;
+
+    private static bool IsKeyValues3Signed(KVValueType type)
+        => type is KVValueType.Int16 or KVValueType.Int32 or KVValueType.Int64;
+
+    private static bool IsKeyValues3Unsigned(KVValueType type)
+        => type is KVValueType.UInt16 or KVValueType.UInt32 or KVValueType.UInt64;
 
     private static string? ToEditString(object? data)
     {

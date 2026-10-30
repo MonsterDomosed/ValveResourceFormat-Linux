@@ -149,31 +149,26 @@ namespace Tests
         }
 
         [Test]
-        public async Task TestSoundNoFileName()
+        public async Task TestSoundNoFileNameAllowsTrailingData()
         {
             var file = Path.Combine(TestContext.TestDirectory!, "Files", "beep.vsnd_c");
-            using var fs = File.OpenRead(file);
+            using var stream = new MemoryStream();
+            await stream.WriteAsync(await File.ReadAllBytesAsync(file));
+            await stream.WriteAsync(new byte[16]);
+            stream.Position = 0;
+
             using var resource = new Resource();
-            resource.Read(fs, verifyFileSize: false);
+            resource.Read(stream);
 
             using (Assert.Multiple())
             {
                 await Assert.That(resource.ResourceType).IsEqualTo(ResourceType.Sound);
                 await Assert.That(resource.DataBlock).IsAssignableTo<Sound>();
             }
-
-            var soundData = (Sound?)resource.DataBlock;
-            Debug.Assert(soundData != null);
-
-            using var hash = SHA256.Create();
-            using var sound = soundData.GetSoundStream();
-            var actualHash = Convert.ToHexString(await hash.ComputeHashAsync(sound));
-
-            await Assert.That(actualHash).IsEqualTo(BeepSoundWaveHash);
         }
 
         [Test]
-        public async Task TestSoundNoFileNameVerifySize()
+        public async Task TestSoundNoFileNameFromFile()
         {
             var file = Path.Combine(TestContext.TestDirectory!, "Files", "beep.vsnd_c");
             using var fs = File.OpenRead(file);

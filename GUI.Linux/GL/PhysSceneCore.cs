@@ -29,6 +29,9 @@ internal sealed class PhysSceneCore : GLSceneViewerCore
         LoadDefaultLighting();
     }
 
+    /// <summary>A collision mesh is a still picture, so it only redraws when asked.</summary>
+    protected override bool SceneWantsContinuousFrames => false;
+
     protected override void LoadScene()
     {
         if (phys.Parts.Length > 0)

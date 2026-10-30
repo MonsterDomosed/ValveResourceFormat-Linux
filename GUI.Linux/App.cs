@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -16,11 +17,13 @@ using GUI.Linux.GL;
 using GUI.Linux.Platform;
 using GUI.Linux.Shell;
 using GUI.Linux.Types.Browser;
+using GUI.Linux.Types.GLViewers;
 using GUI.Linux.Types.Viewers;
 using GUI.Linux.Utils;
 using GUI.Linux.Viewers;
 using ValvePak;
 using ValveResourceFormat;
+using ValveResourceFormat.CompiledShader;
 using ValveResourceFormat.IO;
 using ValveResourceFormat.Renderer.World;
 using ValveResourceFormat.ResourceTypes;
@@ -95,6 +98,8 @@ internal sealed class App : Application
             + $"XDG_SESSION_TYPE={Environment.GetEnvironmentVariable("XDG_SESSION_TYPE") ?? "<unset>"}");
 
         output.WriteLine($"[self-check] settings directory: {PlatformServices.Current.SettingsDirectory}");
+
+        output.WriteLine($"[self-check] windowing: {window.TryGetPlatformHandle()?.HandleDescriptor ?? "<none>"}");
 
         // Wayland only accepts a new clipboard selection from a focused client, so activate the window
         // and give the compositor a moment before testing the clipboard.
@@ -207,32 +212,36 @@ internal sealed class App : Application
             return;
         }
 
-        await RunViewerFactoryChecksAsync().ConfigureAwait(true); await RunGameContentCheckAsync().ConfigureAwait(true);
-        await RunGameContentViewerCheckAsync(window).ConfigureAwait(true);
-        await RunWorldRenderCheckAsync(window).ConfigureAwait(true);
-        await RunGlInfrastructureCheckAsync().ConfigureAwait(true);
-        await RunNavMeshRenderCheckAsync(window).ConfigureAwait(true);
-        await RunTwoViewportsCheckAsync(window).ConfigureAwait(true);
-        await RunMeshRenderCheckAsync(window).ConfigureAwait(true);
-        await RunParticleRenderCheckAsync(window).ConfigureAwait(true);
-        await RunFixtureGlRenderCheckAsync<GUI.Linux.GL.TextureGlRenderer>(window, "Tests/Files/pip-left.vsvg_c", "panorama vector").ConfigureAwait(true);
-        await RunFixtureGlRenderCheckAsync<GUI.Linux.GL.ParticleSnapshotGlRenderer>(window, "Tests/Files/test.vsnap_c", "particle snapshot").ConfigureAwait(true);
-        await RunFixtureGlRenderCheckAsync<GUI.Linux.GL.WorldNodeGlRenderer>(window, "Tests/Files/node000_kv3_v2_zstd.vwnod_c", "world node").ConfigureAwait(true);
-        await RunFixtureGlRenderCheckAsync<GUI.Linux.GL.TextureGlRenderer>(window, "Tests/Files/a1_eli_corridor_kv3_v1_uncompressed.vpost_c", "postprocessing lut").ConfigureAwait(true);
-        await RunFixtureGlRenderCheckAsync<GUI.Linux.GL.GraphGlRenderer>(window, "Tests/Files/vrf_all_nodes.vanmgrph_c", "ag1 graph").ConfigureAwait(true);
-        await RunFixtureGlRenderCheckAsync<GUI.Linux.GL.GraphGlRenderer>(window, "Tests/Files/de_inferno_script.vpulse_c", "pulse graph").ConfigureAwait(true);
-        await RunFixtureGlRenderCheckAsync<GUI.Linux.GL.GraphGlRenderer>(window, "Tests/Files/default_ents.vents_c", "entity io graph").ConfigureAwait(true);
-        await RunVoxelVisibilityRenderCheckAsync(window).ConfigureAwait(true);
-        await RunModelRenderCheckAsync(window).ConfigureAwait(true);
-        await RunModelAnimationCheckAsync(window).ConfigureAwait(true);
-        await RunKeyboardRoutingCheckAsync(window).ConfigureAwait(true);
-        await RunMaterialRenderCheckAsync(window).ConfigureAwait(true);
-        await RunAnimationRenderCheckAsync(window).ConfigureAwait(true);
-        await RunPhysicsRenderCheckAsync(window).ConfigureAwait(true);
-        await RunGraphRenderCheckAsync(window).ConfigureAwait(true);
-        await RunSkyboxRenderCheckAsync(window).ConfigureAwait(true);
-        await RunBrowserCheckAsync(window).ConfigureAwait(true);
-        await RunAudioCheckAsync(window).ConfigureAwait(true);
+        // Name any of these with --self-check-section to run just that part; naming none runs them all.
+        await RunSelfCheckSectionAsync("viewers", () => RunViewerFactoryChecksAsync()).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("game", () => RunGameContentCheckAsync()).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("game", () => RunGameContentViewerCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("world", () => RunWorldRenderCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("gl", () => RunGlInfrastructureCheckAsync()).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("navmesh", () => RunNavMeshRenderCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("twoviewports", () => RunTwoViewportsCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("mesh", () => RunMeshRenderCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("particle", () => RunParticleRenderCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("fixtures", () => RunFixtureGlRenderCheckAsync<GUI.Linux.GL.TextureGlRenderer>(window, "Tests/Files/pip-left.vsvg_c", "panorama vector")).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("fixtures", () => RunFixtureGlRenderCheckAsync<GUI.Linux.GL.ParticleSnapshotGlRenderer>(window, "Tests/Files/test.vsnap_c", "particle snapshot")).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("fixtures", () => RunFixtureGlRenderCheckAsync<GUI.Linux.GL.WorldNodeGlRenderer>(window, "Tests/Files/node000_kv3_v2_zstd.vwnod_c", "world node")).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("fixtures", () => RunFixtureGlRenderCheckAsync<GUI.Linux.GL.TextureGlRenderer>(window, "Tests/Files/a1_eli_corridor_kv3_v1_uncompressed.vpost_c", "postprocessing lut")).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("fixtures", () => RunFixtureGlRenderCheckAsync<GUI.Linux.GL.GraphGlRenderer>(window, "Tests/Files/vrf_all_nodes.vanmgrph_c", "ag1 graph")).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("fixtures", () => RunFixtureGlRenderCheckAsync<GUI.Linux.GL.GraphGlRenderer>(window, "Tests/Files/de_inferno_script.vpulse_c", "pulse graph")).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("fixtures", () => RunFixtureGlRenderCheckAsync<GUI.Linux.GL.GraphGlRenderer>(window, "Tests/Files/default_ents.vents_c", "entity io graph")).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("viz", () => RunVoxelVisibilityRenderCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("model", () => RunModelRenderCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("model", () => RunModelAnimationCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("pointer", () => RunPointerWarpCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("texture", () => RunTextureInspectorCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("keyboard", () => RunKeyboardRoutingCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("material", () => RunMaterialRenderCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("animation", () => RunAnimationRenderCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("physics", () => RunPhysicsRenderCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("graph", () => RunGraphRenderCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("skybox", () => RunSkyboxRenderCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("browser", () => RunBrowserCheckAsync(window)).ConfigureAwait(true);
+        await RunSelfCheckSectionAsync("audio", () => RunAudioCheckAsync(window)).ConfigureAwait(true);
 
         output.WriteLine("[self-check] shell opened, exiting");
         DispatcherTimer.RunOnce(window.Close, TimeSpan.FromSeconds(1));
@@ -733,19 +742,24 @@ internal sealed class App : Application
 
             if (worldViewport is not null)
             {
-                for (var i = 0; i < 100 && worldRenderer.RenderedFrames < 3; i++)
+                for (var i = 0; i < 120 && worldRenderer.RenderedFrames < 3; i++)
                 {
+                    // Re-ask every time: a request made while the renderer was busy can be dropped
+                    worldViewport.RequestFrame();
                     await Task.Delay(50).ConfigureAwait(true);
                 }
 
                 await Program.StdOut.WriteLineAsync(
                     $"[self-check] world view: frames={worldRenderer.RenderedFrames}, distinctColors={worldRenderer.ReadbackDistinctColors}, "
-                    + $"nonBackgroundPixels={worldRenderer.ReadbackNonBackgroundPixels}, viewport={worldRenderer.ViewportWidth}x{worldRenderer.ViewportHeight}").ConfigureAwait(true);
+                    + $"nonBackgroundPixels={worldRenderer.ReadbackNonBackgroundPixels}, viewport={worldRenderer.ViewportWidth}x{worldRenderer.ViewportHeight}, "
+                    + $"exposure={worldRenderer.SceneCore?.Renderer.Postprocess.AverageLuminance:0.0000}").ConfigureAwait(true);
                 await Program.StdOut.WriteLineAsync(worldRenderer.ReadbackNonBackgroundPixels > 0 && worldRenderer.ReadbackDistinctColors > 1
                     ? "[self-check] world tab rendered real geometry"
                     : "[self-check] world tab rendered only a flat frame").ConfigureAwait(true);
 
                 await Program.StdOut.WriteLineAsync($"[self-check] world scene sound: {worldRenderer.HasSoundPlayer}").ConfigureAwait(true);
+
+                await RunWorldPickingCheckAsync(worldRenderer).ConfigureAwait(true);
 
                 await RunWorldSidebarCheckAsync(worldViewport, worldRenderer).ConfigureAwait(true);
 
@@ -768,6 +782,38 @@ internal sealed class App : Application
         {
             await Program.StdOut.WriteLineAsync($"[self-check] world view failed: {e.GetType().Name}: {e.Message}").ConfigureAwait(true);
         }
+    }
+
+    /// <summary>Clicking world geometry has to select the node under the pointer.</summary>
+    private static async Task RunWorldPickingCheckAsync(WorldGlRenderer renderer)
+    {
+        if (renderer.SceneCore is not { } core)
+        {
+            return;
+        }
+
+        var width = renderer.ViewportWidth;
+        var height = renderer.ViewportHeight;
+        var selected = false;
+
+        // Geometry does not cover every point of a framed map, so probe a few of them
+        for (var attempt = 0; attempt < 8 && !selected; attempt++)
+        {
+            var x = width * (0.35f + (attempt % 4) * 0.1f);
+            var y = height * (0.5f + (attempt / 4) * 0.1f);
+
+            renderer.OnPointerDown(x, y, ViewerKey.MouseLeft, 1);
+            renderer.OnPointerUp(x, y, ViewerKey.MouseLeft);
+
+            for (var frames = 0; frames < 8 && !selected; frames++)
+            {
+                await Task.Delay(60).ConfigureAwait(true);
+                selected = core.SelectedNodeRenderer?.HasSelectedNodes == true;
+            }
+        }
+
+        await Program.StdOut.WriteLineAsync(
+            $"[self-check] world picking: selected={selected}, node={core.SelectedNodeRenderer?.HasSelectedNodes}").ConfigureAwait(true);
     }
 
     private static async Task RunWorldSidebarCheckAsync(AvaloniaGlViewport viewport, WorldGlRenderer renderer)
@@ -938,8 +984,10 @@ internal sealed class App : Application
                 return;
             }
 
-            for (var i = 0; i < 50 && renderer.RenderedFrames < 3; i++)
+            for (var i = 0; i < 120 && renderer.RenderedFrames < 3; i++)
             {
+                // Re-ask every time: a request made while the renderer was busy can be dropped
+                viewport.RequestFrame();
                 await Task.Delay(50).ConfigureAwait(true);
             }
 
@@ -1116,8 +1164,10 @@ internal sealed class App : Application
                 return;
             }
 
-            for (var i = 0; i < 50 && renderer.RenderedFrames < 3; i++)
+            for (var i = 0; i < 120 && renderer.RenderedFrames < 3; i++)
             {
+                // Re-ask every time: a request made while the renderer was busy can be dropped
+                viewport.RequestFrame();
                 await Task.Delay(50).ConfigureAwait(true);
             }
 
@@ -1185,8 +1235,10 @@ internal sealed class App : Application
                 return;
             }
 
-            for (var i = 0; i < 50 && renderer.RenderedFrames < 3; i++)
+            for (var i = 0; i < 120 && renderer.RenderedFrames < 3; i++)
             {
+                // Re-ask every time: a request made while the renderer was busy can be dropped
+                viewport.RequestFrame();
                 await Task.Delay(50).ConfigureAwait(true);
             }
 
@@ -1197,6 +1249,26 @@ internal sealed class App : Application
             await Program.StdOut.WriteLineAsync(renderer.ReadbackNonBackgroundPixels > 0 && renderer.ReadbackDistinctColors > 1
                 ? "[self-check] particle tab rendered real geometry"
                 : "[self-check] particle tab rendered only a flat frame").ConfigureAwait(true);
+
+            if (renderer.SceneCore is ParticleSceneCore { ParticleNode: { } particleNode } && viewport.GetVisualAncestors().OfType<ParticleViewerControl>().FirstOrDefault() is { } control)
+            {
+                var framesBefore = renderer.RenderedFrames;
+
+                control.Session.SetPlaying(false);
+                var paused = await WaitForAsync(() => particleNode.IsPaused, 30).ConfigureAwait(true);
+
+                control.Session.SetPlaying(true);
+                var resumed = await WaitForAsync(() => !particleNode.IsPaused && renderer.RenderedFrames > framesBefore, 30).ConfigureAwait(true);
+
+                control.Session.Restart();
+                var restarted = await WaitForAsync(() => renderer.RenderedFrames > framesBefore + 1, 30).ConfigureAwait(true);
+
+                control.Session.SetMode(ValveResourceFormat.Renderer.SceneNodes.ParticlePlaybackMode.EndCapOnly);
+                var modeApplied = await WaitForAsync(() => particleNode.PlaybackMode == ValveResourceFormat.Renderer.SceneNodes.ParticlePlaybackMode.EndCapOnly, 30).ConfigureAwait(true);
+
+                await Program.StdOut.WriteLineAsync(
+                    $"[self-check] particle controls: paused={paused}, resumed={resumed}, restarted={restarted}, mode={modeApplied}").ConfigureAwait(true);
+            }
 
             window.CloseTabContaining(viewport);
             for (var i = 0; i < 60 && !renderer.Disposed; i++)
@@ -1234,8 +1306,10 @@ internal sealed class App : Application
                 return;
             }
 
-            for (var i = 0; i < 50 && renderer.RenderedFrames < 3; i++)
+            for (var i = 0; i < 120 && renderer.RenderedFrames < 3; i++)
             {
+                // Re-ask every time: a request made while the renderer was busy can be dropped
+                viewport.RequestFrame();
                 await Task.Delay(50).ConfigureAwait(true);
             }
 
@@ -1282,8 +1356,10 @@ internal sealed class App : Application
                 return;
             }
 
-            for (var i = 0; i < 60 && renderer.RenderedFrames < 3; i++)
+            for (var i = 0; i < 120 && renderer.RenderedFrames < 3; i++)
             {
+                // Re-ask every time: a request made while the renderer was busy can be dropped
+                viewport.RequestFrame();
                 await Task.Delay(50).ConfigureAwait(true);
             }
 
@@ -1303,6 +1379,119 @@ internal sealed class App : Application
         {
             await Program.StdOut.WriteLineAsync($"[self-check] {label} failed: {e.GetType().Name}: {e.Message}").ConfigureAwait(true);
         }
+    }
+
+    /// <summary>
+    /// Drives the texture inspector: the channel mapping, the channel split and a mip level have to
+    /// reach the renderer and produce a frame.
+    /// </summary>
+    private static async Task RunTextureInspectorCheckAsync(MainWindow window)
+    {
+        const string texturePath = "Tests/Files/subscriptions_gamerpvp_inhouse_png.vtex_c";
+
+        if (!File.Exists(texturePath))
+        {
+            await Program.StdOut.WriteLineAsync($"[self-check] texture inspector sample missing: {texturePath}").ConfigureAwait(true);
+            return;
+        }
+
+        try
+        {
+            await window.OpenFileAsync(texturePath).ConfigureAwait(true);
+
+            var (viewport, renderer) = await WaitForRendererAsync<TextureGlRenderer>(window, 1, 30000).ConfigureAwait(true);
+
+            if (viewport is null)
+            {
+                await Program.StdOut.WriteLineAsync("[self-check] texture inspector: renderer timed out").ConfigureAwait(true);
+                return;
+            }
+
+            for (var i = 0; i < 120 && renderer.RenderedFrames < 3; i++)
+            {
+                // Re-ask every time: a request made while the renderer was busy can be dropped
+                viewport.RequestFrame();
+                await Task.Delay(50).ConfigureAwait(true);
+            }
+
+            var control = viewport.GetVisualAncestors().OfType<TextureViewerControl>().FirstOrDefault();
+            var session = renderer.Inspector;
+            var initial = session.GetState();
+            var framesBefore = renderer.RenderedFrames;
+
+            session.SetChannels(ChannelMapping.R.PackedValue);
+            session.SetSplitMode(2);
+            await WaitForAsync(() => renderer.RenderedFrames > framesBefore, 20).ConfigureAwait(true);
+
+            var changed = session.GetState();
+            var ok = control is not null
+                && changed.Channels == ChannelMapping.R.PackedValue
+                && changed.SplitMode == 2
+                && renderer.RenderedFrames > framesBefore;
+
+            if (initial.HasMips)
+            {
+                session.SetMip(initial.MipCount - 1);
+                ok &= await WaitForAsync(() => session.GetState().Mip == initial.MipCount - 1, 20).ConfigureAwait(true);
+            }
+
+            await Program.StdOut.WriteLineAsync(
+                $"[self-check] texture inspector: mips={initial.MipCount}, depth={initial.DepthCount}, "
+                + $"faces={initial.CubeFaceCount}, channels=0x{changed.Channels:X8}, split={changed.SplitMode}, "
+                + $"frames+={renderer.RenderedFrames - framesBefore}, control={control is not null}, ok={ok}").ConfigureAwait(true);
+
+            window.CloseTabContaining(viewport);
+
+            for (var i = 0; i < 60 && !renderer.Disposed; i++)
+            {
+                await Task.Delay(50).ConfigureAwait(true);
+            }
+
+            await Program.StdOut.WriteLineAsync($"[self-check] texture inspector closed, renderer disposed={renderer.Disposed}").ConfigureAwait(true);
+        }
+        catch (Exception e)
+        {
+            await Program.StdOut.WriteLineAsync($"[self-check] texture inspector failed: {e.GetType().Name}: {e.Message}").ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>
+    /// Verifies that the pointer can be moved while a drag is in progress, which is what lets a drag
+    /// carry on after it reaches the edge of the screen. Only the X11 backend allows it.
+    /// </summary>
+    private static async Task RunPointerWarpCheckAsync(Window window)
+    {
+        using var warp = X11PointerWarp.TryCreate(window);
+
+        if (warp is null)
+        {
+            await Program.StdOut.WriteLineAsync("[self-check] pointer warp: not available on this backend").ConfigureAwait(true);
+            return;
+        }
+
+        var target = new Point(40, 40);
+        var expected = window.PointToScreen(target);
+        var requested = warp.Warp(window, target);
+
+        var reached = false;
+        var actual = default(PixelPoint);
+
+        for (var i = 0; i < 20 && !reached; i++)
+        {
+            if (warp.TryGetPosition(out var current))
+            {
+                actual = current;
+                reached = Math.Abs(current.X - expected.X) <= 2 && Math.Abs(current.Y - expected.Y) <= 2;
+            }
+
+            if (!reached)
+            {
+                await Task.Delay(50).ConfigureAwait(true);
+            }
+        }
+
+        await Program.StdOut.WriteLineAsync(
+            $"[self-check] pointer warp: requested={requested}, expected={expected}, actual={actual}, reached={reached}").ConfigureAwait(true);
     }
 
     private static async Task RunKeyboardRoutingCheckAsync(MainWindow window)
@@ -1386,8 +1575,10 @@ internal sealed class App : Application
                 return;
             }
 
-            for (var i = 0; i < 50 && renderer.RenderedFrames < 3; i++)
+            for (var i = 0; i < 120 && renderer.RenderedFrames < 3; i++)
             {
+                // Re-ask every time: a request made while the renderer was busy can be dropped
+                viewport.RequestFrame();
                 await Task.Delay(50).ConfigureAwait(true);
             }
 
@@ -1434,6 +1625,12 @@ internal sealed class App : Application
         await ExerciseModelViewerAsync(window, "Tests/Files/wooden_crate_01.vmdl_c", "static fixture", checkInteractions: true).ConfigureAwait(true);
 
         if (LinuxGameContent.Context.Install is not { } install)
+        {
+            return;
+        }
+
+        // The sweep opens a dozen real game models, which is most of this check's run time.
+        if (!Program.WantsSelfCheckSection("gameanimations"))
         {
             return;
         }
@@ -1537,8 +1734,10 @@ internal sealed class App : Application
                 return false;
             }
 
-            for (var i = 0; i < 60 && renderer.RenderedFrames < 3; i++)
+            for (var i = 0; i < 120 && renderer.RenderedFrames < 3; i++)
             {
+                // Re-ask every time: a request made while the renderer was busy can be dropped
+                viewport.RequestFrame();
                 await Task.Delay(50).ConfigureAwait(true);
             }
 
@@ -1581,6 +1780,25 @@ internal sealed class App : Application
                 await Program.StdOut.WriteLineAsync(control.AnimationControlsVisible
                     ? $"[self-check] {label}: animation controls visible without animations"
                     : $"[self-check] {label}: bind pose shown, animation controls hidden").ConfigureAwait(true);
+            }
+
+            if (session.GetSnapshot().HasHitboxSets)
+            {
+                await ExerciseModelHitboxControlsAsync(control, session, label).ConfigureAwait(true);
+            }
+            else
+            {
+                await Program.StdOut.WriteLineAsync($"[self-check] {label}: model has no hitbox sets, controls hidden").ConfigureAwait(true);
+            }
+
+            if (session.GetSnapshot().HasBones || session.GetSnapshot().HasAttachments)
+            {
+                await ExerciseModelSkeletonControlsAsync(control, label).ConfigureAwait(true);
+            }
+
+            if (renderer.SceneCore is ModelSceneCore modelCore)
+            {
+                await ExerciseModelLodAndGroupsAsync(session, modelCore, label).ConfigureAwait(true);
             }
 
             window.CloseTabContaining(viewport);
@@ -1633,18 +1851,72 @@ internal sealed class App : Application
         RaisePointerEntered(viewport);
         await Task.Delay(80).ConfigureAwait(true);
 
+        // Hovering before a drag must not build up movement for it: hover no longer renders a frame,
+        // so an accumulated delta would be applied in one jump by the first frame of the drag.
+        RaisePointerMoved(viewport, new Point(300, 300));
+        RaisePointerMoved(viewport, new Point(420, 380));
+        var hoverDelta = viewport.Input.Delta;
+
+        viewport.Input.Captured = true;
+        RaisePointerMoved(viewport, new Point(430, 380));
+        var dragDelta = viewport.Input.Delta;
+
+        viewport.Input.Captured = false;
+        viewport.Input.Delta = System.Numerics.Vector2.Zero;
+        viewport.RequestFrame();
+        await Task.Delay(60).ConfigureAwait(true);
+
+        var dragStartsFromPointer = hoverDelta.Length() < 0.001f
+            && Math.Abs(dragDelta.X - 10f) < 0.5f
+            && Math.Abs(dragDelta.Y) < 0.5f;
+
+        // A drag that reaches the edge of the window must keep going: the pointer is put back in the
+        // middle of the viewport, which is only possible on the X11 backend.
+        var warpOk = true;
+
+        using var warp = X11PointerWarp.TryCreate(window);
+
+        if (warp is not null)
+        {
+            // The event takes a point in the window, so aim at its last pixel
+            viewport.Input.Captured = true;
+            RaisePointerMoved(viewport, new Point(window.ClientSize.Width - 0.5, window.ClientSize.Height / 2));
+            await Task.Delay(120).ConfigureAwait(true);
+
+            var viewportCenter = new Point(viewport.Bounds.Width / 2, viewport.Bounds.Height / 2);
+            var expectedWarp = viewport.PointToScreen(viewportCenter);
+
+            warpOk = await WaitForAsync(
+                () => warp.TryGetPosition(out var position)
+                    && Math.Abs(position.X - expectedWarp.X) <= 2
+                    && Math.Abs(position.Y - expectedWarp.Y) <= 2,
+                20).ConfigureAwait(true);
+
+            viewport.Input.Captured = false;
+            viewport.Input.Delta = System.Numerics.Vector2.Zero;
+        }
+
         var start = renderer.CameraLocation;
         var startDistance = core.Input.OrbitDistance;
 
         await SimulatePointerDragAsync(viewport, ViewerKey.MouseLeft, new System.Numerics.Vector2(12, 4), 8).ConfigureAwait(true);
         var orbitDistance = System.Numerics.Vector3.Distance(start, renderer.CameraLocation);
 
-        var beforePan = renderer.CameraLocation;
+        var beforeHorizontalPan = renderer.CameraLocation;
         await SimulatePointerDragAsync(viewport, ViewerKey.MouseRight, new System.Numerics.Vector2(10, 0), 8).ConfigureAwait(true);
-        var panDistance = System.Numerics.Vector3.Distance(beforePan, renderer.CameraLocation);
+        var panHorizontal = System.Numerics.Vector3.Distance(beforeHorizontalPan, renderer.CameraLocation);
+
+        // Right-drag has to pan in both screen axes, not just sideways.
+        var beforeVerticalPan = renderer.CameraLocation;
+        await SimulatePointerDragAsync(viewport, ViewerKey.MouseRight, new System.Numerics.Vector2(0, 8), 8).ConfigureAwait(true);
+        var panVertical = System.Numerics.Vector3.Distance(beforeVerticalPan, renderer.CameraLocation);
 
         var beforeZoom = core.Input.OrbitDistance;
         await SimulateMouseWheelAsync(viewport, 1f, 4).ConfigureAwait(true);
+
+        // A slow frame must not fail the check merely because the wheel was applied later than the
+        // fixed delay in the helper expects.
+        await WaitForAsync(() => core.Input.OrbitDistance < beforeZoom, 40).ConfigureAwait(true);
         var afterZoom = core.Input.OrbitDistance;
 
         var beforeReset = core.Input.OrbitDistance;
@@ -1653,7 +1925,7 @@ internal sealed class App : Application
         var afterReset = core.Input.OrbitDistance;
 
         var orbitOk = orbitDistance > 0.05f;
-        var panOk = panDistance > 0.01f;
+        var panOk = panHorizontal > 0.01f && panVertical > 0.01f;
         var zoomOk = afterZoom < beforeZoom;
 
         // Reset must frame the model bounds and point the orbit target at their center.
@@ -1668,17 +1940,72 @@ internal sealed class App : Application
             centerOk = System.Numerics.Vector3.Distance(target, bounds.Center) <= tolerance;
         }
 
+        // Orbiting has to tumble over the pole and keep going instead of stopping at straight up or
+        // down. The rendered camera has to keep the angle too, not clamp it back.
+        // Frames coalesce, so the drag is repeated until the pitch is visibly past a quarter turn
+        // rather than assuming every simulated tick got its own frame.
+        var tumbleOk = false;
+        var tumblePitch = 0f;
+        var renderedTumblePitch = 0f;
+
+        viewport.Input.Keys |= ViewerKey.MouseLeft;
+
+        for (var i = 0; i < 40 && !tumbleOk; i++)
+        {
+            viewport.Input.Delta = new System.Numerics.Vector2(0, 500);
+            viewport.RequestFrame();
+            await Task.Delay(40).ConfigureAwait(true);
+
+            tumblePitch = MathF.Abs(core.Input.Camera.Pitch);
+            renderedTumblePitch = MathF.Abs(core.Renderer.Camera.Pitch);
+            tumbleOk = tumblePitch > MathF.PI / 2f && renderedTumblePitch > MathF.PI / 2f;
+        }
+
+        viewport.Input.Keys &= ~ViewerKey.MouseLeft;
+        viewport.Input.Delta = System.Numerics.Vector2.Zero;
+        viewport.RequestFrame();
+        await Task.Delay(80).ConfigureAwait(true);
+
+        // Put the camera back for the idle check below.
+        control.ResetViewButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        await Task.Delay(200).ConfigureAwait(true);
+
         var resetOk = centerOk && afterReset > 0.01f;
         var pointerOk = hitOk && pointerEntered && pointerExited;
 
         await Program.StdOut.WriteLineAsync(
-            $"[self-check] {label} camera: orbit={orbitDistance:0.00}, pan={panDistance:0.00}, "
+            $"[self-check] {label} camera: orbit={orbitDistance:0.00}, panX={panHorizontal:0.00}, panY={panVertical:0.00}, "
             + $"zoom {beforeZoom:0.00}->{afterZoom:0.00}, reset {beforeReset:0.00}->{afterReset:0.00}, "
-            + $"startDistance={startDistance:0.00}, hitTest/pointerEnter/exit={pointerOk}").ConfigureAwait(true);
+            + $"startDistance={startDistance:0.00}, hitTest/pointerEnter/exit={pointerOk}, "
+            + $"hoverPrime={hoverDelta.Length():0.00}/dragDelta={dragDelta.X:0.00},{dragDelta.Y:0.00}, "
+            + $"tumble={tumblePitch:0.00}rad/{renderedTumblePitch:0.00}rad, warp={warpOk}").ConfigureAwait(true);
 
-        await Program.StdOut.WriteLineAsync(orbitOk && panOk && zoomOk && resetOk && pointerOk
-            ? $"[self-check] {label} camera: orbit, pan, zoom and reset view all responded"
-            : $"[self-check] {label} camera: incomplete (orbit={orbitOk}, pan={panOk}, zoom={zoomOk}, reset={resetOk}, pointer={pointerOk})").ConfigureAwait(true);
+        // The model sits on the bind pose, so once its textures have streamed in and the camera
+        // transitions are done the viewer has to go idle instead of redrawing at the display rate.
+        var idleEligible = false;
+
+        for (var i = 0; i < 60 && !idleEligible; i++)
+        {
+            await Task.Delay(100).ConfigureAwait(true);
+            idleEligible = renderer.SceneCore?.WantsContinuousFrames == false;
+        }
+
+        await Task.Delay(600).ConfigureAwait(true);
+
+        var framesBeforeIdle = renderer.RenderedFrames;
+        await Task.Delay(1000).ConfigureAwait(true);
+        var idleFrames = renderer.RenderedFrames - framesBeforeIdle;
+
+        // A couple of frames can still be owed to layout or a command queued just before the window
+        // started; what matters is that the viewer is nowhere near redrawing at the display rate.
+        var idleOk = idleFrames <= 10;
+
+        await Program.StdOut.WriteLineAsync(
+            $"[self-check] {label} idle: frames={idleFrames} in 1s, settling={idleEligible}, reason={renderer.SceneCore?.ContinuousFramesReason}").ConfigureAwait(true);
+
+        await Program.StdOut.WriteLineAsync(orbitOk && panOk && zoomOk && resetOk && pointerOk && idleOk && dragStartsFromPointer && tumbleOk && warpOk
+            ? $"[self-check] {label} camera: orbit, both pan axes, over-pole tumble, zoom, reset view, drag start, edge warp and idle rendering all verified"
+            : $"[self-check] {label} camera: incomplete (orbit={orbitOk}, pan={panOk}, zoom={zoomOk}, reset={resetOk}, pointer={pointerOk}, idle={idleOk}, dragStart={dragStartsFromPointer}, tumble={tumbleOk}, warp={warpOk})").ConfigureAwait(true);
     }
 
     private static async Task ExerciseModelAnimationControlsAsync(ModelViewerControl control, ModelAnimationSession session, string label)
@@ -1726,6 +2053,17 @@ internal sealed class App : Application
         control.SpeedBar.Value = 1.0;
         await WaitForAsync(() => Math.Abs(session.GetSnapshot().Speed - 1f) < 0.01f, 60).ConfigureAwait(true);
 
+        // Root motion is only offered while the animation carries it.
+        var rootMotionAvailable = control.RootMotionCheckBox.IsEnabled;
+
+        if (rootMotionAvailable)
+        {
+            control.RootMotionCheckBox.IsChecked = true;
+            await Task.Delay(250).ConfigureAwait(true);
+        }
+
+        control.RootMotionCheckBox.IsChecked = false;
+
         // Loop through the real checkbox.
         control.LoopCheckBox.IsChecked = false;
         var loopOff = await WaitForAsync(() => !session.GetSnapshot().Looping, 60).ConfigureAwait(true);
@@ -1739,13 +2077,104 @@ internal sealed class App : Application
         await Program.StdOut.WriteLineAsync(
             $"[self-check] {label} animation: select={target}, advanced={advanced}, pauseStable={pauseOk}, "
             + $"scrub={scrubbed.Frame}/{cycleFrames} (expected {expectedFrame}), stayedPaused={stayedPaused}, "
-            + $"speed={speedOk}, loop={loopOff && loopOn}, restart={restartOk}").ConfigureAwait(true);
+            + $"speed={speedOk}, loop={loopOff && loopOn}, restart={restartOk}, rootMotion={rootMotionAvailable}").ConfigureAwait(true);
 
         var ok = selected && advanced && pauseOk && scrubOk && stayedPaused && speedOk && loopOff && loopOn && restartOk;
 
         await Program.StdOut.WriteLineAsync(ok
             ? $"[self-check] {label} animation: select, play, pause, scrub, speed, loop and restart all verified"
             : $"[self-check] {label} animation: interaction check incomplete").ConfigureAwait(true);
+    }
+
+    private static async Task ExerciseModelHitboxControlsAsync(ModelViewerControl control, ModelAnimationSession session, string label)
+    {
+        // The first item is the empty selection, so the set under test is the second one.
+        var setName = control.HitboxSelector.Items.Count > 1 ? control.HitboxSelector.Items[1] as string : null;
+        var available = setName is not null;
+
+        if (available)
+        {
+            // Select through the real combo box so its SelectionChanged handler queues the command.
+            control.HitboxSelector.SelectedItem = setName;
+        }
+
+        var selected = available && await WaitForAsync(() => string.Equals(session.GetSnapshot().ActiveHitboxSet, setName, StringComparison.Ordinal), 60).ConfigureAwait(true);
+
+        control.HitboxSelector.SelectedItem = control.HitboxSelector.Items.Count > 0 ? control.HitboxSelector.Items[0] : null;
+        var cleared = await WaitForAsync(() => session.GetSnapshot().ActiveHitboxSet == null, 60).ConfigureAwait(true);
+
+        await Program.StdOut.WriteLineAsync(
+            $"[self-check] {label} hitboxes: sets={control.HitboxSelector.Items.Count - 1}, select={selected}, clear={cleared}").ConfigureAwait(true);
+    }
+
+    /// <summary>Forces a level of detail and toggles a mesh group, then restores both.</summary>
+    private static async Task ExerciseModelLodAndGroupsAsync(ModelAnimationSession session, ModelSceneCore core, string label)
+    {
+        var snapshot = session.GetSnapshot();
+        var lodOk = true;
+        var meshGroupOk = true;
+
+        if (snapshot.HasMultipleLods)
+        {
+            var target = snapshot.LodLevels[^1];
+
+            session.SetLod(target);
+            lodOk = await WaitForAsync(() => !core.IsAutoLod && core.ActiveLod == target, 40).ConfigureAwait(true);
+
+            session.SetLod(null);
+            lodOk &= await WaitForAsync(() => core.IsAutoLod, 40).ConfigureAwait(true);
+        }
+
+        if (snapshot.HasMeshGroups)
+        {
+            var first = snapshot.MeshGroups[0];
+
+            session.SetMeshGroups([first]);
+            meshGroupOk = await WaitForAsync(() => Array.IndexOf(core.ActiveMeshGroups, first) >= 0, 40).ConfigureAwait(true);
+
+            session.SetMeshGroups(snapshot.MeshGroups);
+            meshGroupOk &= await WaitForAsync(() => core.ActiveMeshGroups.Length == snapshot.MeshGroups.Length, 40).ConfigureAwait(true);
+        }
+
+        var skinOk = true;
+
+        if (snapshot.HasMaterialGroups)
+        {
+            var target = snapshot.MaterialGroups[^1];
+
+            session.SetMaterialGroup(target);
+            skinOk = await WaitForAsync(() => string.Equals(core.ActiveMaterialGroup, target, StringComparison.Ordinal), 40).ConfigureAwait(true);
+
+            session.SetMaterialGroup(snapshot.MaterialGroups[0]);
+            skinOk &= await WaitForAsync(
+                () => string.Equals(core.ActiveMaterialGroup, snapshot.MaterialGroups[0], StringComparison.Ordinal),
+                40).ConfigureAwait(true);
+        }
+
+        await Program.StdOut.WriteLineAsync(
+            $"[self-check] {label} model detail: lodLevels={snapshot.LodLevels.Length}, lod={lodOk}, "
+            + $"meshGroups={snapshot.MeshGroups.Length}, groups={meshGroupOk}, "
+            + $"skins={snapshot.MaterialGroups.Length}, skin={skinOk}").ConfigureAwait(true);
+    }
+
+    private static async Task ExerciseModelSkeletonControlsAsync(ModelViewerControl control, string label)
+    {
+        // Toggle through the real checkboxes so their IsCheckedChanged handlers queue the commands.
+        control.ShowBonesCheckBox.IsChecked = true;
+        control.ShowAttachmentsCheckBox.IsChecked = true;
+
+        // The render thread applies them on its next frame, so give it a moment before reading back.
+        await Task.Delay(250).ConfigureAwait(true);
+
+        var attachments = control.AttachmentList.Items.Count;
+        var listed = attachments > 0 && control.AttachmentList.IsVisible;
+
+        control.ShowBonesCheckBox.IsChecked = false;
+        control.ShowAttachmentsCheckBox.IsChecked = false;
+        await Task.Delay(150).ConfigureAwait(true);
+
+        await Program.StdOut.WriteLineAsync(
+            $"[self-check] {label} skeleton: bones toggled, attachments listed={attachments} visible={listed}").ConfigureAwait(true);
     }
 
     private static async Task SimulatePointerDragAsync(AvaloniaGlViewport viewport, ViewerKey button, System.Numerics.Vector2 delta, int frames)
@@ -1796,6 +2225,9 @@ internal sealed class App : Application
         => RaisePointerEvent(viewport, InputElement.PointerExitedEvent);
 
     private static void RaisePointerEvent(AvaloniaGlViewport viewport, RoutedEvent pointerEvent)
+        => RaisePointerEvent(viewport, pointerEvent, new Point(8, 8));
+
+    private static void RaisePointerEvent(AvaloniaGlViewport viewport, RoutedEvent pointerEvent, Point position)
     {
         using var pointer = new Pointer(1, PointerType.Mouse, true);
         var properties = new PointerPointProperties();
@@ -1804,11 +2236,15 @@ internal sealed class App : Application
             viewport,
             pointer,
             viewport,
-            new Point(8, 8),
+            position,
             0,
             properties,
             KeyModifiers.None));
     }
+
+    /// <summary>Raises a real Avalonia pointer-move event at the given position in the viewport.</summary>
+    private static void RaisePointerMoved(AvaloniaGlViewport viewport, Point position)
+        => RaisePointerEvent(viewport, InputElement.PointerMovedEvent, position);
 
     private static async Task<bool> WaitForAsync(Func<bool> condition, int attempts)
     {
@@ -1855,8 +2291,10 @@ internal sealed class App : Application
                 return;
             }
 
-            for (var i = 0; i < 50 && renderer.RenderedFrames < 3; i++)
+            for (var i = 0; i < 120 && renderer.RenderedFrames < 3; i++)
             {
+                // Re-ask every time: a request made while the renderer was busy can be dropped
+                viewport.RequestFrame();
                 await Task.Delay(50).ConfigureAwait(true);
             }
 
@@ -1867,6 +2305,49 @@ internal sealed class App : Application
             await Program.StdOut.WriteLineAsync(renderer.ReadbackNonBackgroundPixels > 0 && renderer.ReadbackDistinctColors > 1
                 ? "[self-check] material tab rendered real geometry"
                 : "[self-check] material tab rendered only a flat frame").ConfigureAwait(true);
+
+            if (renderer.SceneCore is MaterialSceneCore materialCore
+                && viewport.GetVisualAncestors().OfType<MaterialViewerControl>().FirstOrDefault() is { } materialControl
+                && materialCore.Material is { } material)
+            {
+                var parameters = materialControl.Session.GetParameters();
+                var edited = false;
+
+                if (parameters.FirstOrDefault(static parameter => parameter.Kind == MaterialParameterKind.Float) is { Name.Length: > 0 } floatParameter)
+                {
+                    var before = material.FloatParams[floatParameter.Name];
+                    materialControl.Session.Set(new MaterialParameterChange(
+                        MaterialParameterKind.Float, floatParameter.Name, before + 1.5f, 0, default));
+
+                    edited = await WaitForAsync(
+                        () => Math.Abs(material.FloatParams[floatParameter.Name] - (before + 1.5f)) < 0.001f,
+                        30).ConfigureAwait(true);
+                }
+                else if (parameters.FirstOrDefault(static parameter => parameter.Kind == MaterialParameterKind.Vector) is { Name.Length: > 0 } vectorParameter)
+                {
+                    var before = material.VectorParams[vectorParameter.Name];
+                    var changed = before with { X = before.X + 1.5f };
+
+                    materialControl.Session.Set(new MaterialParameterChange(
+                        MaterialParameterKind.Vector, vectorParameter.Name, 0f, 0, changed));
+
+                    edited = await WaitForAsync(
+                        () => Math.Abs(material.VectorParams[vectorParameter.Name].X - changed.X) < 0.001f,
+                        30).ConfigureAwait(true);
+                }
+                else if (parameters.FirstOrDefault(static parameter => parameter.Kind == MaterialParameterKind.Int) is { Name.Length: > 0 } intParameter)
+                {
+                    var before = material.IntParams[intParameter.Name];
+
+                    materialControl.Session.Set(new MaterialParameterChange(
+                        MaterialParameterKind.Int, intParameter.Name, 0f, before + 1, default));
+
+                    edited = await WaitForAsync(() => material.IntParams[intParameter.Name] == before + 1, 30).ConfigureAwait(true);
+                }
+
+                await Program.StdOut.WriteLineAsync(
+                    $"[self-check] material parameters: total={parameters.Length}, control={materialControl is not null}, edited={edited}").ConfigureAwait(true);
+            }
 
             window.CloseTabContaining(viewport);
             for (var i = 0; i < 60 && !renderer.Disposed; i++)
@@ -1904,8 +2385,10 @@ internal sealed class App : Application
                 return;
             }
 
-            for (var i = 0; i < 50 && renderer.RenderedFrames < 3; i++)
+            for (var i = 0; i < 120 && renderer.RenderedFrames < 3; i++)
             {
+                // Re-ask every time: a request made while the renderer was busy can be dropped
+                viewport.RequestFrame();
                 await Task.Delay(50).ConfigureAwait(true);
             }
 
@@ -1953,8 +2436,10 @@ internal sealed class App : Application
                 return;
             }
 
-            for (var i = 0; i < 50 && renderer.RenderedFrames < 3; i++)
+            for (var i = 0; i < 120 && renderer.RenderedFrames < 3; i++)
             {
+                // Re-ask every time: a request made while the renderer was busy can be dropped
+                viewport.RequestFrame();
                 await Task.Delay(50).ConfigureAwait(true);
             }
 
@@ -2028,8 +2513,10 @@ internal sealed class App : Application
 
             if (viewport is not null)
             {
-                for (var i = 0; i < 100 && renderer.RenderedFrames < 3; i++)
+                for (var i = 0; i < 120 && renderer.RenderedFrames < 3; i++)
                 {
+                    // Re-ask every time: a request made while the renderer was busy can be dropped
+                    viewport.RequestFrame();
                     await Task.Delay(50).ConfigureAwait(true);
                 }
 
@@ -2045,17 +2532,30 @@ internal sealed class App : Application
                 // Wheel zoom, then middle-drag pan, driven through the same input state the shell fills.
                 var scaleBefore = renderer.Scale;
                 viewport.Input.Wheel = 1f;
+                viewport.RequestFrame();
                 await Task.Delay(400).ConfigureAwait(true);
                 var scaleAfterZoom = renderer.Scale;
 
                 viewport.Input.Middle = true;
                 viewport.Input.Delta = new System.Numerics.Vector2(60f, 40f);
+                viewport.RequestFrame();
                 await Task.Delay(400).ConfigureAwait(true);
                 viewport.Input.Middle = false;
                 await Task.Delay(200).ConfigureAwait(true);
 
                 await Program.StdOut.WriteLineAsync(
                     $"[self-check] graph input: zoom {scaleBefore:0.000} -> {scaleAfterZoom:0.000}, pan applied").ConfigureAwait(true);
+
+                // The search box highlights matching nodes; the presenter has to receive the query.
+                var graphControl = viewport.GetVisualAncestors().OfType<GraphViewerControl>().FirstOrDefault();
+                var graphState = renderer.Inspector.GetState();
+
+                renderer.Inspector.SetSearch("node");
+                var searchApplied = await WaitForAsync(() => renderer.AppliedSearch == "node", 40).ConfigureAwait(true);
+
+                await Program.StdOut.WriteLineAsync(
+                    $"[self-check] graph search: control={graphControl is not null}, subtitles={graphState.Subtitles.Length}, "
+                    + $"query='node', applied={searchApplied}, appliedText='{renderer.AppliedSearch}'").ConfigureAwait(true);
 
                 // Resize the shell window; the viewport must follow.
                 var widthBefore = renderer.ViewportWidth;
@@ -2143,8 +2643,10 @@ internal sealed class App : Application
 
             if (viewport is not null)
             {
-                for (var i = 0; i < 100 && renderer.RenderedFrames < 3; i++)
+                for (var i = 0; i < 120 && renderer.RenderedFrames < 3; i++)
                 {
+                    // Re-ask every time: a request made while the renderer was busy can be dropped
+                    viewport.RequestFrame();
                     await Task.Delay(50).ConfigureAwait(true);
                 }
 
@@ -2207,7 +2709,7 @@ internal sealed class App : Application
             await Task.Delay(200).ConfigureAwait(true);
 
             var pakPath = Path.Combine(install.ContentRoot, "pak01_dir.vpk");
-            var pakView = window.OpenPackage(pakPath);
+            var pakView = await window.OpenPackageAsync(pakPath).ConfigureAwait(true);
 
             if (pakView is null)
             {
@@ -2284,6 +2786,65 @@ internal sealed class App : Application
                 await Program.StdOut.WriteLineAsync("[self-check] browser model thumbnails: no sample model folder").ConfigureAwait(true);
             }
 
+            // 4b. A search over the whole package has to stay responsive, so the list is capped and
+            // the results are counted without building a control for every match.
+            var (shown, total, elapsed, models, textures) = pakView.SearchAllFolders("a");
+            var searchOk = elapsed < 2000;
+
+            await Program.StdOut.WriteLineAsync(
+                $"[self-check] browser search: query 'a' shown={shown} of {total} in {elapsed}ms, models={models}, textures={textures}, responsive={searchOk}").ConfigureAwait(true);
+
+            // Typing has to settle into a single search instead of running one per character.
+            var (typedShown, typedTotal, rebuilds) = await pakView.TypeSearchAsync("model").ConfigureAwait(true);
+            var debounceOk = rebuilds == 1;
+
+            await Program.StdOut.WriteLineAsync(
+                $"[self-check] browser typing: query 'model' shown={typedShown} of {typedTotal}, rebuilds={rebuilds}, debounced={debounceOk}").ConfigureAwait(true);
+
+            // 5. The export engine the context menu drives: one entry as is, and decompiled.
+            // Big enough to reference sub resources, so the recursion and de-dup get exercised too
+            var exportEntry = pakView.Package.Entries?.GetValueOrDefault("vmdl_c")
+                ?.Where(static entry => entry.Length is > 20_000 and < 500_000)
+                .FirstOrDefault();
+
+            if (exportEntry is not null)
+            {
+                var exportRoot = Path.Combine(Path.GetTempPath(), "s2v-selfcheck-export");
+
+                if (Directory.Exists(exportRoot))
+                {
+                    Directory.Delete(exportRoot, true);
+                }
+
+                // Export as is keeps the compiled bytes, so the copy has to match the entry size
+                var asIsFolder = Path.Combine(exportRoot, "asis");
+                var asIs = new GUI.Linux.Types.Exporter.PackageExporter(pakView.Package, null, decompile: false);
+                asIs.QueueFiles(exportEntry);
+                await asIs.ExecuteToFolderAsync(null, asIsFolder).ConfigureAwait(true);
+
+                var asIsPath = Path.Combine(asIsFolder, exportEntry.GetFullPath());
+                var asIsLength = File.Exists(asIsPath) ? new FileInfo(asIsPath).Length : -1;
+                var asIsOk = asIsLength == exportEntry.TotalLength;
+
+                // Decompiling writes the same relative path with the decompiled extension
+                var decompiledFolder = Path.Combine(exportRoot, "decompiled");
+                var decompiled = new GUI.Linux.Types.Exporter.PackageExporter(pakView.Package, null, decompile: true);
+                decompiled.QueueFiles(exportEntry);
+                decompiled.SetOutputFormat(exportEntry.TypeName, "vmdl");
+                await decompiled.ExecuteToFolderAsync(null, decompiledFolder).ConfigureAwait(true);
+
+                var decompiledPath = Path.Combine(decompiledFolder, Path.ChangeExtension(exportEntry.GetFullPath(), "vmdl"));
+                var decompiledOk = File.Exists(decompiledPath) && new FileInfo(decompiledPath).Length > 0;
+
+                await Program.StdOut.WriteLineAsync(
+                    $"[self-check] browser export: {exportEntry.GetFullPath()} as-is={asIsOk} ({asIsLength}/{exportEntry.TotalLength} bytes), "
+                    + $"decompiled={decompiledOk} ({Path.GetFileName(decompiledPath)})").ConfigureAwait(true);
+            }
+            else
+            {
+                await Program.StdOut.WriteLineAsync("[self-check] browser export: no sample model entry").ConfigureAwait(true);
+            }
+
             if (textureEntry is not null)
             {
                 await window.OpenPackageEntryAsync(pakView.Package, pakPath, textureEntry).ConfigureAwait(true);
@@ -2335,7 +2896,7 @@ internal sealed class App : Application
 
             if (mapVpkPath is not null && worldEntryPath is not null)
             {
-                var mapView = window.OpenPackage(mapVpkPath);
+                var mapView = await window.OpenPackageAsync(mapVpkPath).ConfigureAwait(true);
 
                 if (mapView?.Package.FindEntry(worldEntryPath) is { } worldEntry)
                 {
@@ -2344,8 +2905,10 @@ internal sealed class App : Application
 
                     if (worldViewport is not null)
                     {
-                        for (var i = 0; i < 100 && worldRenderer.RenderedFrames < 3; i++)
+                        for (var i = 0; i < 120 && worldRenderer.RenderedFrames < 3; i++)
                         {
+                            // Re-ask every time: a request made while the renderer was busy can be dropped
+                            worldViewport.RequestFrame();
                             await Task.Delay(50).ConfigureAwait(true);
                         }
 
@@ -2398,7 +2961,7 @@ internal sealed class App : Application
         try
         {
             var pakPath = Path.Combine(install.ContentRoot, "pak01_dir.vpk");
-            var pakView = window.OpenPackage(pakPath);
+            var pakView = await window.OpenPackageAsync(pakPath).ConfigureAwait(true);
 
             if (pakView is null)
             {
@@ -2540,6 +3103,21 @@ internal sealed class App : Application
         {
             await Task.Delay(50).ConfigureAwait(true);
         }
+    }
+
+    /// <summary>Runs one named part of the full self-check, when it was asked for, and times it.</summary>
+    private static async Task RunSelfCheckSectionAsync(string name, Func<Task> section)
+    {
+        if (!Program.WantsSelfCheckSection(name))
+        {
+            return;
+        }
+
+        var start = Stopwatch.GetTimestamp();
+        await section().ConfigureAwait(true);
+        var elapsed = Stopwatch.GetElapsedTime(start);
+
+        await Program.StdOut.WriteLineAsync($"[self-check] timing: {name} {elapsed.TotalMilliseconds:0}ms").ConfigureAwait(true);
     }
 
     private static async Task RunViewerFactoryChecksAsync()

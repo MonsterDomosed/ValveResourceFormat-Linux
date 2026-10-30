@@ -16,9 +16,21 @@ namespace GUI.Linux.Types.Viewers;
 /// </summary>
 public static class ResourceBlockContent
 {
+    private const long MaxKeyValuesBlockSizeForText = 64L * 1024 * 1024;
+
     /// <summary>Returns the text/KV content for a block, or a byte dump when it has no textual form.</summary>
     public static ViewerContent GetBlockContent(ValveResourceFormat.Resource resource, Block block)
     {
+        return new ViewerContent.LazyContent(() => GetBlockContentNow(resource, block));
+    }
+
+    private static ViewerContent GetBlockContentNow(ValveResourceFormat.Resource resource, Block block)
+    {
+        if (block.Size > MaxKeyValuesBlockSizeForText && TryGetKvDataBlock(block, out _, out _))
+        {
+            return new ViewerContent.Text($"The {block.Type} block is {block.Size:N0} bytes, which is too large to display as text.");
+        }
+
         try
         {
             return GetTextViewContent(resource.ResourceType, block);

@@ -21,6 +21,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     env:
       MESA_GLSL_VERSION_OVERRIDE: '460'

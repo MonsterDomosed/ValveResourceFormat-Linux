@@ -12,8 +12,8 @@ internal sealed class ModelGlRenderer : SceneCoreGlRenderer
 {
     private readonly ModelAnimationSession session;
 
-    public ModelGlRenderer(string fileName, ModelAnimationSession session)
-        : base("model", (context, rendererContext, host) => CreateCore(context, rendererContext, host, fileName, session))
+    public ModelGlRenderer(string fileName, ModelAnimationSession session, Action<string>? openResource = null)
+        : base("model", (context, rendererContext, host) => CreateCore(context, rendererContext, host, fileName, session, openResource))
     {
         this.session = session;
     }
@@ -21,7 +21,14 @@ internal sealed class ModelGlRenderer : SceneCoreGlRenderer
     /// <summary>The animation bridge between the shell controls and the render thread.</summary>
     internal ModelAnimationSession AnimationSession => session;
 
-    private static ModelSceneCore CreateCore(LinuxSceneViewerContext context, ValveResourceFormat.Renderer.RendererContext rendererContext, GUI.Linux.Types.GLViewers.IGLViewerHost host, string fileName, ModelAnimationSession session)
+    /// <summary>
+    /// A single centred model has no long silhouettes to antialias, and the main target is a
+    /// multisampled RGBA16F color plus depth attachment, so the sample count is the largest single
+    /// driver of this viewer's bandwidth and VRAM. 4x keeps edges clean at half the cost of 8x.
+    /// </summary>
+    protected override int MaxSampleCount => 4;
+
+    private static ModelSceneCore CreateCore(LinuxSceneViewerContext context, ValveResourceFormat.Renderer.RendererContext rendererContext, GUI.Linux.Types.GLViewers.IGLViewerHost host, string fileName, ModelAnimationSession session, Action<string>? openResource)
     {
         var resource = new ValveResourceFormat.Resource
         {
@@ -35,6 +42,6 @@ internal sealed class ModelGlRenderer : SceneCoreGlRenderer
             throw new InvalidOperationException($"Resource is not a model: {fileName}");
         }
 
-        return new ModelSceneCore(context, rendererContext, host, resource, model, session);
+        return new ModelSceneCore(context, rendererContext, host, resource, model, session, openResource);
     }
 }

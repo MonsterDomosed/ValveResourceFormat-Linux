@@ -232,7 +232,7 @@ namespace ValveResourceFormat.CompiledShader
                 };
 
                 input.Position -= 4;
-                resource.Read(input, false, leaveOpen: true);
+                resource.Read(input, leaveOpen: true);
 
                 VfxCreateFromResource(resource);
             }
@@ -560,7 +560,7 @@ namespace ValveResourceFormat.CompiledShader
         private static void ThrowIfNotSupported(int vcsFileVersion)
         {
             const int earliest = 59;
-            const int latest = 71;
+            const int latest = 72;
 
             if (vcsFileVersion < earliest || vcsFileVersion > latest)
             {

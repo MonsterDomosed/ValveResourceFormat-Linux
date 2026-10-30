@@ -54,12 +54,44 @@ internal abstract class ViewportGlRenderer : IGLViewportRenderer
     /// <summary>Current viewport height in pixels.</summary>
     public int ViewportHeight { get; private set; }
 
-    public virtual bool ContinuousRendering => true;
+    /// <summary>
+    /// Upper bound for this viewer's MSAA sample count, applied on top of the user's global setting.
+    /// Viewers override it where the extra samples cost more bandwidth than they are worth.
+    /// </summary>
+    protected virtual int MaxSampleCount => int.MaxValue;
+
+    /// <summary>
+    /// Whether the viewer wants the next frame even though nothing asked for one. Viewers that only
+    /// change in response to input leave this false and are redrawn on demand, so an idle window does
+    /// not keep the GPU busy.
+    /// </summary>
+    protected virtual bool WantsContinuousFrames => false;
+
+    /// <summary>
+    /// Whether the host should queue another frame. The first frames always render, so a viewer that
+    /// only draws on demand still gets its initial picture (and the self-check readback).
+    /// </summary>
+    public bool ContinuousRendering => RenderedFrames < StartupFrames || WantsContinuousFrames;
+
+    /// <summary>Frames drawn before an on-demand viewer is allowed to go idle.</summary>
+    private const int StartupFrames = 3;
 
     /// <summary>
     /// Forwards a viewer keyboard shortcut from the host to the renderer. Base renderers ignore keys.
     /// </summary>
     public virtual void OnKeyDown(ViewerKey key)
+    {
+    }
+
+    public virtual void OnPointerDown(float x, float y, ViewerKey buttons, int clickCount)
+    {
+    }
+
+    public virtual void OnPointerUp(float x, float y, ViewerKey buttons)
+    {
+    }
+
+    public virtual void OnVisibilityChanged(bool isVisible)
     {
     }
 
@@ -94,7 +126,7 @@ internal abstract class ViewportGlRenderer : IGLViewportRenderer
                 GLEnvironment.EnableParallelShaderCompile();
 
                 var maxSamples = OpenGL.GetInteger(GetPName.MaxSamples);
-                SampleCount = Math.Max(1, Math.Min(Settings.Config.AntiAliasingSamples, maxSamples));
+                SampleCount = Math.Max(1, Math.Min(Settings.Config.AntiAliasingSamples, Math.Min(maxSamples, MaxSampleCount)));
 
                 FileLoader = LinuxGameContent.FileLoader;
 

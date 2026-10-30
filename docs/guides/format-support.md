@@ -38,7 +38,9 @@ format. Parsing network/demo formats such as `.dem` is out of scope
 dedicated dump, "generic" means only the generic KV3/NTRO tree dump described above.
 **Decompiles / exports to** is what file-level extraction ("Decompile & Export") produces;
 a "-" means no dedicated decompile exists, extraction still writes the text dump described
-in the Dump column.
+in the Dump column. On the native Linux application the same actions live on the VPK
+browser's file and folder context menus and on the tab context menu; see the
+[Linux guide](./linux.md).
 
 ### Resource Formats
 
@@ -305,8 +307,8 @@ maps can run out of memory; dump the block to a file via the CLI instead
 Particle systems round-trip exactly: extraction re-emits the original stored KV3 tree, not
 VRF's upgraded in-memory version, so decompiled `.vpcf` files match the compiled source
 (pre-KV3 NTRO-era files are re-encoded as KV3 text instead). The viewer simulates a large
-subset of particle functions and lists any unsupported functions per system in red instead
-of failing.
+subset of particle functions and skips the ones it has no implementation for, instead of
+failing; the skipped functions are not listed in the viewer yet.
 
 Particle snapshots (`vsnap`) preview and extract. Bone name streams survive, but skinning
 streams are written into the extracted `.vsnap` as empty streams: their values show in the

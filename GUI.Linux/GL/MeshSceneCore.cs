@@ -29,6 +29,9 @@ internal sealed class MeshSceneCore : GLSceneViewerCore
         LoadDefaultLighting();
     }
 
+    /// <summary>A mesh is a still picture, so it only redraws when asked.</summary>
+    protected override bool SceneWantsContinuousFrames => false;
+
     protected override void LoadScene()
     {
         Scene.Add(new MeshSceneNode(Scene, mesh, 0), false);

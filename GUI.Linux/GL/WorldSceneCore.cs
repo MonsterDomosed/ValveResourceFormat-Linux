@@ -39,6 +39,8 @@ internal sealed class WorldSceneCore : GLSceneViewerCore
         this.externalReferences = externalReferences;
     }
 
+    protected override bool CenterCameraOnNodes => false;
+
     protected override void LoadScene()
     {
         ReportLoadingStatus("Loading world geometry…");
@@ -46,10 +48,7 @@ internal sealed class WorldSceneCore : GLSceneViewerCore
         var loadedWorld = new WorldLoader(world, Scene);
         loadedWorld.Load(externalReferences);
 
-        if (loadedWorld.SkyboxScene != null)
-        {
-            Renderer.SkyboxScene = loadedWorld.SkyboxScene;
-        }
+        Renderer.Skybox3D = loadedWorld.Skybox3D;
 
         if (loadedWorld.Skybox2D != null)
         {
@@ -58,6 +57,7 @@ internal sealed class WorldSceneCore : GLSceneViewerCore
 
         NavMeshSceneNode.AddNavNodesToScene(loadedWorld.NavMesh, Scene);
         CS2BombDamageSceneNode.AddBakedBombDamageToScene(loadedWorld.BombDamage, Scene);
+        SetDefaultEnabledLayers(loadedWorld.DefaultEnabledLayers);
 
         if (loadedWorld.SpawnCameraMatrix is { } spawnCamera)
         {
@@ -69,6 +69,7 @@ internal sealed class WorldSceneCore : GLSceneViewerCore
             Input.Camera.LookAt(Vector3.Zero);
         }
 
+        Input.TryLoadViewmodel(Scene);
         Input.EntitySystem = Scene.EntitySystem;
         Scene.EntitySystem.SpawnPlayer(Input.PlayerMovement);
 
@@ -118,6 +119,16 @@ internal sealed class WorldSceneCore : GLSceneViewerCore
         if (soundPlayer is not null && !Paused)
         {
             soundPlayer.Update(Renderer.Camera);
+        }
+    }
+
+    public override void OnDetachedFromRenderLoop()
+    {
+        base.OnDetachedFromRenderLoop();
+
+        if (soundPlayer is not null)
+        {
+            soundPlayer.Suspended = true;
         }
     }
 

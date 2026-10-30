@@ -460,6 +460,12 @@ namespace ValveResourceFormat.ResourceTypes
 
                     var prevOffset = reader.BaseStream.Position;
 
+                    if (offset > reader.BaseStream.Length - reader.BaseStream.Position
+                        || size > reader.BaseStream.Length - (reader.BaseStream.Position + offset))
+                    {
+                        throw new InvalidDataException($"Texture extra data block {type} does not fit in the file.");
+                    }
+
                     reader.BaseStream.Position += offset;
                     ExtraData.Add(type, reader.ReadBytes((int)size));
                     reader.BaseStream.Position -= size;
@@ -893,6 +899,7 @@ namespace ValveResourceFormat.ResourceTypes
                 VTexFormat.RGB323232F => new DecodeRGB323232F(),
                 VTexFormat.RGBA32323232F => new DecodeRGBA32323232F(),
                 VTexFormat.IA88 => new DecodeIA88(),
+                VTexFormat.R8_UNORM => new DecodeR8(),
                 VTexFormat.BGRA8888 => new DecodeBGRA8888(),
                 _ => throw new UnexpectedMagicException("Unhandled image type", (int)Format, nameof(Format))
             };

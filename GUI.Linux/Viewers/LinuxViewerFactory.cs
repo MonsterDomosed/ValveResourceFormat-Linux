@@ -18,7 +18,7 @@ namespace GUI.Linux.Viewers;
 /// </summary>
 internal static class LinuxViewerFactory
 {
-    public static async Task<IViewer> CreateAndLoadAsync(string fileName)
+    public static async Task<IViewer> CreateAndLoadAsync(string fileName, Action<string>? openResource = null)
     {
         await Task.Yield();
 
@@ -106,7 +106,7 @@ internal static class LinuxViewerFactory
 
             if (resourceViewer.ResourceType == ResourceType.Model)
             {
-                return new ModelGlViewer(context, fileName, resourceViewer);
+                return new ModelGlViewer(context, fileName, resourceViewer, openResource);
             }
 
             if (resourceViewer.ResourceType == ResourceType.SmartProp)
@@ -191,7 +191,7 @@ internal static class LinuxViewerFactory
 
             if (resourceViewer.ResourceType == ResourceType.ParticleSnapshot)
             {
-                return new ParticleGlViewer(context, fileName, resourceViewer, () => new ParticleSnapshotGlRenderer(fileName), "SNAPSHOT");
+                return new ParticleGlViewer(context, fileName, resourceViewer, session => new ParticleSnapshotGlRenderer(fileName, session), "SNAPSHOT");
             }
 
             if (resourceViewer.ResourceType == ResourceType.PostProcessing)

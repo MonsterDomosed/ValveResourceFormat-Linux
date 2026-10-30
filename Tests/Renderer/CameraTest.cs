@@ -82,6 +82,75 @@ namespace Tests.Renderer
             await Assert.That(camera.Roll).IsEqualTo(0f).Within(Tolerance);
         }
 
+        /// <summary>
+        /// Framing has to clear the whole box, including the part of it that reaches toward the camera.
+        /// Measuring only the screen-plane extents left the camera inside anything long along its view
+        /// direction.
+        /// </summary>
+        [Test]
+        public async Task FramingDistanceStaysOutsideTheBox()
+        {
+            var camera = MakeCamera(new Vector3(0f, 0f, 0f));
+            camera.SetViewportSize(1920, 1080);
+
+            // Long along +X, which is where the camera is looking from.
+            var size = new Vector3(1000f, 4f, 4f);
+            var distance = camera.GetFramingDistance(size, camera.Right, camera.Up);
+
+            await Assert.That(distance).IsGreaterThan(size.X * 0.5f + camera.NearPlane);
+        }
+
+        /// <summary>Every corner of the box lands inside the view at the distance reported.</summary>
+        [Test]
+        public async Task FramingDistanceFitsEveryCornerInTheFrustum()
+        {
+            var camera = MakeCamera(new Vector3(0f, 0f, 0f));
+            camera.SetViewportSize(1920, 1080);
+
+            var size = new Vector3(120f, 40f, 300f);
+            var distance = camera.GetFramingDistance(size, camera.Right, camera.Up);
+
+            var tanVertical = MathF.Tan(camera.GetFOV() * 0.5f);
+            var tanHorizontal = tanVertical * camera.AspectRatio;
+            var half = size * 0.5f;
+            var worst = 0f;
+
+            for (var i = 0; i < 8; i++)
+            {
+                var corner = new Vector3(
+                    (i & 1) != 0 ? half.X : -half.X,
+                    (i & 2) != 0 ? half.Y : -half.Y,
+                    (i & 4) != 0 ? half.Z : -half.Z);
+
+                // The camera sits at -distance along its forward, so a corner is this far down the view
+                var depth = Vector3.Dot(corner, camera.Forward) + distance;
+                var horizontal = MathF.Abs(Vector3.Dot(corner, camera.Right));
+                var vertical = MathF.Abs(Vector3.Dot(corner, camera.Up));
+
+                worst = MathF.Max(worst, MathF.Max(horizontal / (tanHorizontal * depth), vertical / (tanVertical * depth)));
+            }
+
+            // One is exactly touching the frustum edge, none spills past it.
+            await Assert.That(worst).IsEqualTo(1f).Within(Tolerance);
+        }
+
+        /// <summary>
+        /// The direction overload frames from a level camera looking along <c>forward</c>, which is what
+        /// a caller sizes its orbit against when it has not moved the camera yet.
+        /// </summary>
+        [Test]
+        public async Task FramingDistanceFromDirectionMatchesTheCameraBasis()
+        {
+            var camera = MakeCamera(new Vector3(0f, 0f, 0f));
+            camera.SetViewportSize(1920, 1080);
+
+            var size = new Vector3(64f, 96f, 32f);
+            var fromDirection = camera.GetFramingDistance(size, camera.Forward);
+            var fromBasis = camera.GetFramingDistance(size, camera.Right, camera.Up);
+
+            await Assert.That(fromDirection).IsEqualTo(fromBasis).Within(Tolerance);
+        }
+
         /// <summary>Positive pitch looks down, as in a QAngle and unlike most camera conventions.</summary>
         [Test]
         public async Task PositivePitchLooksDown()
@@ -274,6 +343,42 @@ namespace Tests.Renderer
             await Assert.That(cross.X).IsEqualTo(camera.Right.X).Within(Tolerance).Because($"right is Cross(forward, up), X, for {context}");
             await Assert.That(cross.Y).IsEqualTo(camera.Right.Y).Within(Tolerance).Because($"right is Cross(forward, up), Y, for {context}");
             await Assert.That(cross.Z).IsEqualTo(camera.Right.Z).Within(Tolerance).Because($"right is Cross(forward, up), Z, for {context}");
+        }
+
+        /// <summary>
+        /// The billboard matrix turns a quad in the view plane to face the camera, which is the rotation
+        /// half of the view matrix inverted. Transposing that block is the same thing, so pin the two
+        /// against each other for every angle, the straight up and down ones included.
+        /// </summary>
+        [Test]
+        public async Task BillboardMatrixInvertsTheViewRotation()
+        {
+            foreach (var angles in Angles)
+            {
+                var camera = MakeCamera(angles);
+                camera.RecalculateMatrices();
+
+                var decomposed = Matrix4x4.Decompose(camera.CameraViewMatrix, out _, out var viewRotation, out _);
+
+                await Assert.That(decomposed).IsTrue().Because($"the view is decomposable for {angles}");
+
+                var expected = Matrix4x4.CreateFromQuaternion(Quaternion.Inverse(viewRotation));
+                var actual = camera.BillboardMatrix;
+
+                await AssertMatrixClose(actual, expected, $"billboard for {angles}");
+            }
+        }
+
+        private static async Task AssertMatrixClose(Matrix4x4 actual, Matrix4x4 expected, string context)
+        {
+            for (var row = 0; row < 4; row++)
+            {
+                for (var column = 0; column < 4; column++)
+                {
+                    await Assert.That(actual[row, column]).IsEqualTo(expected[row, column]).Within(Tolerance)
+                        .Because($"{context}, element {row}{column}");
+                }
+            }
         }
 
         private static float NormalizeDegrees(float degrees)

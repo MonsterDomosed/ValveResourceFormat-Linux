@@ -1,0 +1,48 @@
+using ValveResourceFormat.Serialization.KeyValues;
+
+namespace ValveResourceFormat.Renderer.Entities;
+
+/// <summary>An <c>info_visibility_box</c> entity.</summary>
+public sealed class InfoVisibilityBox : BaseEntity
+{
+    private const string CameraInsideModeGame = "Counter-Strike 2";
+
+    /// <summary>Gets the volume this entity culls with.</summary>
+    public VisibilityBox Box { get; private set; } = null!;
+
+    /// <summary>Initializes an <c>info_visibility_box</c>.</summary>
+    public InfoVisibilityBox(EntitySystem system, EntitySpawnInfo spawnInfo) : base(system, spawnInfo)
+    {
+    }
+
+    /// <inheritdoc/>
+    public override void Spawn()
+    {
+        var cullMode = KeyValues.GetInt32Property("cull_mode");
+        var gameName = Scene.RendererContext.FileLoader.GameName;
+        var hasCameraInsideMode = gameName == null || gameName == CameraInsideModeGame;
+        var mode = cullMode switch
+        {
+            0 => VisibilityBoxMode.Inside,
+            2 when hasCameraInsideMode => VisibilityBoxMode.OutsideWhenEyeInside,
+            1 or 2 => VisibilityBoxMode.Outside,
+            _ => hasCameraInsideMode ? VisibilityBoxMode.Inside : VisibilityBoxMode.Outside,
+        };
+
+        Box = new VisibilityBox(mode, KeyValues.GetVector3Property("box_size", new Vector3(128f)));
+        Scene.VisibilityBoxes.Add(Box);
+        if (!KeyValues.GetBooleanProperty("startdisabled"))
+        {
+            Box.Enable(RigidTransform);
+        }
+    }
+
+    [EntityInput("Enable")]
+    private void InputEnable(EntityInputData data) => Box.Enable(RigidTransform);
+
+    [EntityInput("Disable")]
+    private void InputDisable(EntityInputData data) => Box.Disable();
+
+    /// <inheritdoc/>
+    protected override void OnRemove() => Scene.VisibilityBoxes.Remove(Box);
+}

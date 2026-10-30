@@ -10,12 +10,12 @@ namespace GUI.Linux.GL;
 /// </summary>
 internal sealed class ParticleGlRenderer : SceneCoreGlRenderer
 {
-    public ParticleGlRenderer(string fileName)
-        : base("particle", (context, rendererContext, host) => CreateCore(context, rendererContext, host, fileName))
+    public ParticleGlRenderer(string fileName, ParticleSession session)
+        : base("particle", (context, rendererContext, host) => CreateCore(context, rendererContext, host, fileName, session))
     {
     }
 
-    private static ParticleSceneCore CreateCore(LinuxSceneViewerContext context, ValveResourceFormat.Renderer.RendererContext rendererContext, IGLViewerHost host, string fileName)
+    private static ParticleSceneCore CreateCore(LinuxSceneViewerContext context, ValveResourceFormat.Renderer.RendererContext rendererContext, IGLViewerHost host, string fileName, ParticleSession session)
     {
         var resource = new ValveResourceFormat.Resource
         {
@@ -29,6 +29,6 @@ internal sealed class ParticleGlRenderer : SceneCoreGlRenderer
             throw new InvalidOperationException($"Resource is not a particle system: {fileName}");
         }
 
-        return new ParticleSceneCore(context, rendererContext, host, resource, particleSystem);
+        return new ParticleSceneCore(context, rendererContext, host, resource, particleSystem, session);
     }
 }

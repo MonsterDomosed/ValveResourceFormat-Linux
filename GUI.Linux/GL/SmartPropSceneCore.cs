@@ -32,6 +32,9 @@ internal sealed class SmartPropSceneCore : GLSceneViewerCore
         LoadDefaultLighting();
     }
 
+    /// <summary>A smart prop preview only redraws when asked.</summary>
+    protected override bool SceneWantsContinuousFrames => false;
+
     protected override void LoadScene()
     {
         var children = smartProp.Data.Root.GetArray("m_Children");

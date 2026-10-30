@@ -39,6 +39,10 @@ public class BaseEntity
     /// <summary>Gets the world transform the entity is drawn at, interpolated between ticks.</summary>
     public Matrix4x4 Transform { get; private set; } = Matrix4x4.Identity;
 
+    /// <summary>Gets the entity's rigid world transform, without its scale.</summary>
+    protected Matrix4x4 RigidTransform
+        => EntityTransformHelper.ToRigidTransformationMatrix(Angles, Origin) * ParentTransform;
+
     /// <summary>Gets the visibility layer this entity's nodes belong to.</summary>
     public string? LayerName { get; }
 
@@ -844,7 +848,7 @@ public class BaseEntity
 
         foreach (var node in ownedNodes)
         {
-            node.Transform = Transform;
+            node.Transform = node.ApplyPlacementScale(Transform);
             Scene.DynamicOctree.Update(node);
         }
     }
@@ -968,8 +972,9 @@ public class BaseEntity
     }
 
     /// <summary>
-    /// Bakes a spawn group's placement into the entity, the way the loader places the 3D skybox: the
-    /// origin and angles stay in the group's own coordinates, and the placement rides on top.
+    /// Bakes a spawn group's placement into the entity, keeping the origin and angles in the group's own
+    /// coordinates with the placement riding on top. Nothing calls this any more: a group is now placed
+    /// as it loads, through the transform the loader hands to the whole map.
     /// </summary>
     internal void ApplySpawnGroupTransform(in Matrix4x4 placement)
     {

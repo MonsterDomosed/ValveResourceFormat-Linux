@@ -101,6 +101,22 @@ internal static class PackageTree
     /// file names, or a regular expression against file names.
     /// </summary>
     public static List<PackageEntry> Search(PackageTreeNode root, string query, PackageSearchMode mode)
+        => Search(root, query, mode, limit: 0);
+
+    /// <summary>
+    /// Searches a subtree, collecting at most <paramref name="limit"/> results. The total number of
+    /// matches is still counted, so the caller can report how many were left out. A limit of zero
+    /// collects everything.
+    /// </summary>
+    public static List<PackageEntry> Search(PackageTreeNode root, string query, PackageSearchMode mode, int limit)
+        => Search(root, query, mode, limit, out _);
+
+    /// <summary>
+    /// Searches a subtree, collecting at most <paramref name="limit"/> results. The total number of
+    /// matches is still counted, so the caller can report how many were left out. A limit of zero
+    /// collects everything.
+    /// </summary>
+    public static List<PackageEntry> Search(PackageTreeNode root, string query, PackageSearchMode mode, int limit, out int totalMatches)
     {
         var results = new List<PackageEntry>();
 
@@ -123,7 +139,7 @@ internal static class PackageTree
             _ => static _ => false,
         };
 
-        Collect(root, results, match);
+        Collect(root, results, match, limit, out totalMatches);
         return results;
     }
 
@@ -134,10 +150,22 @@ internal static class PackageTree
     }
 
     private static void Collect(PackageTreeNode node, List<PackageEntry> results, Func<PackageEntry, bool> match)
+        => Collect(node, results, match, 0, out _);
+
+    private static void Collect(PackageTreeNode node, List<PackageEntry> results, Func<PackageEntry, bool> match, int limit, out int total)
     {
+        total = 0;
+
         foreach (var file in node.Files)
         {
-            if (match(file))
+            if (!match(file))
+            {
+                continue;
+            }
+
+            total++;
+
+            if (limit <= 0 || results.Count < limit)
             {
                 results.Add(file);
             }
@@ -145,7 +173,8 @@ internal static class PackageTree
 
         foreach (var folder in node.Folders.Values)
         {
-            Collect(folder, results, match);
+            Collect(folder, results, match, limit, out var folderTotal);
+            total += folderTotal;
         }
     }
 }

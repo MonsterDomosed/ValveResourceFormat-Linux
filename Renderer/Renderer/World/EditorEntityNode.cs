@@ -92,7 +92,7 @@ internal static class EditorEntityNode
 
             if (SceneLight.IsAccepted(classname).Accepted)
             {
-                modelNode.Tint = new Vector4(SceneLight.GetEditorTint(entity), 1f);
+                modelNode.TintAlpha = new Vector4(SceneLight.GetEditorTint(entity), 1f);
             }
 
             modelNode.SetAnimationForWorldPreview("tools_preview");
@@ -114,7 +114,7 @@ internal static class EditorEntityNode
             {
                 // light_omni2 has no editor model in the fgd, only an icon, so the cost tint has
                 // to go on the sprite for it to show up at all.
-                spriteNode.Tint = new Vector4(SceneLight.GetEditorTint(entity), 1f);
+                spriteNode.TintAlpha = new Vector4(SceneLight.GetEditorTint(entity), 1f);
             }
 
             return spriteNode;

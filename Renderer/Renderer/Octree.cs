@@ -474,7 +474,6 @@ namespace ValveResourceFormat.Renderer
             var min = Vector3.Max(-new Vector3(16384), rootBounds.Min);
             var max = Vector3.Min(new Vector3(16384), rootBounds.Max);
 
-            max = new Vector3(max.Length());
             Root = new Node(null, min, max - min);
         }
     }

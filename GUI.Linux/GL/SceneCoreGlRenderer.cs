@@ -62,9 +62,26 @@ internal class SceneCoreGlRenderer : ViewportGlRenderer
         core.Paint(frameTime);
     }
 
+    /// <summary>An idle scene stops asking for frames once nothing in it is moving.</summary>
+    protected override bool WantsContinuousFrames => core?.WantsContinuousFrames ?? false;
+
     protected override void OnResize(int width, int height) => core?.Resize(width, height);
 
     public override void OnKeyDown(ViewerKey key) => core?.OnKeyDown(key);
+
+    public override void OnPointerDown(float x, float y, ViewerKey buttons, int clickCount)
+        => core?.OnPointerDown(x, y, buttons, clickCount);
+
+    public override void OnPointerUp(float x, float y, ViewerKey buttons)
+        => core?.OnPointerUp(x, y, buttons);
+
+    public override void OnVisibilityChanged(bool isVisible)
+    {
+        if (!isVisible)
+        {
+            core?.OnDetachedFromRenderLoop();
+        }
+    }
 
     protected override void OnDispose() => core?.Dispose();
 }

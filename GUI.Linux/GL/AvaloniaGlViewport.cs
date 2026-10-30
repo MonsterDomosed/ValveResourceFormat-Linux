@@ -8,6 +8,10 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.OpenGL;
 using Avalonia.OpenGL.Controls;
+using Avalonia.OpenGL.Egl;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+using GUI.Linux.Platform;
 using GUI.Linux.Types.GLViewers;
 using GUI.Linux.Utils;
 using ValveResourceFormat.Renderer;
@@ -25,6 +29,8 @@ namespace GUI.Linux.GL;
 /// </summary>
 internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
 {
+    private static readonly EglInterface EglApi = new();
+
     /// <summary>Raised after every rendered frame. Used by automated checks.</summary>
     public event Action? FrameRendered;
 
@@ -37,10 +43,17 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
     private GraphicsDevice? device;
     private GraphicsContext? context;
     private IGLViewportRenderer? renderer;
+    private int appliedVsync = -1;
     private long lastTicks;
     private Point lastPointer;
     private Framebuffer screenFramebuffer = Framebuffer.GLDefaultFramebuffer;
     private bool cursorHidden;
+    private DispatcherTimer? framePacer;
+    private DispatcherTimer? statePoller;
+    private Window? hostWindow;
+    private bool hostWindowMinimized;
+
+    private X11PointerWarp? pointerWarp;
 
     public AvaloniaGlViewport()
     {
@@ -64,9 +77,15 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
     internal IGLViewportRenderer? ViewportRenderer => renderer;
 
     /// <summary>Asks for another frame.</summary>
-    public void RequestFrame() => RequestNextFrameRendering();
+    public void RequestFrame()
+    {
+        if (IsVisible)
+        {
+            RequestNextFrameRendering();
+        }
+    }
 
-    void IGLViewerHost.RequestFrame() => RequestNextFrameRendering();
+    void IGLViewerHost.RequestFrame() => RequestFrame();
 
     void IGLViewerHost.RequestFullscreen() => ToggleFullscreen();
 
@@ -103,9 +122,18 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
 
     void IGLViewerHost.SetClipboardImage(SkiaSharp.SKBitmap bitmap) => AppClipboard.SetImage(bitmap);
 
+    internal static double ClampFrameTime(double elapsed) => Math.Clamp(elapsed, 0.0, 0.1);
+
+    /// <summary>
+    /// The frame time for a rendered frame. A viewer that was idle for a while gets no time at all
+    /// rather than the whole idle gap, which would advance animations and physics by seconds at once.
+    /// </summary>
+    internal static double GetFrameTime(double elapsed) => elapsed > 0.25 ? 0.0 : ClampFrameTime(elapsed);
+
     protected override void OnOpenGlInit(GlInterface gl)
     {
         OpenGL.LoadBindings(new GlBindingsContext(gl));
+        ApplyVerticalSync();
 
         device = GraphicsDevice.Create();
         context = device.CreateContext(new AvaloniaGraphicsSurface());
@@ -116,18 +144,21 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
 #pragma warning restore CA2000
 
         renderer.Initialize(device, context, this);
+        (renderer as ViewportGlRenderer)?.OnVisibilityChanged(IsVisible);
         lastTicks = Stopwatch.GetTimestamp();
     }
 
     protected override void OnOpenGlRender(GlInterface gl, int fb)
     {
-        if (renderer is null || context is null)
+        if (renderer is null || context is null || !IsVisible)
         {
             return;
         }
 
+        ApplyVerticalSync();
+
         var now = Stopwatch.GetTimestamp();
-        var frameTime = (now - lastTicks) / (double)Stopwatch.Frequency;
+        var frameTime = GetFrameTime((now - lastTicks) / (double)Stopwatch.Frequency);
         lastTicks = now;
 
         var scaling = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1.0;
@@ -143,24 +174,147 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
 
         FrameRendered?.Invoke();
 
-        if (renderer.ContinuousRendering)
+        if (renderer.ContinuousRendering && IsVisible && IsRenderActive)
+        {
+            ScheduleNextFrame();
+        }
+    }
+
+    /// <summary>
+    /// False while the host window is minimized. Avalonia keeps delivering render callbacks for an
+    /// iconified window, so the frame loop has to stop itself, otherwise a window nobody can see
+    /// keeps redrawing at full cost.
+    /// </summary>
+    private bool IsRenderActive => !hostWindowMinimized;
+
+    private bool HostWindowMinimized => hostWindow?.WindowState == WindowState.Minimized;
+
+    /// <summary>Queues the next continuous frame, honouring the configured frame rate limit.</summary>
+    private void ScheduleNextFrame()
+    {
+        if (Settings.Config.FrameRateLimit <= 0)
+        {
+            RequestNextFrameRendering();
+            return;
+        }
+
+        // The timer owns the schedule, so exactly one frame is asked for per slot. Requesting straight
+        // from the render callback as well would race the timer that already asked for this frame and
+        // deliver two frames per slot.
+        if (framePacer is null)
+        {
+            framePacer = new DispatcherTimer(DispatcherPriority.Render);
+            framePacer.Tick += OnFramePacerTick;
+        }
+
+        framePacer.Stop();
+        framePacer.Interval = TimeSpan.FromSeconds(1.0 / Settings.Config.FrameRateLimit);
+        framePacer.Start();
+    }
+
+    private void OnFramePacerTick(object? sender, EventArgs e)
+    {
+        framePacer?.Stop();
+
+        if (renderer is not null && IsVisible && IsRenderActive)
         {
             RequestNextFrameRendering();
         }
     }
 
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+
+        hostWindow = TopLevel.GetTopLevel(this) as Window;
+        hostWindowMinimized = HostWindowMinimized;
+        pointerWarp = X11PointerWarp.TryCreate(hostWindow);
+
+        statePoller = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(1)
+        };
+        statePoller.Tick += OnHostStatePollTick;
+        statePoller.Start();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        hostWindow = null;
+        hostWindowMinimized = false;
+        pointerWarp?.Dispose();
+        pointerWarp = null;
+        framePacer?.Stop();
+        statePoller?.Stop();
+        base.OnDetachedFromVisualTree(e);
+    }
+
+    /// <summary>
+    /// Notices a window that was minimized or restored. Avalonia has no public window state event, and
+    /// a minimized window stops being drawn, so a one second poll is what lets the loop notice that
+    /// nobody is looking at it and stop feeding the GPU.
+    /// </summary>
+    private void OnHostStatePollTick(object? sender, EventArgs e)
+    {
+        var minimized = HostWindowMinimized;
+
+        if (minimized == hostWindowMinimized)
+        {
+            return;
+        }
+
+        hostWindowMinimized = minimized;
+
+        if (minimized)
+        {
+            framePacer?.Stop();
+            return;
+        }
+
+        // Restoring from minimized leaves the surface without a fresh frame, so ask for one.
+        RequestNextFrameRendering();
+    }
+
+    private void ApplyVerticalSync()
+    {
+        if (appliedVsync == Settings.Config.Vsync)
+        {
+            return;
+        }
+
+        var context = EglApi.GetCurrentContext();
+        if (context != IntPtr.Zero && EglApi.SwapInterval(context, Settings.Config.Vsync))
+        {
+            appliedVsync = Settings.Config.Vsync;
+        }
+    }
+
     protected override void OnOpenGlDeinit(GlInterface gl)
     {
+        framePacer?.Stop();
+        statePoller?.Stop();
         renderer?.Dispose();
         renderer = null;
         context = null;
         device = null;
+        appliedVsync = -1;
         screenFramebuffer = Framebuffer.GLDefaultFramebuffer;
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
+
+        if (change.Property == IsVisibleProperty && renderer is ViewportGlRenderer viewportRenderer)
+        {
+            viewportRenderer.OnVisibilityChanged(IsVisible);
+
+            if (IsVisible)
+            {
+                lastTicks = Stopwatch.GetTimestamp();
+                RequestNextFrameRendering();
+            }
+        }
 
         if (change.Property == BoundsProperty && renderer is not null)
         {
@@ -179,7 +333,17 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         Input.X = (float)lastPointer.X;
         Input.Y = (float)lastPointer.Y;
         Input.Captured = true;
+
+        // The drag starts from this point, so movement from hovering before the press is discarded
+        // instead of being applied in one jump by the first frame of the drag.
+        Input.Delta = Vector2.Zero;
         UpdateButtons(e.GetCurrentPoint(this).Properties);
+
+        if (renderer is ViewportGlRenderer viewportRenderer)
+        {
+            var pointer = GetRenderPointerPosition(e);
+            viewportRenderer.OnPointerDown(pointer.X, pointer.Y, Input.Keys, e.ClickCount);
+        }
 
         // Hide the pointer while dragging the camera so it does not run into the window edges or
         // distract from the model being inspected.
@@ -200,18 +364,39 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         Input.MouseOverViewport = true;
 
         var position = e.GetPosition(this);
-        Input.Delta += new Vector2((float)(position.X - lastPointer.X), (float)(position.Y - lastPointer.Y));
+        UpdateButtons(e.GetCurrentPoint(this).Properties);
+
+        // Hovering is not sampled every frame anymore, so accumulating it here would hand the whole
+        // hover travel to the first frame of the next drag and make the camera jump to wherever the
+        // pointer had wandered.
+        if (FollowsPointer)
+        {
+            Input.Delta += new Vector2((float)(position.X - lastPointer.X), (float)(position.Y - lastPointer.Y));
+        }
+
         lastPointer = position;
         Input.X = (float)position.X;
         Input.Y = (float)position.Y;
-        UpdateButtons(e.GetCurrentPoint(this).Properties);
+        WarpPointerAtEdge(position);
 
-        RequestNextFrameRendering();
+        // A scene viewer only needs a frame while the pointer is doing something. Asking for one for
+        // every hover motion would keep an idle viewer redrawing.
+        if (FollowsPointer)
+        {
+            RequestNextFrameRendering();
+        }
     }
 
     protected override void OnPointerEntered(PointerEventArgs e)
     {
         base.OnPointerEntered(e);
+
+        // Entering is not a move: the first move has to measure from where the pointer came in, not
+        // from wherever it last was inside the viewport.
+        if (!IsDragging)
+        {
+            lastPointer = e.GetPosition(this);
+        }
 
         Input.MouseOverViewport = true;
         RequestNextFrameRendering();
@@ -221,7 +406,9 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
     {
         base.OnPointerExited(e);
 
-        Input.MouseOverViewport = false;
+        // A drag that runs past the edge of the viewport keeps driving the camera, because the pointer
+        // is captured; only a free pointer leaving means the camera should stop following it.
+        Input.MouseOverViewport = IsDragging;
         RequestNextFrameRendering();
     }
 
@@ -232,6 +419,13 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         e.Pointer.Capture(null);
         Input.Captured = false;
         UpdateButtons(e.GetCurrentPoint(this).Properties);
+
+        if (renderer is ViewportGlRenderer viewportRenderer)
+        {
+            var pointer = GetRenderPointerPosition(e);
+            viewportRenderer.OnPointerUp(pointer.X, pointer.Y, Input.Keys);
+        }
+
         RestoreCursor();
         RequestNextFrameRendering();
     }
@@ -252,6 +446,13 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         Input.Captured = false;
         UpdateButtons(default);
         RestoreCursor();
+    }
+
+    private Vector2 GetRenderPointerPosition(PointerEventArgs e)
+    {
+        var position = e.GetPosition(this);
+        var scaling = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1.0;
+        return new Vector2((float)(position.X * scaling), (float)(position.Y * scaling));
     }
 
     private void HideCursor()
@@ -305,10 +506,16 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         Input.Keys |= key | MapModifiers(e.KeyModifiers);
 
         // Viewer shortcuts (Tab performance overlay, Delete, Escape) are handled by the core, not by
-        // the held-key input state.
-        if (key != ViewerKey.None && renderer is ViewportGlRenderer viewportRenderer)
+        // the held-key input state. Consuming them keeps Tab from walking focus out of the viewport
+        // while the viewer is being driven with the keyboard.
+        if (key != ViewerKey.None)
         {
-            viewportRenderer.OnKeyDown(key);
+            e.Handled = true;
+
+            if (renderer is ViewportGlRenderer viewportRenderer)
+            {
+                viewportRenderer.OnKeyDown(key);
+            }
         }
 
         RequestNextFrameRendering();
@@ -354,6 +561,58 @@ internal sealed class AvaloniaGlViewport : OpenGlControlBase, IGLViewerHost
         RestoreCursor();
         RequestNextFrameRendering();
     }
+
+    /// <summary>
+    /// Whether a drag is in progress. The core sets <see cref="ViewerInputState.Captured"/> while mouse
+    /// look owns the pointer, so walk mode counts too even without a button.
+    /// </summary>
+    private bool IsDragging => Input.Left || Input.Middle || Input.Right || Input.Captured;
+
+    /// <summary>
+    /// Puts the pointer back in the middle of the viewport when a drag runs into the edge of the
+    /// window, so the drag can carry on across the whole desk instead of stopping where the pointer
+    /// does. Does nothing on Wayland, which does not let a client move the pointer.
+    /// </summary>
+    private void WarpPointerAtEdge(Point position)
+    {
+        if (!IsDragging || pointerWarp is null || hostWindow is null
+            || this.TranslatePoint(position, hostWindow) is not { } windowPoint)
+        {
+            return;
+        }
+
+        // One pixel of margin, because the pointer stops exactly on the last pixel of the client area
+        const double Edge = 1;
+        var client = hostWindow.ClientSize;
+
+        if (windowPoint.X > Edge && windowPoint.Y > Edge
+            && windowPoint.X < client.Width - Edge && windowPoint.Y < client.Height - Edge)
+        {
+            return;
+        }
+
+        var center = new Point(Bounds.Width / 2, Bounds.Height / 2);
+
+        if (!pointerWarp.Warp(this, center))
+        {
+            return;
+        }
+
+        // The warp produces its own motion event at the new position, so measuring from there keeps
+        // the jump from being read as a drag
+        lastPointer = center;
+        Input.X = (float)center.X;
+        Input.Y = (float)center.Y;
+    }
+
+    /// <summary>
+    /// Whether pointer movement currently does something in the view. Besides a drag, scene viewers
+    /// adjust the sun on ctrl-hover, and the graph and texture viewers follow the pointer for hover
+    /// feedback, so those keep sampling motion.
+    /// </summary>
+    private bool FollowsPointer => IsDragging
+        || renderer is not SceneCoreGlRenderer
+        || (Input.Keys & ViewerKey.Control) != 0;
 
     private void UpdateButtons(PointerPointProperties properties)
     {

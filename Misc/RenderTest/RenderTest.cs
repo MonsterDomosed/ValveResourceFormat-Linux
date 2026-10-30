@@ -297,7 +297,7 @@ internal class RenderTestWindow : GameWindow
         var mapPath = vmaps[0].GetFullPath();
         var loadedMap = WorldLoader.LoadMap(mapPath, scene);
 
-        SceneRenderer.SkyboxScene = loadedMap.SkyboxScene;
+        SceneRenderer.Skybox3D = loadedMap.Skybox3D;
         SceneRenderer.Skybox2D = loadedMap.Skybox2D;
 
         // Initialize scene (creates lighting buffers, octrees, etc.)

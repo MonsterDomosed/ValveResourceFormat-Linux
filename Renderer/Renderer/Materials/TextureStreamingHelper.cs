@@ -289,8 +289,8 @@ namespace ValveResourceFormat.Renderer.Materials
             return hookedUp;
         }
 
-        // Anything left to request, in flight, or waiting to be hooked up
-        private bool HasPendingWork
+        /// <summary>Anything left to request, in flight, or waiting to be hooked up.</summary>
+        public bool HasPendingWork
             => !pendingLoadRequests.IsEmpty || !loadedMipBits.IsEmpty || Interlocked.Read(ref bitsInFlight) > 0;
 
         /// <summary>

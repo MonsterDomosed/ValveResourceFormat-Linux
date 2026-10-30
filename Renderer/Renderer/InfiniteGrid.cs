@@ -8,6 +8,7 @@ namespace ValveResourceFormat.Renderer
     public class InfiniteGrid
     {
         private readonly int vao;
+        private readonly int buffer;
         private readonly Shader shader;
 
         /// <summary>Initializes the grid geometry and loads the grid shader.</summary>
@@ -26,7 +27,7 @@ namespace ValveResourceFormat.Renderer
 
             shader = scene.RendererContext.ShaderLoader.LoadShader("grid");
 
-            var buffer = GraphicsDevice.CreateBuffer<float>(nameof(InfiniteGrid), vertices, BufferUsage.Static);
+            buffer = GraphicsDevice.CreateBuffer<float>(nameof(InfiniteGrid), vertices, BufferUsage.Static);
 
             var format = new VertexInputLayout(sizeof(float) * 2, new VertexAttribute(VertexSlot.Position, DXGI_FORMAT.R32G32_FLOAT));
             vao = format.CreateVertexArray(nameof(InfiniteGrid), buffer);
@@ -41,6 +42,13 @@ namespace ValveResourceFormat.Renderer
             VertexArray.Bind(vao, shader);
 
             GL.DrawArrays(PrimitiveType.Triangles, 0, 6);
+        }
+
+        /// <summary>Deletes the grid's vertex array and vertex buffer.</summary>
+        public void Delete()
+        {
+            VertexArray.Delete(vao);
+            GL.DeleteBuffer(buffer);
         }
     }
 }

@@ -68,6 +68,10 @@ internal sealed class PulseAudioPlayer : IDisposable
     private readonly int loopStart;
     private readonly int loopEnd;
     private readonly Lock gate = new();
+
+    // libpulse-simple is not thread-safe, and the writer thread, the playhead estimate and the
+    // pause/seek flush all reach the same native stream.
+    private readonly Lock nativeStream = new();
     private readonly ManualResetEventSlim wake = new(false);
     private readonly byte[] buffer = new byte[ChunkFrames * 2 * 2];
 
@@ -216,7 +220,10 @@ internal sealed class PulseAudioPlayer : IDisposable
 
         if (handle != IntPtr.Zero)
         {
-            _ = PaSimpleFlush(handle, out _);
+            lock (nativeStream)
+            {
+                _ = PaSimpleFlush(handle, out _);
+            }
         }
     }
 
@@ -227,8 +234,19 @@ internal sealed class PulseAudioPlayer : IDisposable
             return queueFrame;
         }
 
-        var latency = PaSimpleGetLatency(handle, out _);
-        var latencyFrames = (long)(latency * (ulong)sampleRate / 1_000_000UL);
+        long latency;
+
+        lock (nativeStream)
+        {
+            if (handle == IntPtr.Zero)
+            {
+                return queueFrame;
+            }
+
+            latency = (long)PaSimpleGetLatency(handle, out _);
+        }
+
+        var latencyFrames = latency * sampleRate / 1_000_000L;
         return (int)Math.Clamp(baseFrame + framesQueued - latencyFrames, 0, frameCount);
     }
 
@@ -255,7 +273,12 @@ internal sealed class PulseAudioPlayer : IDisposable
                 {
                     if (HasLoop && looping)
                     {
+                        // Rebase rather than only moving the write cursor, so the reported position
+                        // loops with the audio instead of sitting clamped at the end
+                        baseFrame = loopStart;
+                        framesQueued = 0;
                         queueFrame = loopStart;
+                        positionSnapshot = loopStart;
                     }
                     else
                     {
@@ -278,7 +301,11 @@ internal sealed class PulseAudioPlayer : IDisposable
             }
 
             var byteCount = (nuint)(framesToWrite * channels * sizeof(short));
-            _ = PaSimpleWrite(handle, buffer, byteCount, out _);
+
+            lock (nativeStream)
+            {
+                _ = PaSimpleWrite(handle, buffer, byteCount, out _);
+            }
 
             lock (gate)
             {
@@ -312,25 +339,32 @@ internal sealed class PulseAudioPlayer : IDisposable
         Disposed = true;
         stopRequested = true;
         wake.Set();
-        thread?.Join(2000);
+
+        var stopped = thread is null || thread.Join(2000);
         thread = null;
 
-        lock (gate)
+        if (stopped)
         {
-            if (handle != IntPtr.Zero)
+            lock (nativeStream)
             {
-                PaSimpleFree(handle);
-                handle = IntPtr.Zero;
+                if (handle != IntPtr.Zero)
+                {
+                    PaSimpleFree(handle);
+                    handle = IntPtr.Zero;
+                }
             }
+
+            wake.Dispose();
         }
 
-        wake.Dispose();
+        // A writer still stuck in a write to an unresponsive server owns the handle now; freeing it
+        // underneath that thread would be a native use-after-free.
         GC.SuppressFinalize(this);
     }
 
     ~PulseAudioPlayer()
     {
-        lock (gate)
+        lock (nativeStream)
         {
             if (handle != IntPtr.Zero)
             {

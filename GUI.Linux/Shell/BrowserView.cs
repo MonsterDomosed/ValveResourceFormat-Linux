@@ -185,7 +185,7 @@ internal sealed class BrowserView : UserControl
         switch (node.Kind)
         {
             case BrowserSourceKind.Vpk or BrowserSourceKind.MapVpk:
-                window.OpenPackage(node.Path);
+                _ = window.OpenPackageAsync(node.Path);
                 break;
 
             case BrowserSourceKind.File:

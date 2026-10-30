@@ -16,13 +16,15 @@ internal sealed class ModelGlViewer : IViewer
     private readonly string fileName;
     private readonly ResourceDataViewer dataViewer;
     private readonly ModelAnimationSession session = new();
+    private readonly Action<string>? openResource;
 
     private ModelViewerControl? control;
 
-    public ModelGlViewer(IViewerContext context, string fileName, ResourceDataViewer dataViewer)
+    public ModelGlViewer(IViewerContext context, string fileName, ResourceDataViewer dataViewer, Action<string>? openResource = null)
     {
         this.fileName = fileName;
         this.dataViewer = dataViewer;
+        this.openResource = openResource;
     }
 
     public Task LoadAsync(Stream? stream) => dataViewer.LoadAsync(stream);
@@ -31,7 +33,7 @@ internal sealed class ModelGlViewer : IViewer
     {
         List<ViewerTab> tabs =
         [
-            new ViewerTab("MODEL", new ViewerContent.CustomControl(() => control = new ModelViewerControl(fileName, session)), Select: true),
+            new ViewerTab("MODEL", new ViewerContent.CustomControl(() => control = new ModelViewerControl(fileName, session, openResource)), Select: true),
         ];
 
         if (dataViewer.GetContent() is ViewerContent.Tabs data)

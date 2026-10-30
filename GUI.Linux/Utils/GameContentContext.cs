@@ -49,6 +49,10 @@ public sealed class GameContentContext : IDisposable
                         {
                             configuredLoader.AddPackageToSearch(path);
                         }
+                        else if (path.EndsWith(".gi", StringComparison.OrdinalIgnoreCase))
+                        {
+                            configuredLoader.FindAndLoadSearchPaths(path);
+                        }
                         else if (Directory.Exists(path))
                         {
                             configuredLoader.AddDiskPathToSearch(path);

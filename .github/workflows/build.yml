@@ -52,7 +52,7 @@ jobs:
     - uses: ./.github/actions/setup-dotnet-cache
 
     - name: Run tests
-      run: dotnet test --project ./Tests/Tests.csproj --configuration Release --minimum-expected-tests 1100 ${{ env.SKIP_ANALYSIS }} ${{ matrix.coverage }}
+      run: dotnet test --project ./Tests/Tests.csproj --configuration Release --minimum-expected-tests 1300 ${{ env.SKIP_ANALYSIS }} ${{ matrix.coverage }}
 
 #    - name: Check formatting
 #      if: matrix.os == 'ubuntu-latest'

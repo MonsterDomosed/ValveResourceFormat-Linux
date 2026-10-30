@@ -124,16 +124,87 @@ public abstract class GLSceneViewerCore : IDisposable
     /// <summary>Uses the animation viewer's camera offset mode.</summary>
     protected virtual bool IsAnimationViewer => false;
 
+    /// <summary>
+    /// Whether the scene changes on its own, so the host has to keep drawing frames. A scene that only
+    /// changes in response to input returns false and the viewer goes idle instead of redrawing the
+    /// same picture at the display rate.
+    /// </summary>
+    protected virtual bool SceneWantsContinuousFrames => true;
+
+    /// <summary>Whether the host should queue another frame right now.</summary>
+    public bool WantsContinuousFrames
+        => Input.ForceUpdate
+            || (Input.WalkMode && Input.Velocity.LengthSquared() > 1e-4f)
+            || Picker?.ActiveNextFrame == true
+            || Renderer.RendererContext.TextureStreaming.HasPendingWork
+            || SceneWantsContinuousFrames;
+
+    private bool sidebarDirty = true;
+
+    /// <summary>Why the host is still being asked for frames, for the self-check. Not for UI use.</summary>
+    internal string ContinuousFramesReason
+    {
+        get
+        {
+            if (Input.ForceUpdate)
+            {
+                return "camera";
+            }
+
+            if (Input.WalkMode && Input.Velocity.LengthSquared() > 1e-4f)
+            {
+                return "walk";
+            }
+
+            if (Picker?.ActiveNextFrame == true)
+            {
+                return "picker";
+            }
+
+            if (Renderer.RendererContext.TextureStreaming.HasPendingWork)
+            {
+                return "streaming";
+            }
+
+            return SceneWantsContinuousFrames ? "scene" : "idle";
+        }
+    }
+
+    /// <summary>Whether any particle system in the scene is still emitting.</summary>
+    protected bool HasLiveParticles
+    {
+        get
+        {
+            foreach (var node in Scene.AllNodes)
+            {
+                if (node is ParticleSceneNode { IsPlaying: true, IsPaused: false })
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
+
     protected GLSceneViewerCore(ISceneViewerContext context, RendererContext rendererContext, IGLViewerHost host)
     {
         Context = context;
         Host = host;
+
+        rendererContext.MaxTextureSize = Settings.Config.MaxTextureSize;
+        rendererContext.FieldOfView = Settings.Config.FieldOfView;
+        rendererContext.ViewmodelFieldOfView = Settings.Config.ViewmodelFieldOfView;
 
         Renderer = new(rendererContext);
         Input = new UserInput(Renderer);
         TextRenderer = new(rendererContext, Renderer.Camera);
         crosshairRenderer = new CrosshairRenderer(rendererContext);
         Scene = Renderer.Scene;
+
+        // The sidebar sits on the UI thread and only queues commands, so it has to wake the render
+        // loop when it does, or an idle viewer would not show the change.
+        Sidebar.RequestFrame = host.RequestFrame;
     }
 
     protected GLSceneViewerCore(ISceneViewerContext context, RendererContext rendererContext, IGLViewerHost host, Frustum cullFrustum)
@@ -160,12 +231,44 @@ public abstract class GLSceneViewerCore : IDisposable
         physicsTraceRenderer?.Delete();
         physicsTraceRenderer = null;
 
+        SelectedNodeRenderer?.Delete();
+        SelectedNodeRenderer = null;
+
+        baseGrid?.Delete();
+        baseGrid = null;
+
+        crosshairRenderer.Delete();
+        TextRenderer.Delete();
+
+        if (frametimeQuery1 != 0)
+        {
+            OpenGL.DeleteQuery(frametimeQuery1);
+            frametimeQuery1 = 0;
+        }
+
+        if (frametimeQuery2 != 0)
+        {
+            OpenGL.DeleteQuery(frametimeQuery2);
+            frametimeQuery2 = 0;
+        }
+
         DisposeAudio();
 
         QuadOverdrawRenderer?.Dispose();
         QuadOverdrawRenderer = null;
 
-        Renderer?.Dispose();
+        Picker?.Delete();
+        Picker = null;
+
+        saveAsFramebuffer?.Delete();
+        saveAsFramebuffer = null;
+
+        // The host owns the target it handed over, but nothing else frees the attachments
+        MainFramebuffer?.Delete();
+        MainFramebuffer = null;
+
+        Renderer.Dispose();
+        Renderer.RendererContext.Dispose();
     }
 
     /// <summary>Deletes viewer-specific GL resources before the renderer is disposed.</summary>
@@ -202,6 +305,7 @@ public abstract class GLSceneViewerCore : IDisposable
     {
         MainFramebuffer = mainFramebuffer;
         NumSamples = sampleCount;
+        ApplySettingsToRenderState();
 
         ReportLoadingStatus("Preparing renderer…");
 
@@ -394,6 +498,12 @@ public abstract class GLSceneViewerCore : IDisposable
     {
         var command = Sidebar.ConsumeCommands();
 
+        if (command != default)
+        {
+            // The sidebar only has something new to show when a command changed something
+            sidebarDirty = true;
+        }
+
         if (command.RenderModeChanged && command.RenderMode is { Length: > 0 } mode)
         {
             ApplyRenderMode(mode);
@@ -490,6 +600,13 @@ public abstract class GLSceneViewerCore : IDisposable
     /// <summary>Publishes the scene state for the sidebar. Called on the render thread.</summary>
     private void PublishSidebarState()
     {
+        if (!sidebarDirty)
+        {
+            return;
+        }
+
+        sidebarDirty = false;
+
         if (sidebarRenderModes.Length == 0)
         {
             sidebarRenderModes = [.. GetAvailableRenderModes().Where(static m => !m.IsHeader).Select(static m => m.Name)];
@@ -533,8 +650,20 @@ public abstract class GLSceneViewerCore : IDisposable
 
     protected abstract void LoadScene();
 
+    /// <summary>
+    /// Selects the node under the pointer when a click resolves. Viewers that do more with a pick,
+    /// such as opening a model's mesh reference, override this.
+    /// </summary>
     protected virtual void OnPicked(object? sender, PickingResponse pixelInfo)
     {
+        if (pixelInfo.Intent != PickingIntent.Select || SelectedNodeRenderer is null)
+        {
+            return;
+        }
+
+        SelectedNodeRenderer.SelectNode(pixelInfo.PixelInfo.ObjectId == 0
+            ? null
+            : Scene.Find(pixelInfo.PixelInfo.ObjectId));
     }
 
     /// <summary>Resizes the render targets and cameras to a new viewport size in pixels.</summary>
@@ -622,7 +751,11 @@ public abstract class GLSceneViewerCore : IDisposable
     public int PerfDisplayMode
     {
         get => (int)perfDisplay;
-        set => perfDisplay = (PerfDisplay)Math.Clamp(value, 0, 3);
+        set
+        {
+            perfDisplay = (PerfDisplay)Math.Clamp(value, 0, 3);
+            sidebarDirty = true;
+        }
     }
 
     /// <summary>Advances simulation, camera and input for one frame.</summary>
@@ -661,8 +794,12 @@ public abstract class GLSceneViewerCore : IDisposable
 
         // The viewport accumulates wheel notches; apply them before the camera tick so an orbit zoom
         // is reflected in the same frame. Avalonia reports one unit per notch, while the input code's
-        // zoom math was written for the traditional 120-unit wheel delta.
-        Input.OnMouseWheel(input.Wheel * MouseWheelNotch);
+        // zoom math was written for the traditional 120-unit wheel delta. A zero delta still starts an
+        // orbit transition, so it must not be fed in on frames without a wheel event.
+        if (input.Wheel != 0f)
+        {
+            Input.OnMouseWheel(input.Wheel * MouseWheelNotch);
+        }
 
         var wasWalkMode = Input.WalkMode;
         Input.Tick(frameTime, pressedKeys, mouseDelta, Renderer.Camera);
@@ -741,11 +878,21 @@ public abstract class GLSceneViewerCore : IDisposable
             if (Picker.ActiveNextFrame)
             {
                 using var _ = new GLDebugGroup("Picker Object Id Render");
-                renderContext.ReplacementShader = Picker.Shader;
-                renderContext.Framebuffer = Picker;
 
-                Renderer.RenderScenesWithView(renderContext);
+                // The pick pass has its own target and shader. Sharing this frame's context would leave
+                // the main pass drawing into the picker and presenting the previous frame.
+                var pickContext = renderContext with
+                {
+                    Framebuffer = Picker,
+                    ReplacementShader = Picker.Shader,
+                };
+
+                Renderer.RenderScenesWithView(pickContext);
                 Picker.Finish();
+
+                // The clicked frame went to the picker, so the viewer needs one more frame to show the
+                // result, including the selection this pick just changed.
+                Host.RequestFrame();
             }
             else if (Picker.IsDebugActive)
             {
@@ -1103,6 +1250,9 @@ public abstract class GLSceneViewerCore : IDisposable
     {
         Context.SceneLogger.LogDebug("Applying settings to render state");
 
+        Renderer.RendererContext.MaxTextureSize = Settings.Config.MaxTextureSize;
+        Renderer.RendererContext.FieldOfView = Settings.Config.FieldOfView;
+        Renderer.RendererContext.ViewmodelFieldOfView = Settings.Config.ViewmodelFieldOfView;
         Renderer.Camera.FieldOfView = Settings.Config.FieldOfView;
         Renderer.Camera.CreateProjectionMatrix();
 
@@ -1116,6 +1266,12 @@ public abstract class GLSceneViewerCore : IDisposable
     {
         Scene.SetEnabledLayers(layers);
         SkyboxScene?.SetEnabledLayers(layers);
+    }
+
+    protected void SetDefaultEnabledLayers(IEnumerable<string> layers)
+    {
+        sidebarEnabledLayers = [.. layers];
+        SetEnabledLayers(sidebarEnabledLayers);
     }
 
     /// <summary>The distinct layer names present in the loaded scene.</summary>
