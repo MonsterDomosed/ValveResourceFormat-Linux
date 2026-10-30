@@ -397,7 +397,11 @@ namespace Tests
         [Arguments("/home/user/materials", "materials/x/y.vtex", "/home/user/materials/x/y.vtex")]
         public async Task ExportAssetFolderAvoidsRepeatingTheChosenFolder(string destination, string asset, string expected)
         {
-            await Assert.That(PackageExporter.CombineAssetFolder(destination, asset)).IsEqualTo(expected);
+            // The exporter is Linux-only, but the suite also runs on Windows, where Path.Combine
+            // produces backslashes for the same logical path.
+            var actual = PackageExporter.CombineAssetFolder(destination, asset).Replace('\\', '/');
+
+            await Assert.That(actual).IsEqualTo(expected);
         }
 
         [Test]

@@ -39,7 +39,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-latest]
+        # The fork targets Linux only; the Windows and macOS entries only tested the shared libraries.
+        os: [ubuntu-latest, ubuntu-24.04-arm]
         include:
         - os: ubuntu-latest
           coverage: --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
@@ -237,7 +238,7 @@ jobs:
 
   analyze:
     name: Run all analyzers
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v7
