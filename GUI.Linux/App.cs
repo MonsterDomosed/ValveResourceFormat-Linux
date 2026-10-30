@@ -17,6 +17,7 @@ using GUI.Linux.GL;
 using GUI.Linux.Platform;
 using GUI.Linux.Shell;
 using GUI.Linux.Types.Browser;
+using GUI.Linux.Types.GLViewers;
 using GUI.Linux.Types.Viewers;
 using GUI.Linux.Utils;
 using GUI.Linux.Viewers;
@@ -2249,6 +2250,49 @@ internal sealed class App : Application
             await Program.StdOut.WriteLineAsync(renderer.ReadbackNonBackgroundPixels > 0 && renderer.ReadbackDistinctColors > 1
                 ? "[self-check] material tab rendered real geometry"
                 : "[self-check] material tab rendered only a flat frame").ConfigureAwait(true);
+
+            if (renderer.SceneCore is MaterialSceneCore materialCore
+                && viewport.GetVisualAncestors().OfType<MaterialViewerControl>().FirstOrDefault() is { } materialControl
+                && materialCore.Material is { } material)
+            {
+                var parameters = materialControl.Session.GetParameters();
+                var edited = false;
+
+                if (parameters.FirstOrDefault(static parameter => parameter.Kind == MaterialParameterKind.Float) is { Name.Length: > 0 } floatParameter)
+                {
+                    var before = material.FloatParams[floatParameter.Name];
+                    materialControl.Session.Set(new MaterialParameterChange(
+                        MaterialParameterKind.Float, floatParameter.Name, before + 1.5f, 0, default));
+
+                    edited = await WaitForAsync(
+                        () => Math.Abs(material.FloatParams[floatParameter.Name] - (before + 1.5f)) < 0.001f,
+                        30).ConfigureAwait(true);
+                }
+                else if (parameters.FirstOrDefault(static parameter => parameter.Kind == MaterialParameterKind.Vector) is { Name.Length: > 0 } vectorParameter)
+                {
+                    var before = material.VectorParams[vectorParameter.Name];
+                    var changed = before with { X = before.X + 1.5f };
+
+                    materialControl.Session.Set(new MaterialParameterChange(
+                        MaterialParameterKind.Vector, vectorParameter.Name, 0f, 0, changed));
+
+                    edited = await WaitForAsync(
+                        () => Math.Abs(material.VectorParams[vectorParameter.Name].X - changed.X) < 0.001f,
+                        30).ConfigureAwait(true);
+                }
+                else if (parameters.FirstOrDefault(static parameter => parameter.Kind == MaterialParameterKind.Int) is { Name.Length: > 0 } intParameter)
+                {
+                    var before = material.IntParams[intParameter.Name];
+
+                    materialControl.Session.Set(new MaterialParameterChange(
+                        MaterialParameterKind.Int, intParameter.Name, 0f, before + 1, default));
+
+                    edited = await WaitForAsync(() => material.IntParams[intParameter.Name] == before + 1, 30).ConfigureAwait(true);
+                }
+
+                await Program.StdOut.WriteLineAsync(
+                    $"[self-check] material parameters: total={parameters.Length}, control={materialControl is not null}, edited={edited}").ConfigureAwait(true);
+            }
 
             window.CloseTabContaining(viewport);
             for (var i = 0; i < 60 && !renderer.Disposed; i++)
